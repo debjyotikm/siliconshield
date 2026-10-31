@@ -1,0 +1,17 @@
+{
+  "python": "/path/to/security-environment/bin/python",
+  "source": "/path/to/siliconshield-checkout",
+  "laya_root": "/path/to/laya-next-checkout",
+  "model": "/path/to/published-laya-checkpoint",
+  "data": "/path/to/verified-security-dataset",
+  "runs": "/path/to/private-training-artifacts",
+  "gpus": [0, 1, 2],
+  "defaults": {
+    "max_updates": 200,
+    "encoder_lr": 0.00001,
+    "head_lr": 0.0001,
+    "micro_batch": 4,
+    "accumulation": 4,
+    "seed": 41
+  }
+}

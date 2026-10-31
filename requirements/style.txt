@@ -1,0 +1,12 @@
+# Development tooling pins, separate from GPU training requirements.
+# Verified against Python 3.11.
+ruff==0.14.2
+pylint==3.3.7
+mypy==1.18.1
+pytest==9.1.1
+# Numerical dependency for the CPU-gated reporting tests, which use synthetic
+# fixtures only (mirrors the version pinned in requirements/core.txt).
+numpy==2.4.6
+# Build backend for the wheel-installation check (tests/test_installation.py).
+setuptools>=68
+wheel

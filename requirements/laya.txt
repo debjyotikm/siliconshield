@@ -1,0 +1,3 @@
+# LAYA security training runs against an external LAYA checkout (LAYA_ROOT) or installed laya package.
+# Runtime additionally requires: numpy, torch, transformers, safetensors (see requirements/core.txt).
+pytest==9.1.1

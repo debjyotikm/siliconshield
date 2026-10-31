@@ -1,0 +1,6 @@
+# Tested GPU runtime (pins preserved from the source harness). Select the compatible platform wheel/index explicitly.
+torch==2.14.0
+numpy==2.4.6
+transformers==5.5.0
+safetensors==0.8.0
+pytest==9.1.1

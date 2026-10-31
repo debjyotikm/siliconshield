@@ -1,0 +1,4 @@
+# Optional GUI dependencies for the SiliconShield desktop application.
+# Verified with CPython 3.11 and 3.12; Qt widgets only, no Torch/CUDA.
+# Keep this file free of training and serving dependencies.
+PySide6-Essentials==6.9.2

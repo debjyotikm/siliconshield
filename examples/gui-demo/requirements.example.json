@@ -1,0 +1,83 @@
+{
+  "privilege-check-missing": {
+    "title": "Should violate - missing privilege guard",
+    "expected": "violates_requirement",
+    "requirement": "After reset, cfg_reg may change only on a write performed while privileged is 1. A write while privileged is 0 must leave cfg_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL. rst_n is low initially and high thereafter. Values are observed just after rising clock edges. Reset behavior is excluded after reset completes."
+  },
+  "privileged-write-guarded": {
+    "title": "Should satisfy - privilege guard enforced",
+    "expected": "satisfies_requirement",
+    "requirement": "After reset, cfg_reg may change only on a write performed while privileged is 1. A write while privileged is 0 must leave cfg_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL. rst_n is low initially and high thereafter. Values are observed just after rising clock edges. Reset behavior is excluded after reset completes."
+  },
+  "clear-enable-omitted": {
+    "title": "Should violate - clear authorization omitted",
+    "expected": "violates_requirement",
+    "requirement": "After reset, status_reg may be cleared only when clear_req and clear_enable are both 1. Otherwise a clear request must leave status_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL. rst_n is low initially and high thereafter. hw_set may set status_reg. Reset behavior is excluded after reset completes."
+  },
+  "clear-enable-enforced": {
+    "title": "Should satisfy - clear authorization enforced",
+    "expected": "satisfies_requirement",
+    "requirement": "After reset, status_reg may be cleared only when clear_req and clear_enable are both 1. Otherwise a clear request must leave status_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL. rst_n is low initially and high thereafter. hw_set may set status_reg. Reset behavior is excluded after reset completes."
+  },
+  "address-check-too-broad": {
+    "title": "Should violate - address window too broad",
+    "expected": "violates_requirement",
+    "requirement": "After reset, secure_reg may change on a software write only when addr equals 8'hA0. Writes at every other address must leave secure_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL. rst_n is low initially and high thereafter. Values are observed just after rising clock edges. Reset behavior is excluded after reset completes."
+  },
+  "exact-address-guard": {
+    "title": "Should satisfy - exact address guard",
+    "expected": "satisfies_requirement",
+    "requirement": "After reset, secure_reg may change on a software write only when addr equals 8'hA0. Writes at every other address must leave secure_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL. rst_n is low initially and high thereafter. Values are observed just after rising clock edges. Reset behavior is excluded after reset completes."
+  },
+  "unauthorized-write": {
+    "title": "Unauthorized register write (original regression fixture)",
+    "requirement": "cfg_reg may change only when privileged is 1. An unprivileged write must leave cfg_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter; values are observed just after rising clock edges. Only this requirement is assessed."
+  },
+  "lock-bypass-second-path": {
+    "title": "Lock bypass through a second (debug) write path",
+    "requirement": "cfg_reg may change only when locked is 0. No write path, including the debug path, may modify cfg_reg while locked is 1.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter; values are observed just after rising clock edges. Only this requirement is assessed."
+  },
+  "legitimate-access": {
+    "title": "Legitimate access that should be accepted",
+    "requirement": "cfg_reg may change only when privileged is 1. An unprivileged write must leave cfg_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter; values are observed just after rising clock edges. Only this requirement is assessed."
+  },
+  "missing-context": {
+    "title": "Missing context that should remain unresolved",
+    "requirement": "cfg_reg may change only when the access is authorized. An unauthorized write must leave cfg_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter. The authorization policy itself is not supplied with this case."
+  },
+  "debug-lock-respected": {
+    "title": "Should satisfy - debug lock respected",
+    "requirement": "cfg_reg may change only when locked is 0. No write path, including the debug path, may modify cfg_reg while locked is 1.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter; values are observed just after rising clock edges. Only this requirement is assessed."
+  },
+  "write-once-then-locked": {
+    "title": "Should satisfy - write once then locked",
+    "requirement": "Once locked is 1, cfg_reg must never change. While locked is 0, writes are allowed.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter; values are observed just after rising clock edges. Only this requirement is assessed."
+  },
+  "peripheral-config-bank": {
+    "title": "Peripheral configuration bank",
+    "requirement": "After reset, cfg_reg may change on a software write only when privileged is 1. A software write while privileged is 0 must leave cfg_reg unchanged.",
+    "assumptions": "Two-state sampled-clock RTL. rst_n is low initially and high thereafter. Values are observed just after rising clock edges. Reset assignments are exempt. Each assessed module contains every writer of its cfg_reg."
+  },
+  "big-faulty-design": {
+    "title": "Big faulty design \u2014 12 modules, 6 violations",
+    "requirement": "cfg_reg may change only when locked is 0. No write path, including the debug path, may modify cfg_reg while locked is 1.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter; values are observed just after rising clock edges. Only this requirement is assessed."
+  },
+  "big-mixed-design": {
+    "title": "Big mixed design \u2014 6 renamed demos",
+    "requirement": "cfg_reg may change only when locked is 0. No write path, including the debug path, may modify cfg_reg while locked is 1.",
+    "assumptions": "Two-state sampled-clock RTL; rst_n is low initially and high thereafter; values are observed just after rising clock edges. Only this requirement is assessed."
+  }
+}

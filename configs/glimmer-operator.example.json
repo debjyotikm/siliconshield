@@ -1,0 +1,26 @@
+{
+  "_comment": "Local operator config example. Copy outside Git, fill real paths, keep on the operator host.",
+  "profile": "/path/to/security.local.json",
+  "experiment_id": "example-fitting",
+  "endpoint": "http://127.0.0.1:18320/v1/chat/completions",
+  "model": "muse-glimmer-operator-replace-with-fingerprint",
+  "adapter_path": "/path/on/operator-host/to/adapter",
+  "checkpoint_fingerprint": "replace-with-checkpoint_fingerprint(adapter)",
+  "output": "/path/to/private/operator-output",
+  "max_cycles": 8,
+  "poll_seconds": 60,
+  "overrides": {
+    "max_updates": 24,
+    "limit_train_rows": 144,
+    "adapter_lr": 5e-05,
+    "adapter_scale": 1.0,
+    "seed": 0
+  },
+  "intervention_budget": {
+    "max_lr_adjustments": 1,
+    "lr_bounds": [
+      1e-06,
+      0.001
+    ]
+  }
+}

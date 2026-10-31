@@ -1,0 +1,25 @@
+# Google-derived Pylint configuration for review signals, not a zero gate.
+# Expanded scans produce review candidates: some rules conflict with
+# legitimate numerical code, optional imports, or testing conventions.
+[MAIN]
+py-version = 3.11
+
+[MESSAGES CONTROL]
+disable =
+    import-error,
+    wrong-import-position,
+    too-many-arguments,
+    too-many-branches,
+    too-many-locals,
+    too-many-statements,
+    too-many-lines,
+    too-many-nested-blocks,
+    duplicate-code,
+    invalid-name,
+    fixme
+
+[FORMAT]
+max-line-length = 80
+
+[BASIC]
+good-names = i,j,k,n,x,y,z,ex,_,id,lr

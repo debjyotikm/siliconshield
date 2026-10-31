@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "siliconshield"
+version = "0.1.0"
+description = "Local training and evaluation for RTL security models"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["siliconshield*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 80
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82", "F401", "F811", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+show_error_codes = true
+
+# Strict checking is adopted package by package: serialization contracts,
+# episode builders, and identity helpers so far. Add modules here only with
+# full annotations and a passing run; keep the default lenient mode elsewhere.
+# Next candidates: training glimmer/dpo helpers, controller replay helpers,
+# and the remaining data builders once their untyped callees are annotated.
+# Note: `strict = true` cannot be scoped per module (it leaks globally),
+# so the equivalent flags are spelled out instead.
+[[tool.mypy.overrides]]
+module = [
+    "siliconshield.schemas",
+    "siliconshield.research_loop.episodes.contracts",
+    "siliconshield.research_loop.episodes.dataset",
+    "siliconshield.research_loop.episodes.laya_results",
+    "siliconshield.research_loop.execution.laya_campaign",
+    "siliconshield.training.glimmer.identity",
+    "siliconshield.training.glimmer.dpo_pairs",
+    "siliconshield.training.laya.checker_adapter",
+    "siliconshield.training.laya.dataset_versions",
+    "siliconshield.training.laya.proposer_ingest",
+]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_reexport = true
+strict_equality = true

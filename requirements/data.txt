@@ -1,0 +1,3 @@
+# Optional parser for offline RTL contract extraction.
+pyverilog==1.3.0
+ply==3.11

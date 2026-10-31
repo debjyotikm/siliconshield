@@ -1,0 +1,16 @@
+{
+  "schema": "siliconshield-gui-model-registry-v1",
+  "models": [
+    {
+      "id": "example-rtl-model",
+      "display_name": "Example RTL Model",
+      "checkpoint": "/path/to/immutable-export",
+      "python": "/path/to/laya-environment/bin/python",
+      "laya_root": "/path/to/pinned-laya-runtime",
+      "expected_files": {
+        "model.safetensors": "<64 lowercase hex characters>"
+      },
+      "device": "cuda:0"
+    }
+  ]
+}

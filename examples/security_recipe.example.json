@@ -1,0 +1,5 @@
+{
+  "_comment": "Example settings, not tuned for a task. Edit a local copy and select it with SILICONSHIELD_SECURITY_RECIPE.",
+  "source_mass": {"HardSecBench": 0.34, "authored-semantic": 0.33, "OpenTitan": 0.33},
+  "acceptance": {"max_worst_family_false_safe_rate": 0.25, "min_class_recall": 0.5, "min_pair_accuracy": 0.5, "require_baseline_improvement": true}
+}

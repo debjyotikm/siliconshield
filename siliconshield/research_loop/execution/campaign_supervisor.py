@@ -1,0 +1,1302 @@
+"""Persistent campaign supervisor driven by Muse Spark sessions.
+
+The supervisor owns the mechanical loop; agent sessions own every
+judgment. One pass reconciles each unfinished round through the
+campaign runner, records newly terminal rounds, runs at most one
+agent session for work needing judgment (analysis, preparation,
+recovery, planning), commits staged preparations only after
+re-verifying them, and refreshes the status files.
+
+The supervisor never prepares a round without a validated agent
+proposal, never edits verification outcomes, and never relaxes a
+registered threshold: dataset acceptance is re-audited from live
+bytes, and selection or recipe rotations refuse while a round is
+active. All progress lives in durable records, so a restart
+recovers by rereading state; agent sessions are fresh each time
+and continue across context limits through the persisted handoff.
+"""
+
+import hashlib
+import json
+import subprocess
+import time
+from pathlib import Path
+from typing import Any, Callable, Optional
+
+from siliconshield.research_loop.episodes.contracts import (
+    atomic_json,
+    read_json,
+)
+from siliconshield.research_loop.execution import laya_campaign
+from siliconshield.research_loop.procedures.bundles import read_bundle
+from siliconshield.research_loop.procedures.campaign_learning import (
+    queue_report,
+)
+from siliconshield.training.laya import dataset_versions, new_study
+
+HANDOFF_SCHEMA = "siliconshield-supervisor-handoff-v1"
+ANALYSIS_SCHEMA = "siliconshield-round-analysis-v1"
+PREP_SCHEMA = "siliconshield-round-prep-v1"
+
+TERMINAL_PHASES = ("done", "failed")
+
+MAX_AGENT_FAILURES = 3
+MAX_PREP_ATTEMPTS = 2
+MAX_PLAN_ATTEMPTS = 3
+
+DEFAULT_TIMEOUTS = {
+    "analyze": 1800,
+    "prepare": 5400,
+    "recover": 3600,
+    "plan": 1800,
+}
+DEFAULT_STEPS = {
+    "analyze": 60,
+    "prepare": 200,
+    "recover": 120,
+    "plan": 60,
+}
+DEFAULT_EFFORTS = {
+    "analyze": "medium",
+    "prepare": "high",
+    "recover": "high",
+    "plan": "medium",
+}
+
+
+def campaign_dir(home: Path) -> Path:
+    """Inner campaign directory holding rounds and registry."""
+    return Path(home) / "campaign"
+
+
+def supervisor_dir(home: Path) -> Path:
+    """Durable supervisor state beside the campaign registry."""
+    path = campaign_dir(home) / "supervisor"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def default_handoff() -> dict[str, Any]:
+    """Fresh handoff: nothing observed, nothing proposed."""
+    return {
+        "schema": HANDOFF_SCHEMA,
+        "updated": None,
+        "mode": "observe",
+        "active_round": None,
+        "observed_terminal": [],
+        "last_analysis": None,
+        "pending_proposal": None,
+        "proposal_round": None,
+        "prep_attempts": 0,
+        "plan_attempts": 0,
+        "consecutive_agent_failures": 0,
+        "parked_reason": None,
+        "stopped_reason": None,
+        "last_error": None,
+    }
+
+
+def load_handoff(home: Path) -> dict[str, Any]:
+    """Read the persisted handoff, or a fresh one when absent."""
+    path = supervisor_dir(home) / "handoff.json"
+    if not path.is_file():
+        return default_handoff()
+    handoff = read_json(path)
+    if not isinstance(handoff, dict):
+        raise ValueError("Handoff is not an object")
+    if handoff.get("schema") != HANDOFF_SCHEMA:
+        raise ValueError("Unknown handoff schema")
+    merged = default_handoff()
+    merged.update(handoff)
+    return merged
+
+
+def save_handoff(home: Path, handoff: dict[str, Any]) -> dict[str, Any]:
+    """Persist the handoff atomically with a fresh timestamp."""
+    handoff["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    handoff["schema"] = HANDOFF_SCHEMA
+    atomic_json(supervisor_dir(home) / "handoff.json", handoff)
+    return handoff
+
+
+def record_session(home: Path, entry: dict[str, Any]) -> None:
+    """Append one agent-session record to the durable journal."""
+    journal = supervisor_dir(home) / "sessions.jsonl"
+    with journal.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(entry, sort_keys=True) + "\n")
+
+
+def load_reference(home: Path) -> Optional[dict[str, Any]]:
+    """Permanent-baseline results, or None when not registered."""
+    path = campaign_dir(home) / "permanent_reference.json"
+    if not path.is_file():
+        return None
+    reference = read_json(path)
+    if not isinstance(reference, dict) or "results" not in reference:
+        raise ValueError("Permanent reference has no results")
+    return reference["results"]  # type: ignore[no-any-return]
+
+
+def _require_text(record: dict[str, Any], key: str, what: str) -> str:
+    value = record.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(what + " needs " + key)
+    return value
+
+
+def check_proposal_next_action(next_action: Any) -> dict[str, Any]:
+    """Validate an agent's next-action proposal."""
+    if not isinstance(next_action, dict):
+        raise ValueError("Next action must be an object")
+    kind = next_action.get("type")
+    if kind == "prepare_round":
+        _require_text(next_action, "round_id", "A prepare action")
+        _require_text(next_action, "hypothesis", "A prepare action")
+        _require_text(next_action, "dataset_plan", "A prepare action")
+        selection = next_action.get("selection")
+        if selection is not None:
+            if not isinstance(selection, dict):
+                raise ValueError("Proposed selection must be an object")
+            laya_campaign.check_selection_policy(selection)
+        recipe = next_action.get("recipe_plan")
+        if recipe is not None and not isinstance(recipe, dict):
+            raise ValueError("Proposed recipe plan must be an object")
+        overrides = next_action.get("overrides", {})
+        if not isinstance(overrides, dict):
+            raise ValueError("Proposed overrides must be an object")
+        return {
+            "type": "prepare_round",
+            "round_id": next_action["round_id"],
+            "hypothesis": next_action["hypothesis"],
+            "dataset_plan": next_action["dataset_plan"],
+            "selection": selection,
+            "recipe_plan": recipe,
+            "overrides": dict(overrides),
+        }
+    if kind == "investigate":
+        return {
+            "type": "investigate",
+            "question": _require_text(
+                next_action, "question", "An investigate action"
+            ),
+        }
+    if kind == "stop":
+        return {
+            "type": "stop",
+            "reason": _require_text(next_action, "reason", "A stop action"),
+        }
+    raise ValueError("Unknown next-action type: " + repr(kind))
+
+
+def check_analysis(record: Any, round_id: str) -> dict[str, Any]:
+    """Validate an agent-written round analysis."""
+    if not isinstance(record, dict):
+        raise ValueError("Analysis must be an object")
+    if record.get("schema") != ANALYSIS_SCHEMA:
+        raise ValueError("Analysis names another schema")
+    if record.get("round_id") != round_id:
+        raise ValueError("Analysis names another round")
+    failed = record.get("what_failed")
+    if not isinstance(failed, dict):
+        raise ValueError("Analysis needs a what_failed object")
+    for key in ("metrics", "artifacts"):
+        if key not in failed:
+            raise ValueError("Analysis what_failed needs " + key)
+    for key in (
+        "verdict_summary",
+        "explanation",
+        "proposed_change",
+        "predicted_improvement",
+        "possible_regressions",
+        "falsifier",
+    ):
+        _require_text(record, key, "An analysis")
+    return {
+        "schema": ANALYSIS_SCHEMA,
+        "round_id": round_id,
+        "verdict_summary": record["verdict_summary"],
+        "what_failed": {
+            "metrics": failed["metrics"],
+            "artifacts": failed["artifacts"],
+        },
+        "explanation": record["explanation"],
+        "proposed_change": record["proposed_change"],
+        "predicted_improvement": record["predicted_improvement"],
+        "possible_regressions": record["possible_regressions"],
+        "falsifier": record["falsifier"],
+        "next_action": check_proposal_next_action(record.get("next_action")),
+    }
+
+
+def check_prep_receipt(record: Any, round_id: str) -> dict[str, Any]:
+    """Validate an agent-written preparation receipt."""
+    if not isinstance(record, dict):
+        raise ValueError("Prep receipt must be an object")
+    if record.get("schema") != PREP_SCHEMA:
+        raise ValueError("Prep receipt names another schema")
+    if record.get("round_id") != round_id:
+        raise ValueError("Prep receipt names another round")
+    _require_text(record, "dataset_version", "A prep receipt")
+    _require_text(record, "manifest_path", "A prep receipt")
+    _require_text(record, "study_path", "A prep receipt")
+    _require_text(record, "hypothesis", "A prep receipt")
+    _require_text(record, "qualification", "A prep receipt")
+    recipe = record.get("recipe_path")
+    if recipe is not None and not isinstance(recipe, str):
+        raise ValueError("Prep receipt recipe_path must be a path")
+    selection = record.get("selection")
+    if selection is not None:
+        if not isinstance(selection, dict):
+            raise ValueError("Prep receipt selection must be an object")
+        laya_campaign.check_selection_policy(selection)
+    return {
+        "schema": PREP_SCHEMA,
+        "round_id": round_id,
+        "dataset_version": record["dataset_version"],
+        "manifest_path": record["manifest_path"],
+        "recipe_path": recipe,
+        "study_path": record["study_path"],
+        "hypothesis": record["hypothesis"],
+        "selection": selection,
+        "qualification": record["qualification"],
+        "notes": record.get("notes", ""),
+    }
+
+
+def parse_exec_jsonl(text: str) -> dict[str, Any]:
+    """Extract the session id, terminal state, and final text.
+
+    Raises when the transcript carries no terminal record, so a
+    truncated or killed run never reads as a completed analysis.
+    """
+    session: Optional[str] = None
+    terminal: Optional[str] = None
+    final_text = ""
+    usage: dict[str, Any] = {}
+    for line in text.splitlines():
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        stream = record.get("stream") or {}
+        if stream.get("kind") == "session" and session is None:
+            session = stream.get("id")
+        payload = record.get("payload") or {}
+        kind = record.get("payload_type", "")
+        if kind.startswith("run.terminal."):
+            terminal = payload.get("terminal")
+            final_text = payload.get("text") or ""
+        elif kind == "run.usage":
+            usage = {
+                "calls": payload.get("calls"),
+                "input_tokens": sum(
+                    model.get("input_tokens", 0)
+                    for model in payload.get("models", [])
+                ),
+                "output_tokens": sum(
+                    model.get("output_tokens", 0)
+                    for model in payload.get("models", [])
+                ),
+            }
+    if terminal is None:
+        raise ValueError("Agent transcript has no terminal record")
+    return {
+        "session": session,
+        "terminal": terminal,
+        "text": final_text,
+        "usage": usage,
+    }
+
+
+def agent_argv(config: dict[str, Any], kind: str, prompt: str) -> list[str]:
+    """Build the headless agent command for one session.
+
+    The agent runs sandboxed by default. ``--disable-sandbox`` is added
+    only when the operator-owned config explicitly sets
+    ``allow_unsandboxed_agent``: unattended sessions must not silently
+    gain full workspace access.
+    """
+    steps = config.get("max_model_steps", {})
+    efforts = config.get("reasoning_effort", {})
+    argv = [
+        config["muse_bin"],
+        "exec",
+        "--model",
+        config["model"],
+    ]
+    if config.get("allow_unsandboxed_agent"):
+        argv.append("--disable-sandbox")
+    argv.extend(
+        [
+            "--json",
+            "--max-model-steps",
+            str(steps.get(kind, DEFAULT_STEPS[kind])),
+            "--reasoning-effort",
+            str(efforts.get(kind, DEFAULT_EFFORTS[kind])),
+            "--disable-web-tools",
+            "--workspace",
+            config["repo"],
+        ]
+    )
+    argv.extend(config.get("extra_args", []))
+    argv.append(prompt)
+    return argv
+
+
+def run_muse_session(
+    config: dict[str, Any],
+    kind: str,
+    prompt: str,
+    workdir: Path,
+) -> dict[str, Any]:
+    """Run one headless agent session to completion or timeout.
+
+    Returns the parsed transcript with the process exit code. A
+    timeout kills the session and reports it as failed, never as
+    an analysis.
+    """
+    from siliconshield.research_loop.execution.sandbox import (
+        limited_preexec,
+        restricted_env,
+    )
+
+    timeouts = config.get("session_timeout_s", {})
+    timeout = int(timeouts.get(kind, DEFAULT_TIMEOUTS[kind]))
+    try:
+        run = subprocess.run(
+            agent_argv(config, kind, prompt),
+            cwd=str(workdir),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            env=restricted_env(config.get("agent_env_extra")),
+            preexec_fn=limited_preexec(timeout),
+        )
+    except subprocess.TimeoutExpired as exc:
+        partial = exc.stdout or ""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", "replace")
+        return {
+            "session": None,
+            "exit_code": None,
+            "terminal": "timeout",
+            "text": partial[-2000:],
+            "usage": {},
+            "timed_out": True,
+        }
+    try:
+        parsed = parse_exec_jsonl(run.stdout)
+    except ValueError:
+        parsed = {
+            "session": None,
+            "terminal": "unparsed",
+            "text": run.stdout[-2000:] + run.stderr[-2000:],
+            "usage": {},
+        }
+    parsed["exit_code"] = run.returncode
+    parsed["timed_out"] = False
+    return parsed
+
+
+_PROHIBITIONS = """You must not rewrite verification outcomes, move
+evaluation examples (or their near-duplicates) into training, or
+relax any acceptance threshold to manufacture success. Strengthening
+a threshold with a recorded reason is allowed. Labels come from
+compilation and the fixed solver verification procedures only."""
+
+_OUTPUT_CONTRACT = """Write your result as JSON to exactly this path:
+{path}
+Your final reply must be exactly one line: DONE:{path}"""
+
+
+def build_prompt(kind: str, context: dict[str, Any]) -> str:
+    """Render one agent-session prompt from durable context."""
+    home = context["home"]
+    repo = context["repo"]
+    header = (
+        "You own one step of the SiliconShield 24x7 training campaign.\n"
+        "Repository: %s\nCampaign: %s\n" % (repo, home)
+    )
+    if kind == "analyze":
+        body = (
+            "Round %(round_id)s reached %(phase)s. Diagnose it.\n"
+            "Round receipt: %(receipt)s\n"
+            "Incumbent: %(incumbent)s\n"
+            "Trainer report: %(report)s\n"
+            "Leaderboard: %(leaderboard)s\n"
+            "Record: what failed with exact metrics and artifacts; your "
+            "leading explanation; the proposed change; the predicted "
+            "improvement and possible regressions; what result would "
+            "contradict the explanation. Then propose the next action: "
+            "prepare_round (with hypothesis, dataset_plan, and optional "
+            "selection/recipe_plan/overrides), investigate (with a "
+            "question), or stop (with a reason).\n" % context
+        )
+        schema = (
+            '{"schema": "%s", "round_id": "%s", '
+            '"verdict_summary": str, "what_failed": '
+            '{"metrics": object, "artifacts": [str]}, "explanation": str, '
+            '"proposed_change": str, "predicted_improvement": str, '
+            '"possible_regressions": str, "falsifier": str, '
+            '"next_action": {"type": "prepare_round", "round_id": str, '
+            '"hypothesis": str, "dataset_plan": str, '
+            '"selection": object|null, "recipe_plan": object|null, '
+            '"overrides": object} | {"type": "investigate", '
+            '"question": str} | {"type": "stop", "reason": str}}'
+            % (ANALYSIS_SCHEMA, context["round_id"])
+        )
+    elif kind == "prepare":
+        body = (
+            "Execute the accepted proposal for round %(round_id)s.\n"
+            "Proposal: %(proposal)s\n"
+            "Generate the planned TRAIN-only data with solver-verified "
+            "labels, keep development examples and near-duplicates out "
+            "of training, qualify and accept the dataset version, stage "
+            "the study manifest and any new recipe file, and record a "
+            "prep receipt. Do not launch training; the supervisor "
+            "commits and launches. Do not train on calibration or "
+            "final-test partitions.\n" % context
+        )
+        schema = (
+            '{"schema": "%s", "round_id": "%s", '
+            '"dataset_version": str, "manifest_path": str, '
+            '"recipe_path": str|null, "study_path": str, '
+            '"hypothesis": str, "selection": object|null, '
+            '"qualification": str, "notes": str}. The selection, when '
+            "present, must equal the proposal's selection exactly."
+            % (PREP_SCHEMA, context["round_id"])
+        )
+    elif kind == "recover":
+        body = (
+            "An execution failure needs recovery, not science.\n"
+            "Failure: %(failure)s\n"
+            "Round receipt: %(receipt)s\n"
+            "Inspect the evidence and perform the appropriate recovery: "
+            "reattach, reconnect, retry finalization, or resume a valid "
+            "checkpoint. If the failure is an implementation bug, "
+            "reproduce it, make a focused correction, run the relevant "
+            "regression tests, freeze a new source snapshot for "
+            "subsequent jobs (preserving existing run identities), "
+            "and restart the supervisor service to load it. "
+            "Describe what you did in your final reply; the supervisor "
+            "re-runs reconciliation itself.\n" % context
+        )
+        schema = ""
+    elif kind == "plan":
+        body = (
+            "No round is active and no proposal is pending. Review the "
+            "campaign state and either propose the next round or stop "
+            "with a reason.\n"
+            "Handoff: %(handoff)s\n"
+            "Incumbent: %(incumbent)s\n"
+            "Leaderboard: %(leaderboard)s\n" % context
+        )
+        schema = (
+            '{"type": "prepare_round", "round_id": str, '
+            '"hypothesis": str, "dataset_plan": str, '
+            '"selection": object|null, "recipe_plan": object|null, '
+            '"overrides": object} | {"type": "stop", "reason": str}.'
+        )
+    else:
+        raise ValueError("Unknown agent session kind: " + kind)
+    parts = [header, body, _PROHIBITIONS]
+    if schema:
+        parts.append("Result schema:\n" + schema)
+        parts.append(_OUTPUT_CONTRACT.format(path=context["output_path"]))
+    else:
+        parts.append(
+            "Your final reply must summarize the recovery actions taken."
+        )
+    return "\n\n".join(parts)
+
+
+def _round_files(home: Path, round_id: str) -> dict[str, Path]:
+    base = campaign_dir(home) / "rounds" / round_id
+    return {
+        "receipt": base / "round.json",
+        "analysis": base / "analysis.json",
+        "prep": base / "prep-receipt.json",
+    }
+
+
+def commit_prep(
+    home: Path,
+    handoff: dict[str, Any],
+    prep: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """Verify staged artifacts and prepare the proposed round.
+
+    Re-audits dataset acceptance from live bytes, rotates the
+    selection policy and recipe binding when the proposal changes
+    them, and prepares the round. Refuses while any round is
+    active. Raises PrepCommitError with the defect; the round, when
+    created but misbound, is failed with its reason preserved.
+    """
+    home = Path(home)
+    campaign = campaign_dir(home)
+    proposal = handoff.get("pending_proposal") or {}
+    if proposal.get("round_id") != prep["round_id"]:
+        raise PrepCommitError("Prep receipt targets another proposal")
+    if proposal.get("hypothesis") != prep["hypothesis"]:
+        raise PrepCommitError("Prep hypothesis differs from the proposal")
+    if (proposal.get("selection") is None) != (prep["selection"] is None):
+        raise PrepCommitError("Prep selection differs from the proposal")
+    if proposal.get("selection") is not None and json_digest(
+        proposal["selection"]
+    ) != json_digest(prep["selection"]):
+        raise PrepCommitError("Prep selection differs from the proposal")
+    for round_id in laya_campaign.list_rounds(campaign):
+        if (
+            laya_campaign.read_round(campaign, round_id)["phase"]
+            not in TERMINAL_PHASES
+        ):
+            raise PrepCommitError("A round is still active: " + round_id)
+    store = Path(prep["manifest_path"]).parents[2]
+    version = prep["dataset_version"]
+    manifest = dataset_versions.verify_version(store, version)
+    splits = {
+        role: Path(entry["path"]) for role, entry in manifest["splits"].items()
+    }
+    for extra in config.get("audit_extra_splits", []):
+        splits[Path(extra).stem] = Path(extra)
+    retired = [Path(path) for path in config.get("retired_paths", [])]
+    try:
+        findings = dataset_versions.audit_partition_overlap(splits, retired)
+    except (OSError, ValueError) as exc:
+        raise PrepCommitError("Dataset re-audit failed: %s" % exc) from exc
+    if (
+        findings["cross_split_exact_rtl_overlap"]
+        or findings["retired_rtl_overlap"]
+    ):
+        raise PrepCommitError(
+            "Dataset re-audit found overlap: %r" % (findings,)
+        )
+    if not dataset_versions.is_accepted(store, version):
+        raise PrepCommitError("Dataset version is not accepted: " + version)
+    manifest_path = Path(prep["manifest_path"])
+    laya_campaign.register_dataset(
+        campaign,
+        version,
+        str(manifest_path),
+        _sha_file(manifest_path),
+    )
+    profile_path = Path(
+        laya_campaign.load_campaign(campaign)["operator_profile"]
+    )
+    profile = read_json(profile_path)
+    if not isinstance(profile, dict):
+        raise PrepCommitError("Operator profile is not an object")
+    incumbent_export = laya_campaign.load_incumbent(campaign)["export"]
+    campaign_id = laya_campaign.load_campaign(campaign)["campaign_id"]
+    try:
+        new_study.verify_new_study(
+            prep["study_path"],
+            incumbent_export,
+            str(Path(manifest["splits"]["train"]["path"]).parent),
+            str(Path(profile["runs"]) / (campaign_id + "-" + prep["round_id"])),
+            campaign_id + "-" + prep["round_id"],
+        )
+    except (OSError, ValueError) as exc:
+        raise PrepCommitError("Study verification failed: %s" % exc) from exc
+    if prep["selection"] is not None:
+        laya_campaign.update_campaign_selection(
+            campaign,
+            prep["selection"],
+            "proposal from %s analysis" % prep["round_id"],
+        )
+    if prep["recipe_path"] is not None:
+        recipe_path = Path(prep["recipe_path"])
+        laya_campaign.update_campaign_recipe(
+            campaign,
+            str(recipe_path),
+            _sha_file(recipe_path),
+            "proposal from %s analysis" % prep["round_id"],
+        )
+        profile = read_json(profile_path)
+        if not isinstance(profile, dict):
+            raise PrepCommitError("Operator profile is not an object")
+        profile["recipe"] = str(recipe_path.resolve())
+        atomic_json(profile_path, profile)
+    receipt = laya_campaign.prepare_round(
+        campaign,
+        prep["round_id"],
+        version,
+        prep["hypothesis"],
+        proposal.get("overrides") or None,
+    )
+    round_recipe = (receipt.get("bindings") or {}).get("round_recipe") or {}
+    if not round_recipe.get("path"):
+        raise PrepCommitError("Prepared round lacks a round recipe")
+    profile = read_json(profile_path)
+    if not isinstance(profile, dict):
+        raise PrepCommitError("Operator profile is not an object")
+    profile["recipe"] = round_recipe["path"]
+    atomic_json(profile_path, profile)
+    try:
+        laya_campaign.verify_round_bindings(campaign, prep["round_id"], profile)
+    except (OSError, ValueError) as exc:
+        laya_campaign.advance(
+            campaign,
+            prep["round_id"],
+            "failed",
+            reason="binding verification at commit: %s" % exc,
+        )
+        raise PrepCommitError(
+            "Prepared round failed binding verification: %s" % exc
+        ) from exc
+    return receipt
+
+
+class PrepCommitError(ValueError):
+    """A staged preparation failed supervisor verification."""
+
+
+def json_digest(payload: Any) -> str:
+    """Canonical digest for comparing agent-staged objects."""
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode()
+    ).hexdigest()
+
+
+def _sha_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(8 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _note_agent_failure(handoff: dict[str, Any], what: str) -> None:
+    """Count a failed agent session; park after the budget."""
+    handoff["consecutive_agent_failures"] += 1
+    if handoff["consecutive_agent_failures"] >= MAX_AGENT_FAILURES:
+        handoff["parked_reason"] = "%s failed %d times consecutively" % (
+            what,
+            handoff["consecutive_agent_failures"],
+        )
+        handoff["mode"] = "parked"
+
+
+def _reset_agent_failures(handoff: dict[str, Any]) -> None:
+    handoff["consecutive_agent_failures"] = 0
+
+
+def _session_ok(result: dict[str, Any]) -> bool:
+    return (
+        not result.get("timed_out")
+        and result.get("terminal") == "completed"
+        and result.get("exit_code") == 0
+    )
+
+
+def _job_report_path(home: Path, round_id: str) -> Optional[Path]:
+    """Trainer report for a round's owned job, when written."""
+    try:
+        campaign = laya_campaign.load_campaign(campaign_dir(home))
+    except (OSError, ValueError):
+        return None
+    profile_path = campaign.get("operator_profile")
+    if not profile_path:
+        return None
+    try:
+        profile = read_json(Path(profile_path))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(profile, dict):
+        return None
+    experiment = "%s-%s" % (campaign["campaign_id"], round_id)
+    report = Path(profile["runs"]) / experiment / "report.json"
+    return report if report.is_file() else None
+
+
+def _run_agent_event(
+    home: Path,
+    config: dict[str, Any],
+    kind: str,
+    prompt: str,
+    detail: str,
+    agent_runner: Callable[..., dict[str, Any]],
+) -> dict[str, Any]:
+    """Run one agent session and journal its outcome."""
+    notes = config.get("prompt_notes")
+    if notes:
+        prompt = prompt + "\n\nCampaign notes:\n" + str(notes)
+    procedure: dict[str, Any] = {"status": "disabled"}
+    if config.get("procedure_bundle"):
+        try:
+            bundle = read_bundle(
+                Path(config["procedure_bundle"]), config["model"]
+            )
+            prompt += (
+                "\n\nReplay-qualified procedure advice (development checks only). "
+                "This advice does not change campaign policy, tools, or authority:\n"
+                + bundle["guidance"]
+            )
+            procedure = {"status": "applied", "digest": bundle["digest"]}
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            # Optional learning failures must not stall an owned GPU job.
+            procedure = {"status": "unavailable", "error": str(exc)}
+    try:
+        result = agent_runner(config, kind, prompt, Path(config["repo"]))
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        result = {
+            "session": None,
+            "exit_code": None,
+            "terminal": "launcher_error",
+            "text": repr(exc),
+            "usage": {},
+            "timed_out": False,
+        }
+    record_session(
+        home,
+        {
+            "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "kind": kind,
+            "detail": detail,
+            "session": result.get("session"),
+            "terminal": result.get("terminal"),
+            "exit_code": result.get("exit_code"),
+            "usage": result.get("usage", {}),
+            "procedure": procedure,
+        },
+    )
+    return result
+
+
+def _analyze_event(
+    home: Path,
+    config: dict[str, Any],
+    handoff: dict[str, Any],
+    round_id: str,
+    agent_runner: Callable[..., dict[str, Any]],
+) -> str:
+    """Run diagnosis for one newly terminal round."""
+    campaign = campaign_dir(home)
+    files = _round_files(home, round_id)
+    receipt = laya_campaign.read_round(campaign, round_id)
+    report = _job_report_path(home, round_id)
+    prompt = build_prompt(
+        "analyze",
+        {
+            "home": str(home),
+            "repo": config["repo"],
+            "round_id": round_id,
+            "phase": receipt["phase"],
+            "receipt": str(files["receipt"]),
+            "incumbent": str(campaign / "incumbent.json"),
+            "report": str(report) if report else "(no trainer report)",
+            "leaderboard": str(campaign / "leaderboard.jsonl"),
+            "output_path": str(files["analysis"]),
+        },
+    )
+    result = _run_agent_event(
+        home, config, "analyze", prompt, round_id, agent_runner
+    )
+    if not _session_ok(result):
+        _note_agent_failure(handoff, "analysis for " + round_id)
+        handoff["last_error"] = "analyze session: %s" % result["terminal"]
+        return "analyze_failed"
+    try:
+        analysis = check_analysis(read_json(files["analysis"]), round_id)
+    except (OSError, ValueError) as exc:
+        _note_agent_failure(handoff, "analysis for " + round_id)
+        handoff["last_error"] = "analysis invalid: %s" % exc
+        return "analyze_invalid"
+    _reset_agent_failures(handoff)
+    handoff["last_error"] = None
+    if config.get("procedure_queue") and report is not None:
+        try:
+            queued = queue_report(Path(config["procedure_queue"]), report)
+            handoff["procedure_learning"] = {
+                "status": "queued",
+                "request": queued.name,
+            }
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            handoff["procedure_learning"] = {
+                "status": "unavailable",
+                "error": str(exc),
+            }
+    handoff["last_analysis"] = {
+        "round_id": round_id,
+        "session": result.get("session"),
+        "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "summary": analysis["verdict_summary"],
+        "next_action": analysis["next_action"]["type"],
+    }
+    handoff["observed_terminal"] = sorted(
+        set(handoff["observed_terminal"]) | {round_id}
+    )
+    action = analysis["next_action"]
+    if action["type"] == "prepare_round":
+        handoff["pending_proposal"] = action
+        handoff["proposal_round"] = action["round_id"]
+        handoff["proposal_source"] = str(files["analysis"])
+        handoff["prep_attempts"] = 0
+        handoff["prep_defect"] = None
+        handoff["mode"] = "prepare"
+    elif action["type"] == "investigate":
+        handoff["investigation"] = action["question"]
+        handoff["mode"] = "observe"
+    else:
+        handoff["stopped_reason"] = action["reason"]
+        handoff["mode"] = "stopped"
+    return "analyzed"
+
+
+def _prepare_event(
+    home: Path,
+    config: dict[str, Any],
+    handoff: dict[str, Any],
+    agent_runner: Callable[..., dict[str, Any]],
+) -> str:
+    """Run data/code preparation for the pending proposal."""
+    proposal = handoff["pending_proposal"]
+    round_id = handoff["proposal_round"]
+    files = _round_files(home, round_id)
+    context: dict[str, Any] = {
+        "home": str(home),
+        "repo": config["repo"],
+        "round_id": round_id,
+        "proposal": handoff.get("proposal_source", "(handoff)"),
+        "output_path": str(files["prep"]),
+    }
+    prompt = build_prompt("prepare", context)
+    if handoff.get("prep_defect"):
+        prompt += (
+            "\n\nPrior staging was rejected: %s\nFix the defect."
+            % (handoff["prep_defect"])
+        )
+    result = _run_agent_event(
+        home, config, "prepare", prompt, round_id, agent_runner
+    )
+    if not _session_ok(result):
+        _note_agent_failure(handoff, "prepare for " + round_id)
+        handoff["last_error"] = "prepare session: %s" % result["terminal"]
+        return "prepare_failed"
+    if not files["prep"].is_file():
+        _note_agent_failure(handoff, "prepare for " + round_id)
+        handoff["last_error"] = "prepare session wrote no receipt"
+        return "prepare_missing"
+    try:
+        check_prep_receipt(read_json(files["prep"]), round_id)
+    except (OSError, ValueError) as exc:
+        _note_agent_failure(handoff, "prepare for " + round_id)
+        handoff["last_error"] = "prep receipt invalid: %s" % exc
+        return "prepare_invalid"
+    _reset_agent_failures(handoff)
+    handoff["prep_defect"] = None
+    return _commit_attempt(home, handoff, config)
+
+
+def _commit_attempt(
+    home: Path, handoff: dict[str, Any], config: dict[str, Any]
+) -> str:
+    """Verify staged prep and prepare the round when idle."""
+    round_id = handoff["proposal_round"]
+    files = _round_files(home, round_id)
+    try:
+        prep = check_prep_receipt(read_json(files["prep"]), round_id)
+    except (OSError, ValueError) as exc:
+        return "prepare_invalid"
+    try:
+        commit_prep(home, handoff, prep, config)
+    except PrepCommitError as exc:
+        defect = str(exc)
+        if defect.startswith("A round is still active"):
+            return "commit_deferred"
+        handoff["prep_attempts"] += 1
+        handoff["prep_defect"] = defect
+        if handoff["prep_attempts"] >= MAX_PREP_ATTEMPTS:
+            handoff["parked_reason"] = "prep for %s rejected %d times: %s" % (
+                round_id,
+                handoff["prep_attempts"],
+                defect,
+            )
+            handoff["mode"] = "parked"
+        return "commit_rejected"
+    handoff["pending_proposal"] = None
+    handoff["proposal_round"] = None
+    handoff["proposal_source"] = None
+    handoff["prep_attempts"] = 0
+    handoff["prep_defect"] = None
+    handoff["active_round"] = round_id
+    handoff["mode"] = "observe"
+    handoff["last_error"] = None
+    return "committed"
+
+
+def _recover_event(
+    home: Path,
+    config: dict[str, Any],
+    handoff: dict[str, Any],
+    errors: dict[str, str],
+    agent_runner: Callable[..., dict[str, Any]],
+) -> str:
+    """Run one recovery session for reconciliation failures."""
+    round_id = sorted(errors)[0]
+    files = _round_files(home, round_id)
+    prompt = build_prompt(
+        "recover",
+        {
+            "home": str(home),
+            "repo": config["repo"],
+            "failure": errors[round_id],
+            "receipt": str(files["receipt"]),
+        },
+    )
+    result = _run_agent_event(
+        home, config, "recover", prompt, round_id, agent_runner
+    )
+    if not _session_ok(result):
+        _note_agent_failure(handoff, "recovery for " + round_id)
+    handoff["last_error"] = errors[round_id]
+    return "recovered" if _session_ok(result) else "recover_failed"
+
+
+def _plan_event(
+    home: Path,
+    config: dict[str, Any],
+    handoff: dict[str, Any],
+    agent_runner: Callable[..., dict[str, Any]],
+) -> str:
+    """Run one planning session when nothing is queued."""
+    campaign = campaign_dir(home)
+    output = supervisor_dir(home) / "plan-proposal.json"
+    if output.is_file():
+        output.unlink()
+    prompt = build_prompt(
+        "plan",
+        {
+            "home": str(home),
+            "repo": config["repo"],
+            "handoff": str(supervisor_dir(home) / "handoff.json"),
+            "incumbent": str(campaign / "incumbent.json"),
+            "leaderboard": str(campaign / "leaderboard.jsonl"),
+            "output_path": str(output),
+        },
+    )
+    if handoff.get("investigation"):
+        prompt += "\n\nOpen investigation: %s" % handoff["investigation"]
+    result = _run_agent_event(
+        home, config, "plan", prompt, "next", agent_runner
+    )
+    if not _session_ok(result):
+        _note_agent_failure(handoff, "planning")
+        return "plan_failed"
+    try:
+        action = check_proposal_next_action(read_json(output))
+    except (OSError, ValueError) as exc:
+        _note_agent_failure(handoff, "planning")
+        handoff["last_error"] = "plan proposal invalid: %s" % exc
+        return "plan_invalid"
+    if action["type"] == "stop":
+        handoff["stopped_reason"] = action["reason"]
+        handoff["mode"] = "stopped"
+        handoff["plan_attempts"] = 0
+        return "planned_stop"
+    if action["type"] == "investigate":
+        handoff["investigation"] = action["question"]
+        handoff["plan_attempts"] += 1
+        if handoff["plan_attempts"] >= MAX_PLAN_ATTEMPTS:
+            handoff["parked_reason"] = (
+                "planning investigated %d times without a proposal"
+                % handoff["plan_attempts"]
+            )
+            handoff["mode"] = "parked"
+        return "planned_investigate"
+    _reset_agent_failures(handoff)
+    handoff["pending_proposal"] = action
+    handoff["proposal_round"] = action["round_id"]
+    handoff["proposal_source"] = str(output)
+    handoff["prep_attempts"] = 0
+    handoff["prep_defect"] = None
+    handoff["plan_attempts"] = 0
+    handoff["investigation"] = None
+    handoff["mode"] = "prepare"
+    return "planned"
+
+
+def _summarize_counts(summary: dict[str, Any]) -> str:
+    """One-line development counts for the status record."""
+    parts = []
+    for role in ("new_coverage", "retention"):
+        view = summary.get(role) or {}
+        if view.get("n") is None:
+            continue
+        parts.append(
+            "%s %s/%s fs %s/%s"
+            % (
+                "transfer" if role == "new_coverage" else "retention",
+                view.get("correct"),
+                view.get("n"),
+                view.get("false_safe"),
+                view.get("violations"),
+            )
+        )
+    return "; ".join(parts) if parts else "(no candidate)"
+
+
+def _leaderboard_tail(campaign: Path) -> Optional[dict[str, Any]]:
+    board = campaign / "leaderboard.jsonl"
+    if not board.is_file():
+        return None
+    for line in reversed(board.read_text(encoding="utf-8").splitlines()):
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(entry, dict):
+            return entry
+    return None
+
+
+def _gpu_note(
+    phases: dict[str, str], handoff: dict[str, Any], action: str
+) -> str:
+    """Explain GPU state, including why idle when applicable."""
+    active = {
+        rid: phase
+        for rid, phase in phases.items()
+        if phase not in TERMINAL_PHASES
+    }
+    if active:
+        rid, phase = sorted(active.items())[0]
+        if phase == "preflight":
+            return "round %s waiting for free GPUs" % rid
+        return "round %s in %s" % (rid, phase)
+    if handoff.get("parked_reason"):
+        return "idle: parked (%s)" % handoff["parked_reason"]
+    if handoff.get("stopped_reason"):
+        return "idle: stopped (%s)" % handoff["stopped_reason"]
+    if handoff.get("pending_proposal"):
+        if action in ("prepared", "committed", "commit_deferred"):
+            return "idle: committing round %s" % handoff["proposal_round"]
+        return "idle: preparing round %s on CPU" % handoff["proposal_round"]
+    if action.startswith("analyze") or action == "analyzed":
+        return "idle: analyzing the finished round"
+    if action.startswith("plan"):
+        return "idle: planning the next experiment"
+    if action.startswith("recover"):
+        return "idle: recovering an execution failure"
+    return "idle: reconciling"
+
+
+def build_status(
+    home: Path,
+    handoff: dict[str, Any],
+    phases: dict[str, str],
+    action: str,
+) -> dict[str, Any]:
+    """Assemble the concise machine-readable status record."""
+    campaign = campaign_dir(home)
+    try:
+        incumbent = laya_campaign.load_incumbent(campaign)
+    except (OSError, ValueError):
+        incumbent = {}
+    tail = _leaderboard_tail(campaign)
+    candidate = None
+    active = handoff.get("active_round")
+    if active:
+        try:
+            record = laya_campaign.read_round(campaign, active)
+            candidate = (record.get("candidate") or {}).get("export")
+        except (OSError, ValueError):
+            candidate = None
+    analysis = handoff.get("last_analysis") or {}
+    proposal = handoff.get("pending_proposal") or {}
+    if handoff.get("parked_reason"):
+        next_action = "operator review: " + handoff["parked_reason"]
+    elif handoff.get("stopped_reason"):
+        next_action = "stopped: " + handoff["stopped_reason"]
+    elif proposal:
+        next_action = "prepare round %s: %s" % (
+            handoff.get("proposal_round"),
+            proposal.get("hypothesis", ""),
+        )
+    elif active:
+        next_action = "drive round %s (%s)" % (
+            active,
+            phases.get(active, "?"),
+        )
+    elif analysis:
+        next_action = "follow analysis of %s (%s)" % (
+            analysis.get("round_id"),
+            analysis.get("next_action"),
+        )
+    else:
+        next_action = "plan the next experiment"
+    return {
+        "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "mode": handoff.get("mode"),
+        "action": action,
+        "rounds": phases,
+        "active_round": active,
+        "incumbent": {
+            "export": incumbent.get("export"),
+            "round_id": incumbent.get("round_id"),
+        },
+        "candidate": candidate,
+        "latest_results": _summarize_counts((tail or {}).get("summary", {})),
+        "latest_round": (tail or {}).get("round_id"),
+        "last_analysis": analysis or None,
+        "next_action": next_action,
+        "recovery": handoff.get("last_error"),
+        "parked_reason": handoff.get("parked_reason"),
+        "stopped_reason": handoff.get("stopped_reason"),
+        "gpu_note": _gpu_note(phases, handoff, action),
+        "agent_failures": handoff.get("consecutive_agent_failures", 0),
+    }
+
+
+def render_status_markdown(status: dict[str, Any]) -> str:
+    """Render the concise human-readable status record."""
+    analysis = status.get("last_analysis") or {}
+    lines = [
+        "# Campaign supervisor status",
+        "",
+        "Updated: %s | Mode: %s | Last action: %s"
+        % (status.get("time"), status.get("mode"), status.get("action")),
+        "",
+        "## Rounds",
+        "",
+    ]
+    rounds = status.get("rounds") or {}
+    if rounds:
+        for round_id in sorted(rounds):
+            lines.append("- %s: %s" % (round_id, rounds[round_id]))
+    else:
+        lines.append("- (none yet)")
+    incumbent = status.get("incumbent") or {}
+    lines.extend(
+        [
+            "",
+            "## Position",
+            "",
+            "- Incumbent: %s (round %s)"
+            % (incumbent.get("export"), incumbent.get("round_id")),
+            "- Candidate: %s" % status.get("candidate"),
+            "- Latest results: %s" % status.get("latest_results"),
+            "",
+            "## Agent",
+            "",
+            "- Last analysis: %s" % (analysis.get("summary") or "(none)"),
+            "- Next action: %s" % status.get("next_action"),
+            "- Recovery: %s" % (status.get("recovery") or "none"),
+            "- Agent failures: %s" % status.get("agent_failures"),
+            "",
+            "## GPUs",
+            "",
+            "- %s" % status.get("gpu_note"),
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def write_status(home: Path, status: dict[str, Any]) -> dict[str, Any]:
+    """Persist the machine and human status records."""
+    home = Path(home)
+    (home / "status.json").write_text(
+        json.dumps(status, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    (home / "STATUS.md").write_text(
+        render_status_markdown(status), encoding="utf-8"
+    )
+    return status
+
+
+def supervise_once(
+    home: Path,
+    config: dict[str, Any],
+    *,
+    operator_factory: Callable[[str], Any],
+    evaluator: Callable[[Path, str, dict[str, Any]], dict[str, Any]],
+    agent_runner: Optional[Callable[..., dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    """Run one supervisor pass and return the status record.
+
+    Reconciles every unfinished round first, records newly
+    terminal rounds, runs at most one agent session for work
+    needing judgment, and refreshes the status files. Never
+    prepares a round without a validated agent proposal.
+    """
+    home = Path(home)
+    campaign = campaign_dir(home)
+    runner = agent_runner or run_muse_session
+    handoff = load_handoff(home)
+    try:
+        reference = load_reference(home)
+    except (OSError, ValueError) as exc:
+        reference = None
+        handoff["last_error"] = "permanent reference unreadable: %s" % exc
+    phases: dict[str, str] = {}
+    errors: dict[str, str] = {}
+    for round_id in laya_campaign.list_rounds(campaign):
+        try:
+            receipt = laya_campaign.read_round(campaign, round_id)
+        except (OSError, ValueError) as exc:
+            errors[round_id] = "unreadable round receipt: %s" % exc
+            continue
+        if receipt["phase"] in TERMINAL_PHASES:
+            phases[round_id] = receipt["phase"]
+            continue
+        try:
+            settled = laya_campaign.run_round(
+                campaign,
+                round_id,
+                operator_factory=operator_factory,
+                evaluator=evaluator,
+                reference_results=reference,
+            )
+            phases[round_id] = settled["phase"]
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+            errors[round_id] = repr(exc)
+            try:
+                phases[round_id] = laya_campaign.read_round(campaign, round_id)[
+                    "phase"
+                ]
+            except (OSError, ValueError):
+                phases[round_id] = "unknown"
+    active = sorted(
+        rid for rid, phase in phases.items() if phase not in TERMINAL_PHASES
+    )
+    handoff["active_round"] = active[0] if active else None
+    for round_id, phase in sorted(phases.items()):
+        if phase in TERMINAL_PHASES:
+            laya_campaign.record_leaderboard_entry(campaign, round_id)
+    unanalyzed = sorted(
+        rid
+        for rid, phase in phases.items()
+        if phase in TERMINAL_PHASES and rid not in handoff["observed_terminal"]
+    )
+    halted = handoff.get("parked_reason") or handoff.get("stopped_reason")
+    action = "reconciled"
+    if errors:
+        handoff["last_error"] = errors[sorted(errors)[0]]
+        if not halted:
+            action = _recover_event(home, config, handoff, errors, runner)
+    elif unanalyzed and not halted:
+        action = _analyze_event(home, config, handoff, unanalyzed[0], runner)
+    elif handoff.get("pending_proposal") and not halted:
+        files = _round_files(home, handoff["proposal_round"])
+        if files["prep"].is_file():
+            action = _commit_attempt(home, handoff, config)
+        else:
+            action = _prepare_event(home, config, handoff, runner)
+    elif not active and not handoff.get("pending_proposal") and not halted:
+        action = _plan_event(home, config, handoff, runner)
+    committed = handoff.get("active_round")
+    if committed and committed not in phases:
+        try:
+            phases[committed] = laya_campaign.read_round(campaign, committed)[
+                "phase"
+            ]
+        except (OSError, ValueError):
+            phases[committed] = "unknown"
+    save_handoff(home, handoff)
+    return write_status(home, build_status(home, handoff, phases, action))

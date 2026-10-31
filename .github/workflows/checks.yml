@@ -1,0 +1,21 @@
+name: checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lightweight:
+    # CPU-only gate. GPU execution, serving, and model-quality evaluation
+    # run in their own environments; see docs/setup.md.
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -r requirements/style.txt
+      - run: bash tools/check.sh

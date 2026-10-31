@@ -1,0 +1,11 @@
+{
+  "_comment": "Example format. Replace the placeholder IDs and definitions in a local copy, then pass it with --cases-manifest or SILICONSHIELD_SECURITY_CASES.",
+  "train_dev_cases": [["authored-example-001", "config_reg", "lock_reg", "!lock_reg", "lock_reg"]],
+  "outer_cases": [["authored-example-101", "data_out", "locked && !debug_en", "!locked || debug_en", "!locked || debug_mode"]],
+  "dev_ids": ["authored-example-001"],
+  "calibration_ids": ["authored-example-101"],
+  "test_ids": [],
+  "mutation_occurrences": {},
+  "expected_counts": null,
+  "manifest_seed": 0
+}
