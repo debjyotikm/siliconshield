@@ -32,18 +32,19 @@ qualification. Pylint is a review signal rather than a blanket score gate.
 |---|---|
 | Investigations, classification, patch checks | `test_app_workflow.py` |
 | Installed package and CLI imports | `test_installation.py`, `test_laya_public_examples.py` |
-| Proposal labels and solver adapter | `test_checker_adapter.py`, `test_proposer_ingest.py`, `test_verification_bounds.py` |
-| Dataset identity and lineage | `test_dataset_versions.py`, `test_independence_gates.py`, `test_laya_new_study.py` |
-| Question contracts and review ledger | `test_question_contracts.py`, `test_review_ledger.py` |
-| Trainer, sampler, checkpoint export | `test_security_training.py`, `test_coverage_audit.py`, `test_ddp_guard.py`, `test_inventory.py`, `test_fresh_selection.py` |
-| Protected objectives and teacher loss | `test_checkpoint_selection.py`, `test_development_views.py`, `test_replay_preservation.py` |
-| Reports and uncertainty | `test_security_reporting.py` |
+| Proposal labels and solver adapter | `test_checker_adapter.py`, `test_data_contracts.py` |
+| Dataset identity and lineage | `test_data_contracts.py`, `test_laya_new_study.py` |
+| Question contracts and review ledger | `test_data_contracts.py` |
+| Trainer, sampler, checkpoint export | `test_security_training.py`, `test_data_contracts.py`, `test_fresh_selection.py` |
+| Protected objectives and teacher loss | `test_selection.py`, `test_data_contracts.py` |
+| Reports and uncertainty | `test_selection.py` |
 | Campaign transactions and supervision | `test_laya_campaign.py`, `test_campaign_supervisor.py` |
-| Job authority, reattachment, recovery | `test_operator_contract.py`, `test_glimmer_jobs.py`, `test_glimmer_operator.py` |
-| Glimmer episodes, identity, training | `test_operator_curriculum.py`, `test_identity_and_splits.py`, `test_glimmer_training.py` |
-| Action-class selection and checkpoint review | `test_glimmer_selection.py`, `test_checkpoint_assessment.py` |
-| Inference interfaces and timing | `test_glimmer_serving.py`, `test_inference_metrics.py` |
-| GUI fixtures and qualification | `test_gui_contracts.py`, `test_gui_controller.py`, `test_gui_demos.py`, `test_gui_entry.py`, `test_gui_lifecycle.py`, `test_gui_qualification.py`, `test_gui_registry.py`, `test_gui_scan.py`, `test_gui_setup.py`, `test_gui_assessment_clearing.py` |
+| Job authority, reattachment, recovery | `test_operator.py`, `test_glimmer.py` |
+| Glimmer episodes, identity, training | `test_operator.py`, `test_episodes.py`, `test_glimmer_training.py` |
+| Action-class selection and checkpoint review | `test_glimmer.py`, `test_checkpoint_assessment.py` |
+| Inference interfaces and timing | `test_glimmer.py`, `test_selection.py` |
+| GUI fixtures and qualification | `test_gui.py`, `test_gui_workflow.py` |
+| Episodes and transfer | `test_episodes.py` |
 | Harness² integration | `test_glimmer_harness2.py`, `test_muse_harness2.py`, `test_muse_procedures.py` |
 | Export privacy/allowlist | `test_export_check.py` |
 

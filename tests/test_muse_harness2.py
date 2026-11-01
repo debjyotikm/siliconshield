@@ -24,8 +24,8 @@ from siliconshield.research_loop.procedures.muse_trials import (
     learn,
     validate_populations,
 )
+from tests.test_episodes import trainer_report
 from tests.test_glimmer_contracts import summary
-from tests.test_laya_episode_pipeline import trainer_report
 from tests.test_muse_procedures import passing
 
 

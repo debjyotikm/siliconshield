@@ -36,8 +36,8 @@ from tests.test_campaign_supervisor import (
     fake_operator_factory,
     make_home,
 )
+from tests.test_episodes import trainer_report
 from tests.test_glimmer_contracts import episode
-from tests.test_laya_episode_pipeline import trainer_report
 
 
 def passing():
