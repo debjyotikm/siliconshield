@@ -250,26 +250,20 @@ headline figure.
 
 ## 10. License and attribution
 
-Source visibility does not grant a new license for repository code.
-See NOTICE. Model weights plus downloaded datasets
-plus checkpoints plus transcripts are excluded from this repository.
+This repository's code is released under the Apache License,
+Version 2.0 (see LICENSE), and the RTL benchmark dataset is
+likewise offered under Apache-2.0 (see NOTICE). Model weights,
+downloaded datasets, checkpoints, and transcripts stay outside
+this repository.
 
-The release license for Contract-1 weights is not declared in this
-tree and needs explicit owner confirmation before Hugging Face
-publication. Upstream terms still apply at pinned revisions. They
-include LAYA plus OpenTitan source terms plus HardSecBench source
-terms plus the Glimmer base terms where used. Review the pinned
-upstream licenses and weight redistribution terms before
-redistributing datasets or source excerpts or model files.
-
-For Hugging Face discoverability, publish with explicit license
-plus base model metadata plus hardware security tags once the
-release license is confirmed. Present the custom LAYA runtime as a
-custom runtime and not as a standard pipeline unless the published
-loading path supports that interface. Distribute weights as
-`safetensors` with a checksum manifest and a tagged revision. Test
-download and load from a clean environment before making the
-repository public.
+Model weights are licensed separately from the code: each
+Hugging Face release page states its own license. The LAYA
+foundation weights retain their upstream terms at the pinned
+revision recorded in the repository, and upstream source terms
+(including OpenTitan and HardSecBench sources where used)
+continue to apply to their materials. Review the pinned
+upstream licenses and the release-page terms before
+redistributing datasets, source excerpts, or model files.
 
 ## Evaluation status
 

@@ -3,6 +3,7 @@
 .pylintrc
 AGENTS.md
 CONTRIBUTING.md
+LICENSE
 NOTICE.md
 README.md
 configs/glimmer-operator.example.json

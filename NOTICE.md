@@ -1,8 +1,9 @@
 # Ownership and dependency notices
 
-This repository contains SiliconShield's orchestration, training, and
-integration code. Making the source visible does not grant a new license
-for that code.
+SiliconShield's orchestration, training, and integration code in this
+repository is released under the Apache License, Version 2.0 (see
+LICENSE). The SiliconShield RTL benchmark dataset is likewise offered
+under Apache-2.0.
 
 Dataset catalogs, source-derived evaluation cases, and experiment recipes are
 loaded from local files. The repository includes only illustrative examples.
