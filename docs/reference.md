@@ -13,7 +13,8 @@ Prefix module names below with `python -m`.
 | Module | Purpose | Main inputs |
 |---|---|---|
 | `siliconshield.app` | Investigate a demo or supplied RTL. | `--case` or `--rtl --requirement`, `--output` |
-| `siliconshield.gui` | Native desktop analysis window. | `--checkpoint`, `--python`, `--laya-root`, `--device` |
+| `siliconshield.gui` | Native desktop analysis window (demo). | `--checkpoint`, `--python`, `--laya-root`, `--device` |
+| `siliconshield.experts` | Route and consult security experts from the CLI. | `assess --registry`, `--scope`, `--state-file`, `--arbitrate` |
 | `siliconshield.training.laya.build_source_security` | Build verified source-catalog data. | `--catalog`, `--output`, `--verification`, solver paths |
 | `siliconshield.training.laya.build_security_data` | Build catalog cases. | `--sources`, `--cases-manifest`, output/evidence paths |
 | `siliconshield.training.laya.security_train` | Distributed decision-model trainer. Also supports direct script launch. | `--model`, `--data`, `--output`, `--run-id` |

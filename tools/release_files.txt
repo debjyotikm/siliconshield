@@ -219,3 +219,23 @@ tools/export_check.py
 tools/release_files.txt
 
 docs/training-recipes.md
+
+docs/expert-qualification.md
+docs/router.md
+siliconshield/experts/__init__.py
+siliconshield/experts/__main__.py
+siliconshield/experts/arbitration.py
+siliconshield/experts/capabilities.py
+siliconshield/experts/cli.py
+siliconshield/experts/contracts.py
+siliconshield/experts/findings.py
+siliconshield/experts/identity.py
+siliconshield/experts/inspection.py
+siliconshield/experts/registry.py
+siliconshield/experts/responses.py
+siliconshield/experts/router.py
+siliconshield/experts/routing_data.py
+siliconshield/experts/service.py
+siliconshield/experts/worker.py
+tests/test_expert_safety.py
+tests/test_multi_expert.py

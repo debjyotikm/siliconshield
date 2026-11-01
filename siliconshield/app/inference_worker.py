@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any
 
 from siliconshield.app.laya_assessor import state_text
+from siliconshield.experts.contracts import validate_result
+from siliconshield.experts.identity import digest, runtime_digest, text_digest
 from siliconshield.training.laya.question_contracts import (
     LABELS as CONTRACT_LABELS,
 )
@@ -208,7 +210,7 @@ def _check_laya_runtime(laya_root: str | None) -> str:
     if laya_root:
         expected = str(Path(laya_root).resolve())
         actual = str(Path(runtime_file).resolve())
-        if not actual.startswith(expected):
+        if not Path(actual).is_relative_to(Path(expected)):
             raise ValueError(
                 "LAYA runtime %r is not the configured %r." % (actual, expected)
             )
@@ -285,12 +287,17 @@ def _run_analyze(
     if not answers:
         raise ValueError("Model produced no answer.")
     answer = answers[0]
-    usage = answer.get("usage", {}) or {}
+    usage = answer.get("usage")
+    if not isinstance(usage, dict) or any(
+        key not in usage
+        for key in ("truncated", "truncated_questions", "state_tokens_dropped")
+    ):
+        raise ValueError("Runtime did not provide complete coverage evidence")
     if usage.get("truncated"):
         raise ValueError("Model input was truncated; no verdict produced.")
     if usage.get("truncated_questions"):
         raise ValueError("Model questions were truncated.")
-    dropped = usage.get("state_tokens_dropped") or 0
+    dropped = usage["state_tokens_dropped"]
     if isinstance(dropped, (int, float)) and dropped > 0:
         raise ValueError("Model input was truncated; no verdict produced.")
     values = (
@@ -316,9 +323,17 @@ def _run_analyze(
         "input_tokens": usage.get("input_tokens"),
         "state_tokens": usage.get("state_tokens"),
         "state_tokens_dropped": dropped,
-        "truncated": bool(usage.get("truncated")),
-        "truncated_questions": usage.get("truncated_questions") or [],
+        "truncated": usage["truncated"],
+        "truncated_questions": usage["truncated_questions"],
     }
+    validate_result(
+        {
+            "label": label,
+            "probabilities": dict(probabilities),
+            "usage": usage,
+            "coverage": coverage,
+        }
+    )
     return {
         "label": label,
         "probabilities": probabilities,
@@ -349,6 +364,7 @@ def main() -> None:
     loaded_device: str | None = None
     loaded_questions: dict[str, Any] | None = None
     loaded_contract: str | None = None
+    loaded_identity: dict[str, Any] | None = None
     default_checkpoint = args.checkpoint
     default_device = args.device
     default_laya = args.laya_root or os.environ.get("LAYA_ROOT")
@@ -400,6 +416,10 @@ def main() -> None:
         try:
             req_id = request_id if isinstance(request_id, str) else ""
             if kind == "load":
+                # A failed replacement must not leave the prior agent usable.
+                agent = None
+                loaded_questions = None
+                loaded_identity = None
                 model = command.get("model")
                 if model is None:
                     if default_checkpoint is None:
@@ -435,6 +455,13 @@ def main() -> None:
                     checkpoint,
                     lambda s, d, _r=req_id: progress(_r, s, d),
                 )
+                if expected:
+                    _verify_expected(
+                        staged,
+                        expected,
+                        lambda s, d, _r=req_id: progress(_r, s, d),
+                    )
+                sealed_files = expected or _tree_hashes(staged)
                 started = time.monotonic()
                 laya_arg = (
                     str(laya_root)
@@ -460,6 +487,40 @@ def main() -> None:
                 loaded_device = device
                 loaded_questions = staged_questions
                 loaded_contract = staged_contract
+                if (
+                    checked.get("question_contract", staged_contract)
+                    != staged_contract
+                ):
+                    loaded_questions = None
+                    raise ValueError(
+                        "Loaded question contract differs from registry"
+                    )
+                import torch
+
+                runtime_root = laya_arg or str(
+                    Path(_check_laya_runtime(None)).parent.parent
+                )
+                loaded_identity = {
+                    "checkpoint_sha256": sealed_files.get("model.safetensors"),
+                    "export_sha256": digest(sealed_files),
+                    "question_contract": staged_contract,
+                    "question_sha256": digest(staged_questions),
+                    "runtime_sha256": runtime_digest(runtime_root),
+                    "inference": {
+                        "backend": "laya.predict_batch",
+                        "batch_size": 1,
+                        "sort_by_length": False,
+                        "option_order": [0, 1, 2],
+                        "precision": str(agent.dtype),
+                        "amp_enabled": bool(agent.amp_enabled),
+                        "torch_version": str(torch.__version__),
+                        "device_type": device.split(":")[0],
+                        "max_len": int(agent.cfg.get("max_len", 512)),
+                        "head_max_len": int(agent.cfg.get("head_max_len", 192)),
+                        "fast_backend": getattr(agent, "_fast", None)
+                        is not None,
+                    },
+                }
                 _log(
                     "loaded %s on %s contract %s"
                     % (loaded_id, device, loaded_contract)
@@ -471,6 +532,7 @@ def main() -> None:
                         "model_id": loaded_id,
                         "device": device,
                         "question_contract": loaded_contract,
+                        "execution_identity": loaded_identity,
                         "cpu_fallback_count": int(
                             getattr(agent, "cpu_fallback_count", 0) or 0
                         ),
@@ -495,6 +557,8 @@ def main() -> None:
                         "coverage": outcome["coverage"],
                         "device": loaded_device,
                         "model_id": loaded_id,
+                        "execution_identity": loaded_identity,
+                        "state_sha256": text_digest(state),
                     },
                     session_id,
                 )

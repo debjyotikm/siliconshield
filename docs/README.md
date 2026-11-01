@@ -27,6 +27,7 @@ run.
 | Serve models and measure inference | [Inference](inference.md) |
 | Interpret results and reserve final evaluation | [Evaluation](evaluation.md) |
 | Understand measured model strengths and limitations | [Model limitations](LIMITATIONS.md) |
+| Route scopes across experts and add models | [Router architecture](router.md) |
 | Diagnose jobs, recover, or stop a campaign | [Operations](operations.md) |
 | Find commands, settings, and artifact owners | [Reference](reference.md) |
 | Develop and verify changes | [Development and testing](development.md) |
