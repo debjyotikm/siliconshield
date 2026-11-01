@@ -255,3 +255,14 @@ docs/decision-study.md
 .agents/skills/round-diagnosis/SKILL.md
 .agents/skills/campaign-ops/SKILL.md
 .agents/skills/rtl-analysis/SKILL.md
+
+docs/benchmark.md
+requirements/benchmark.txt
+siliconshield/benchmark/__init__.py
+siliconshield/benchmark/__main__.py
+siliconshield/benchmark/cli.py
+siliconshield/benchmark/dataset.py
+siliconshield/benchmark/metrics.py
+siliconshield/benchmark/router_eval.py
+siliconshield/benchmark/runner.py
+tests/test_benchmark.py

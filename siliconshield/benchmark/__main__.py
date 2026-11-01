@@ -1,0 +1,6 @@
+"""Run the benchmark CLI: python -m siliconshield.benchmark."""
+
+from siliconshield.benchmark.cli import main
+
+if __name__ == "__main__":
+    raise SystemExit(main())
