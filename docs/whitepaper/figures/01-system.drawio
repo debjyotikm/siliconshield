@@ -1,0 +1,108 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="01-system" name="01 System">
+    <mxGraphModel dx="1200" dy="740" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="740" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;fillColor=#FFFFFF;strokeColor=none;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1200" height="740" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-number" value="01" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#647482;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="22" width="45" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-title" value="Specialist assessment architecture" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=29;fontColor=#1E3040;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="18" width="1080" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-subtitle" value="Measured capability profiles control model selection. Muse review is an optional, separate step." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=18;fontColor=#647482;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="67" width="1140" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="question" value="RTL region&#10;Requirement&#10;Assumptions" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;shape=note;size=20;fillColor=#FFFFFF;strokeColor=#1E3040;align=center;spacing=12;" vertex="1" parent="1">
+          <mxGeometry x="30" y="285" width="190" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="capabilities" value="Measured capability&#10;profiles" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;shape=cylinder3;size=15;boundedLbl=1;backgroundOutline=1;fillColor=#F1F5F8;strokeColor=#647482;align=center;" vertex="1" parent="1">
+          <mxGeometry x="280" y="130" width="210" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="router" value="Capability router" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F1F5F8;swimlaneFillColor=#FFFFFF;strokeColor=#2A6080;fontColor=#2A6080;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="280" y="285" width="210" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="router-body" value="Check requested scope&#10;Select eligible experts" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#1E3040;fontStyle=0;" vertex="1" parent="router">
+          <mxGeometry x="16" y="47" width="178" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="workers" value="LOCAL DECISION WORKERS" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=40;fillColor=#EDF3F7;swimlaneFillColor=#F8FAFC;strokeColor=#8BA0B0;fontStyle=1;fontSize=16;align=left;spacingLeft=16;" vertex="1" parent="1">
+          <mxGeometry x="550" y="120" width="290" height="450" as="geometry" />
+        </mxCell>
+        <mxCell id="contract-one" value="Contract-1" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F1F5F8;swimlaneFillColor=#FFFFFF;strokeColor=#2A6080;fontColor=#2A6080;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="workers">
+          <mxGeometry x="30" y="70" width="230" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="contract-one-body" value="Direct local guards&#10;Register-update paths" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#1E3040;fontStyle=0;" vertex="1" parent="contract-one">
+          <mxGeometry x="16" y="47" width="198" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="contract-two" value="Contract-2" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F1F5F8;swimlaneFillColor=#FFFFFF;strokeColor=#277567;fontColor=#277567;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="workers">
+          <mxGeometry x="30" y="280" width="230" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="contract-two-body" value="FIFO and counters&#10;Bounded arbitration" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#1E3040;fontStyle=0;" vertex="1" parent="contract-two">
+          <mxGeometry x="16" y="47" width="198" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="execution-note" value="Expert calls run sequentially.&#10;Each worker retains its identity." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=14;fontColor=#647482;fontStyle=0;" vertex="1" parent="workers">
+          <mxGeometry x="22" y="409" width="246" height="36" as="geometry" />
+        </mxCell>
+        <mxCell id="evidence" value="Structured evidence" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F1F5F8;swimlaneFillColor=#FFFFFF;strokeColor=#1E3040;fontColor=#1E3040;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="930" y="285" width="240" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="evidence-body" value="Label and three scores&#10;Coverage, identity, errors" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#1E3040;fontStyle=0;" vertex="1" parent="evidence">
+          <mxGeometry x="16" y="47" width="208" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="muse" value="Muse review" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F1F5F8;swimlaneFillColor=#FFFFFF;strokeColor=#A45A35;fontColor=#A45A35;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="930" y="540" width="240" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="muse-body" value="Interpret cited evidence&#10;Expose open questions" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#1E3040;fontStyle=0;" vertex="1" parent="muse">
+          <mxGeometry x="16" y="47" width="208" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="question-router" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#647482;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#647482;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="question" target="router">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="profile-router" value="scope support" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#647482;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#647482;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="capabilities" target="router">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="route-local" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#647482;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#647482;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.292;entryX=0;entryY=0.5;" edge="1" parent="1" source="router" target="contract-one">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="525" y="320" />
+              <mxPoint x="525" y="250" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="route-temporal" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#647482;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#647482;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.708;entryX=0;entryY=0.5;" edge="1" parent="1" source="router" target="contract-two">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="525" y="370" />
+              <mxPoint x="525" y="460" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="local-evidence" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#647482;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#647482;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.292;" edge="1" parent="1" source="contract-one" target="evidence">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="885" y="250" />
+              <mxPoint x="885" y="320" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="temporal-evidence" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#647482;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#647482;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.708;" edge="1" parent="1" source="contract-two" target="evidence">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="885" y="460" />
+              <mxPoint x="885" y="370" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="optional-review" value="optional arbitration" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#A45A35;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#647482;labelBackgroundColor=#FFFFFF;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="evidence" target="muse">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="scope-note" value="Decision models return predictions. Muse interpretation does not establish a verified property." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#647482;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="688" width="1140" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

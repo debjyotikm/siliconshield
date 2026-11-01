@@ -1,0 +1,455 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="900pt" height="468pt" viewBox="0 0 900 468" xmlns="http://www.w3.org/2000/svg" version="1.1" role="img" aria-labelledby="title description">
+<title id="title">Contract-1 across evaluation populations</title>
+<desc id="description">Three panels compare accuracy, violation recall, context recall, and complete triplets. All values are recorded aggregates, with exact counts.</desc>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 468
+L 900 468
+L 900 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 142.2 362.7
+L 326.7 362.7
+L 326.7 135.72
+L 142.2 135.72
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1"/>
+     <g id="text_1">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="145.714286" y="377.825" transform="rotate(-0 145.714286 377.825)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2"/>
+     <g id="text_2">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="233.571429" y="377.825" transform="rotate(-0 233.571429 377.825)">50</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3"/>
+     <g id="text_3">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="321.428571" y="377.825" transform="rotate(-0 321.428571 377.825)">100</text>
+     </g>
+    </g>
+    <g id="text_4">
+     <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #172635" x="234.45" y="404.344531" transform="rotate(-0 234.45 404.344531)">Percent</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_4"/>
+     <g id="text_5">
+      <text style="font-size: 13px; font-family: 'Inter'; text-anchor: end; fill: #53616d" x="126.2" y="167.552125" transform="rotate(-0 126.2 167.552125)">Accuracy</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_5"/>
+     <g id="text_6">
+      <text style="font-size: 13px; font-family: 'Inter'; text-anchor: end; fill: #53616d" x="126.2" y="224.297125" transform="rotate(-0 126.2 224.297125)">Violation recall</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_6"/>
+     <g id="text_7">
+      <text style="font-size: 13px; font-family: 'Inter'; text-anchor: end; fill: #53616d" x="126.2" y="281.042125" transform="rotate(-0 126.2 281.042125)">Context recall</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_7"/>
+     <g id="text_8">
+      <text style="font-size: 13px; font-family: 'Inter'; text-anchor: end; fill: #53616d" x="126.2" y="337.787125" transform="rotate(-0 126.2 337.787125)">Whole triplets</text>
+     </g>
+    </g>
+   </g>
+   <g id="LineCollection_1">
+    <path d="M 145.714286 161.25525
+L 321.428571 161.25525
+" clip-path="url(#drawing-resource-4)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_2">
+    <path d="M 145.714286 218.00025
+L 321.428571 218.00025
+" clip-path="url(#drawing-resource-4)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_3">
+    <path d="M 145.714286 274.74525
+L 321.428571 274.74525
+" clip-path="url(#drawing-resource-4)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_4">
+    <path d="M 145.714286 331.49025
+L 321.428571 331.49025
+" clip-path="url(#drawing-resource-4)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="line2d_8">
+    <defs>
+     <path id="drawing-resource-1" d="M 0 3.5
+C 0.928211 3.5 1.81853 3.131218 2.474874 2.474874
+C 3.131218 1.81853 3.5 0.928211 3.5 0
+C 3.5 -0.928211 3.131218 -1.81853 2.474874 -2.474874
+C 1.81853 -3.131218 0.928211 -3.5 0 -3.5
+C -0.928211 -3.5 -1.81853 -3.131218 -2.474874 -2.474874
+C -3.131218 -1.81853 -3.5 -0.928211 -3.5 0
+C -3.5 0.928211 -3.131218 1.81853 -2.474874 2.474874
+C -1.81853 3.131218 -0.928211 3.5 0 3.5
+z
+" style="stroke: #286181"/>
+    </defs>
+    <g clip-path="url(#drawing-resource-4)">
+     <use xlink:href="#drawing-resource-1" x="302.514881" y="161.25525" style="fill: #286181; stroke: #286181"/>
+    </g>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #286181" x="331.971429" y="165.802369" transform="rotate(-0 331.971429 165.802369)">89.2%</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="145.714286" y="175.4415" transform="rotate(-0 145.714286 175.4415)">257 / 288</text>
+   </g>
+   <g id="line2d_9">
+    <g clip-path="url(#drawing-resource-4)">
+     <use xlink:href="#drawing-resource-1" x="319.598214" y="218.00025" style="fill: #286181; stroke: #286181"/>
+    </g>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #286181" x="331.971429" y="222.547369" transform="rotate(-0 331.971429 222.547369)">99.0%</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="145.714286" y="232.1865" transform="rotate(-0 145.714286 232.1865)">95 / 96</text>
+   </g>
+   <g id="line2d_10">
+    <g clip-path="url(#drawing-resource-4)">
+     <use xlink:href="#drawing-resource-1" x="266.517857" y="274.74525" style="fill: #286181; stroke: #286181"/>
+    </g>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #286181" x="331.971429" y="279.292369" transform="rotate(-0 331.971429 279.292369)">68.8%</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="145.714286" y="288.9315" transform="rotate(-0 145.714286 288.9315)">66 / 96</text>
+   </g>
+   <g id="line2d_11">
+    <g clip-path="url(#drawing-resource-4)">
+     <use xlink:href="#drawing-resource-1" x="266.517857" y="331.49025" style="fill: #286181; stroke: #286181"/>
+    </g>
+   </g>
+   <g id="text_15">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #286181" x="331.971429" y="336.037369" transform="rotate(-0 331.971429 336.037369)">68.8%</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="145.714286" y="345.6765" transform="rotate(-0 145.714286 345.6765)">66 / 96</text>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_3">
+    <path d="M 389.7 362.7
+L 574.2 362.7
+L 574.2 135.72
+L 389.7 135.72
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_3">
+    <g id="xtick_4">
+     <g id="line2d_12"/>
+     <g id="text_17">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="393.214286" y="377.825" transform="rotate(-0 393.214286 377.825)">0</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_13"/>
+     <g id="text_18">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="481.071429" y="377.825" transform="rotate(-0 481.071429 377.825)">50</text>
+     </g>
+    </g>
+    <g id="xtick_6">
+     <g id="line2d_14"/>
+     <g id="text_19">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="568.928571" y="377.825" transform="rotate(-0 568.928571 377.825)">100</text>
+     </g>
+    </g>
+    <g id="text_20">
+     <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #172635" x="481.95" y="404.344531" transform="rotate(-0 481.95 404.344531)">Percent</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_4">
+    <g id="ytick_5">
+     <g id="line2d_15"/>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_16"/>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_17"/>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_18"/>
+    </g>
+   </g>
+   <g id="LineCollection_5">
+    <path d="M 393.214286 161.25525
+L 568.928571 161.25525
+" clip-path="url(#drawing-resource-5)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_6">
+    <path d="M 393.214286 218.00025
+L 568.928571 218.00025
+" clip-path="url(#drawing-resource-5)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_7">
+    <path d="M 393.214286 274.74525
+L 568.928571 274.74525
+" clip-path="url(#drawing-resource-5)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_8">
+    <path d="M 393.214286 331.49025
+L 568.928571 331.49025
+" clip-path="url(#drawing-resource-5)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="line2d_19">
+    <defs>
+     <path id="drawing-resource-2" d="M 0 3.5
+C 0.928211 3.5 1.81853 3.131218 2.474874 2.474874
+C 3.131218 1.81853 3.5 0.928211 3.5 0
+C 3.5 -0.928211 3.131218 -1.81853 2.474874 -2.474874
+C 1.81853 -3.131218 0.928211 -3.5 0 -3.5
+C -0.928211 -3.5 -1.81853 -3.131218 -2.474874 -2.474874
+C -3.131218 -1.81853 -3.5 -0.928211 -3.5 0
+C -3.5 0.928211 -3.131218 1.81853 -2.474874 2.474874
+C -1.81853 3.131218 -0.928211 3.5 0 3.5
+z
+" style="stroke: #257568"/>
+    </defs>
+    <g clip-path="url(#drawing-resource-5)">
+     <use xlink:href="#drawing-resource-2" x="545.133929" y="161.25525" style="fill: #257568; stroke: #257568"/>
+    </g>
+   </g>
+   <g id="text_21">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #257568" x="579.471429" y="165.802369" transform="rotate(-0 579.471429 165.802369)">86.5%</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="393.214286" y="175.4415" transform="rotate(-0 393.214286 175.4415)">249 / 288</text>
+   </g>
+   <g id="line2d_20">
+    <g clip-path="url(#drawing-resource-5)">
+     <use xlink:href="#drawing-resource-2" x="561.607143" y="218.00025" style="fill: #257568; stroke: #257568"/>
+    </g>
+   </g>
+   <g id="text_23">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #257568" x="579.471429" y="222.547369" transform="rotate(-0 579.471429 222.547369)">95.8%</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="393.214286" y="232.1865" transform="rotate(-0 393.214286 232.1865)">92 / 96</text>
+   </g>
+   <g id="line2d_21">
+    <g clip-path="url(#drawing-resource-5)">
+     <use xlink:href="#drawing-resource-2" x="532.321429" y="274.74525" style="fill: #257568; stroke: #257568"/>
+    </g>
+   </g>
+   <g id="text_25">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #257568" x="579.471429" y="279.292369" transform="rotate(-0 579.471429 279.292369)">79.2%</text>
+   </g>
+   <g id="text_26">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="393.214286" y="288.9315" transform="rotate(-0 393.214286 288.9315)">76 / 96</text>
+   </g>
+   <g id="line2d_22">
+    <g clip-path="url(#drawing-resource-5)">
+     <use xlink:href="#drawing-resource-2" x="501.205357" y="331.49025" style="fill: #257568; stroke: #257568"/>
+    </g>
+   </g>
+   <g id="text_27">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #257568" x="579.471429" y="336.037369" transform="rotate(-0 579.471429 336.037369)">61.5%</text>
+   </g>
+   <g id="text_28">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="393.214286" y="345.6765" transform="rotate(-0 393.214286 345.6765)">59 / 96</text>
+   </g>
+  </g>
+  <g id="axes_3">
+   <g id="patch_4">
+    <path d="M 637.2 362.7
+L 821.7 362.7
+L 821.7 135.72
+L 637.2 135.72
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_5">
+    <g id="xtick_7">
+     <g id="line2d_23"/>
+     <g id="text_29">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="640.714286" y="377.825" transform="rotate(-0 640.714286 377.825)">0</text>
+     </g>
+    </g>
+    <g id="xtick_8">
+     <g id="line2d_24"/>
+     <g id="text_30">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="728.571429" y="377.825" transform="rotate(-0 728.571429 377.825)">50</text>
+     </g>
+    </g>
+    <g id="xtick_9">
+     <g id="line2d_25"/>
+     <g id="text_31">
+      <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #53616d" x="816.428571" y="377.825" transform="rotate(-0 816.428571 377.825)">100</text>
+     </g>
+    </g>
+    <g id="text_32">
+     <text style="font-size: 12px; font-family: 'Inter'; text-anchor: middle; fill: #172635" x="729.45" y="404.344531" transform="rotate(-0 729.45 404.344531)">Percent</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_6">
+    <g id="ytick_9">
+     <g id="line2d_26"/>
+    </g>
+    <g id="ytick_10">
+     <g id="line2d_27"/>
+    </g>
+    <g id="ytick_11">
+     <g id="line2d_28"/>
+    </g>
+    <g id="ytick_12">
+     <g id="line2d_29"/>
+    </g>
+   </g>
+   <g id="LineCollection_9">
+    <path d="M 640.714286 161.25525
+L 816.428571 161.25525
+" clip-path="url(#drawing-resource-6)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_10">
+    <path d="M 640.714286 218.00025
+L 816.428571 218.00025
+" clip-path="url(#drawing-resource-6)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_11">
+    <path d="M 640.714286 274.74525
+L 816.428571 274.74525
+" clip-path="url(#drawing-resource-6)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="LineCollection_12">
+    <path d="M 640.714286 331.49025
+L 816.428571 331.49025
+" clip-path="url(#drawing-resource-6)" style="fill: none; stroke: #dbe2e7"/>
+   </g>
+   <g id="line2d_30">
+    <defs>
+     <path id="drawing-resource-3" d="M 0 3.5
+C 0.928211 3.5 1.81853 3.131218 2.474874 2.474874
+C 3.131218 1.81853 3.5 0.928211 3.5 0
+C 3.5 -0.928211 3.131218 -1.81853 2.474874 -2.474874
+C 1.81853 -3.131218 0.928211 -3.5 0 -3.5
+C -0.928211 -3.5 -1.81853 -3.131218 -2.474874 -2.474874
+C -3.131218 -1.81853 -3.5 -0.928211 -3.5 0
+C -3.5 0.928211 -3.131218 1.81853 -2.474874 2.474874
+C -1.81853 3.131218 -0.928211 3.5 0 3.5
+z
+" style="stroke: #aa5833"/>
+    </defs>
+    <g clip-path="url(#drawing-resource-6)">
+     <use xlink:href="#drawing-resource-3" x="717.414966" y="161.25525" style="fill: #aa5833; stroke: #aa5833"/>
+    </g>
+   </g>
+   <g id="text_33">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #aa5833" x="826.971429" y="165.802369" transform="rotate(-0 826.971429 165.802369)">43.7%</text>
+   </g>
+   <g id="text_34">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="640.714286" y="175.4415" transform="rotate(-0 640.714286 175.4415)">330 / 756</text>
+   </g>
+   <g id="line2d_31">
+    <g clip-path="url(#drawing-resource-6)">
+     <use xlink:href="#drawing-resource-3" x="797.602041" y="218.00025" style="fill: #aa5833; stroke: #aa5833"/>
+    </g>
+   </g>
+   <g id="text_35">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #aa5833" x="826.971429" y="222.547369" transform="rotate(-0 826.971429 222.547369)">89.3%</text>
+   </g>
+   <g id="text_36">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="640.714286" y="232.1865" transform="rotate(-0 640.714286 232.1865)">225 / 252</text>
+   </g>
+   <g id="line2d_32">
+    <g clip-path="url(#drawing-resource-6)">
+     <use xlink:href="#drawing-resource-3" x="658.146259" y="274.74525" style="fill: #aa5833; stroke: #aa5833"/>
+    </g>
+   </g>
+   <g id="text_37">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #aa5833" x="826.971429" y="279.292369" transform="rotate(-0 826.971429 279.292369)">9.9%</text>
+   </g>
+   <g id="text_38">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="640.714286" y="288.9315" transform="rotate(-0 640.714286 288.9315)">25 / 252</text>
+   </g>
+   <g id="line2d_33">
+    <g clip-path="url(#drawing-resource-6)">
+     <use xlink:href="#drawing-resource-3" x="649.081633" y="331.49025" style="fill: #aa5833; stroke: #aa5833"/>
+    </g>
+   </g>
+   <g id="text_39">
+    <text style="font-weight: 600; font-size: 12.5px; font-family: 'Inter'; text-anchor: start; fill: #aa5833" x="826.971429" y="336.037369" transform="rotate(-0 826.971429 336.037369)">4.8%</text>
+   </g>
+   <g id="text_40">
+    <text style="font-size: 11px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="640.714286" y="345.6765" transform="rotate(-0 640.714286 345.6765)">12 / 252</text>
+   </g>
+  </g>
+  <g id="line2d_34">
+   <path d="M 31.5 81
+L 868.5 81
+" style="fill: none; stroke: #dbe2e7; stroke-width: 0.8; stroke-linecap: square"/>
+  </g>
+  <g id="line2d_35">
+   <path d="M 31.5 427.752
+L 868.5 427.752
+" style="fill: none; stroke: #dbe2e7; stroke-width: 0.8; stroke-linecap: square"/>
+  </g>
+  <g id="text_41">
+   <text style="font-weight: 600; font-size: 12px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="31.5" y="36" transform="rotate(-0 31.5 36)">04</text>
+  </g>
+  <g id="text_42">
+   <text style="font-weight: 600; font-size: 21px; font-family: 'Inter'; text-anchor: start; fill: #172635" x="72" y="36" transform="rotate(-0 72 36)">Contract-1 across evaluation populations</text>
+  </g>
+  <g id="text_43">
+   <text style="font-size: 13px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="31.5" y="63.75" transform="rotate(-0 31.5 63.75)">Each panel uses the same 0–100% scale. Development and reserved evaluations answer different questions.</text>
+  </g>
+  <g id="text_44">
+   <text style="font-weight: 600; font-size: 15px; font-family: 'Inter'; text-anchor: start; fill: #286181" x="142.2" y="102.024" transform="rotate(-0 142.2 102.024)">A  Development</text>
+  </g>
+  <g id="text_45">
+   <text style="font-size: 11.5px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="142.2" y="120.744" transform="rotate(-0 142.2 120.744)">288 decisions · 96 per class</text>
+  </g>
+  <g id="text_46">
+   <text style="font-weight: 600; font-size: 15px; font-family: 'Inter'; text-anchor: start; fill: #257568" x="389.7" y="102.024" transform="rotate(-0 389.7 102.024)">B  Qualification</text>
+  </g>
+  <g id="text_47">
+   <text style="font-size: 11.5px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="389.7" y="120.744" transform="rotate(-0 389.7 120.744)">288 decisions · 96 per class</text>
+  </g>
+  <g id="text_48">
+   <text style="font-weight: 600; font-size: 15px; font-family: 'Inter'; text-anchor: start; fill: #aa5833" x="637.2" y="102.024" transform="rotate(-0 637.2 102.024)">C  Shifted evaluation</text>
+  </g>
+  <g id="text_49">
+   <text style="font-size: 11.5px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="637.2" y="120.744" transform="rotate(-0 637.2 120.744)">756 decisions · 252 per class</text>
+  </g>
+  <g id="text_50">
+   <text style="font-size: 11.5px; font-family: 'Inter'; text-anchor: start; fill: #53616d" x="31.5" y="449.28" transform="rotate(-0 31.5 449.28)">Whole-triplet scores require all three labels to be correct. Counts below each mark show the relevant support.</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="drawing-resource-4">
+   <rect x="142.2" y="135.72" width="184.5" height="226.98"/>
+  </clipPath>
+  <clipPath id="drawing-resource-5">
+   <rect x="389.7" y="135.72" width="184.5" height="226.98"/>
+  </clipPath>
+  <clipPath id="drawing-resource-6">
+   <rect x="637.2" y="135.72" width="184.5" height="226.98"/>
+  </clipPath>
+ </defs>
+</svg>

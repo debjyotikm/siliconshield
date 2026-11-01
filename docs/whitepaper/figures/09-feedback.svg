@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; background-color: light-dark(#ffffff, #121212);" version="1.1" width="1220px" height="810px" viewBox="0 0 1220 810" role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">Bounded research control and model selection</title>
+  <desc id="figure-description">Rendered from the accompanying editable draw.io source. Bounded research control and model selection.</desc>
+  <defs />
+  <rect fill="#ffffff" width="100%" height="100%" x="0" y="0" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
+  <g>
+    <g data-cell-id="0">
+      <g data-cell-id="1">
+        <g data-cell-id="canvas">
+          <g>
+            <rect x="10" y="10" width="1200" height="790" fill="#ffffff" stroke="none" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
+          </g>
+        </g>
+        <g data-cell-id="figure-number">
+          <g>
+            <rect x="40" y="32" width="45" height="35" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#647482" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="16px" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));">
+              <text x="40" y="56.5">09</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="figure-title">
+          <g>
+            <rect x="95" y="28" width="1080" height="45" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#1E3040" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="29px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+              <text x="95" y="64">Bounded research control and model selection</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="figure-subtitle">
+          <g>
+            <rect x="40" y="77" width="1140" height="35" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#647482" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="18px" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));">
+              <text x="40" y="102.5">Deterministic gates control selection and launch. Muse proposes changes from completed evidence.</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="register">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 40 213 L 40 175 L 390 175 L 390 213" fill="#f1f5f8" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(241, 245, 248), rgb(23, 27, 29)); stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+            <path d="M 40 213 L 40 325 L 390 325 L 390 213" fill="#ffffff" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+            <path d="M 40 213 L 390 213" fill="none" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+          </g>
+          <g>
+            <g fill="#1E3040" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+              <text x="58" y="202.5">1  Register the round</text>
+            </g>
+          </g>
+          <g data-cell-id="register-body">
+            <g>
+              <rect x="56" y="222" width="318" height="92" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#1E3040" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+                <text x="56" y="255.5">Freeze parent and accepted data</text>
+                <text x="56" y="275.5">Bind recipe, policy and budget</text>
+                <text x="56" y="295.5">Record the experiment identity</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="train">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 435 213 L 435 175 L 785 175 L 785 213" fill="#f1f5f8" stroke="#2a6080" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(241, 245, 248), rgb(23, 27, 29)); stroke: light-dark(rgb(42, 96, 128), rgb(125, 171, 199));" />
+            <path d="M 435 213 L 435 325 L 785 325 L 785 213" fill="#ffffff" stroke="#2a6080" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(42, 96, 128), rgb(125, 171, 199));" />
+            <path d="M 435 213 L 785 213" fill="none" stroke="#2a6080" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(42, 96, 128), rgb(125, 171, 199));" />
+          </g>
+          <g>
+            <g fill="#2A6080" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(42, 96, 128), rgb(125, 171, 199));">
+              <text x="453" y="202.5">2  Run owned training</text>
+            </g>
+          </g>
+          <g data-cell-id="train-body">
+            <g>
+              <rect x="451" y="222" width="318" height="92" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#1E3040" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+                <text x="451" y="255.5">Execute on allocated GPUs</text>
+                <text x="451" y="275.5">Retain evaluated checkpoints</text>
+                <text x="451" y="295.5">Persist restart and recovery state</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="audit">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 830 213 L 830 175 L 1180 175 L 1180 213" fill="#f1f5f8" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(241, 245, 248), rgb(23, 27, 29)); stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+            <path d="M 830 213 L 830 325 L 1180 325 L 1180 213" fill="#ffffff" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+            <path d="M 830 213 L 1180 213" fill="none" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+          </g>
+          <g>
+            <g fill="#1E3040" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+              <text x="848" y="202.5">3  Close out and audit</text>
+            </g>
+          </g>
+          <g data-cell-id="audit-body">
+            <g>
+              <rect x="846" y="222" width="318" height="92" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#1E3040" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+                <text x="846" y="255.5">Check SDK parity and exposure</text>
+                <text x="846" y="275.5">Measure class and triplet results</text>
+                <text x="846" y="295.5">Invalid evidence: stop and report</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="select">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 830 538 L 830 500 L 1180 500 L 1180 538" fill="#f1f5f8" stroke="#277567" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(241, 245, 248), rgb(23, 27, 29)); stroke: light-dark(rgb(39, 117, 103), rgb(100, 167, 155));" />
+            <path d="M 830 538 L 830 650 L 1180 650 L 1180 538" fill="#ffffff" stroke="#277567" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(39, 117, 103), rgb(100, 167, 155));" />
+            <path d="M 830 538 L 1180 538" fill="none" stroke="#277567" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(39, 117, 103), rgb(100, 167, 155));" />
+          </g>
+          <g>
+            <g fill="#277567" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(39, 117, 103), rgb(100, 167, 155));">
+              <text x="848" y="527.5">4  Apply frozen policy</text>
+            </g>
+          </g>
+          <g data-cell-id="select-body">
+            <g>
+              <rect x="846" y="547" width="318" height="92" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#1E3040" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+                <text x="846" y="580.5">All promotion gates pass: promote</text>
+                <text x="846" y="600.5">Otherwise: preserve incumbent</text>
+                <text x="846" y="620.5">Record counts and reasons</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="muse">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 435 538 L 435 500 L 785 500 L 785 538" fill="#f1f5f8" stroke="#a45a35" stroke-width="1.4" stroke-miterlimit="10" stroke-dasharray="4.2 4.2" pointer-events="all" style="fill: light-dark(rgb(241, 245, 248), rgb(23, 27, 29)); stroke: light-dark(rgb(164, 90, 53), rgb(201, 137, 105));" />
+            <path d="M 435 538 L 435 650 L 785 650 L 785 538" fill="#ffffff" stroke="#a45a35" stroke-width="1.4" stroke-miterlimit="10" stroke-dasharray="4.2 4.2" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(164, 90, 53), rgb(201, 137, 105));" />
+            <path d="M 435 538 L 785 538" fill="none" stroke="#a45a35" stroke-width="1.4" stroke-miterlimit="10" stroke-dasharray="4.2 4.2" pointer-events="all" style="stroke: light-dark(rgb(164, 90, 53), rgb(201, 137, 105));" />
+          </g>
+          <g>
+            <g fill="#A45A35" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(164, 90, 53), rgb(201, 137, 105));">
+              <text x="453" y="527.5">5  Muse diagnosis</text>
+            </g>
+          </g>
+          <g data-cell-id="muse-body">
+            <g>
+              <rect x="451" y="547" width="318" height="92" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#1E3040" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+                <text x="451" y="580.5">Analyze the measured failure</text>
+                <text x="451" y="600.5">Propose a bounded next experiment</text>
+                <text x="451" y="620.5">Cannot relax frozen gates</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="validate">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 40 538 L 40 500 L 390 500 L 390 538" fill="#f1f5f8" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(241, 245, 248), rgb(23, 27, 29)); stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+            <path d="M 40 538 L 40 650 L 390 650 L 390 538" fill="#ffffff" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+            <path d="M 40 538 L 390 538" fill="none" stroke="#1e3040" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));" />
+          </g>
+          <g>
+            <g fill="#1E3040" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+              <text x="58" y="527.5">6  Validate next round</text>
+            </g>
+          </g>
+          <g data-cell-id="validate-body">
+            <g>
+              <rect x="56" y="547" width="318" height="92" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#1E3040" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(30, 48, 64), rgb(185, 200, 214));">
+                <text x="56" y="580.5">Check authority, bounds and budget</text>
+                <text x="56" y="600.5">Reject unauthorized changes</text>
+                <text x="56" y="620.5">Stop when a frozen limit fires</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="launch">
+          <g>
+            <path d="M 390 250 L 425.61 250" fill="none" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+            <path d="M 433.21 250 L 425.61 253.8 L 425.61 246.2 Z" fill="#647482" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153)); stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+          </g>
+        </g>
+        <g data-cell-id="complete">
+          <g>
+            <path d="M 785 250 L 820.61 250" fill="none" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+            <path d="M 828.21 250 L 820.61 253.8 L 820.61 246.2 Z" fill="#647482" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153)); stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+          </g>
+        </g>
+        <g data-cell-id="valid-evidence">
+          <g>
+            <path d="M 1005 325 L 1005 490.61" fill="none" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+            <path d="M 1005 498.21 L 1001.2 490.61 L 1008.8 490.61 Z" fill="#647482" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153)); stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+          </g>
+          <g>
+            <g fill="#647482" font-family="Inter, Arial, sans-serif" text-anchor="middle" font-size="14px" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));">
+              <rect fill="#FFFFFF" stroke="none" x="957" y="405" width="97" height="18" stroke-width="0" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
+              <text x="1005" y="419">valid evidence</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="diagnose">
+          <g>
+            <path d="M 830 575 L 794.39 575" fill="none" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+            <path d="M 786.79 575 L 794.39 571.2 L 794.39 578.8 Z" fill="#647482" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153)); stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+          </g>
+        </g>
+        <g data-cell-id="proposal">
+          <g>
+            <path d="M 435 575 L 399.39 575" fill="none" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+            <path d="M 391.79 575 L 399.39 571.2 L 399.39 578.8 Z" fill="#647482" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153)); stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+          </g>
+        </g>
+        <g data-cell-id="next-round">
+          <g>
+            <path d="M 215 500 L 215 334.39" fill="none" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+            <path d="M 215 326.79 L 218.8 334.39 L 211.2 334.39 Z" fill="#647482" stroke="#647482" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153)); stroke: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));" />
+          </g>
+          <g>
+            <g fill="#647482" font-family="Inter, Arial, sans-serif" text-anchor="middle" font-size="14px" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));">
+              <rect fill="#FFFFFF" stroke="none" x="142" y="404" width="148" height="18" stroke-width="0" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
+              <text x="215" y="418">authorized next round</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="control-boundary">
+          <g>
+            <rect x="390" y="386" width="440" height="32" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#647482" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="middle" font-size="17px" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));">
+              <text x="610" y="409.5">MEASURE → DIAGNOSE → PROPOSE → VALIDATE</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="stop-note">
+          <g>
+            <rect x="40" y="705" width="1140" height="54" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#647482" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="18px" style="fill: light-dark(rgb(100, 116, 130), rgb(127, 141, 153));">
+              <text x="40" y="729">Audit failures, invalid proposals and frozen stop rules end the loop.</text>
+              <text x="40" y="751">The selected model and the experiment evidence are preserved.</text>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

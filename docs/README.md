@@ -16,6 +16,7 @@ run.
 
 | Goal | Read |
 |---|---|
+| Scientific account of Muse-guided research, training methods, hardware, results, and bottlenecks | [Research white paper](whitepaper.md) |
 | Understand the components and controller boundaries | [Architecture](architecture.md) |
 | Run an authored RTL investigation | [Investigation walkthrough](investigation.md) |
 | Install the right environment | [Setup](setup.md) |
