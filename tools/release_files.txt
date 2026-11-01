@@ -249,3 +249,9 @@ siliconshield/training/laya/decision_study.py
 tests/test_decision_study.py
 
 docs/decision-study.md
+
+.agents/skills/study-design/SKILL.md
+
+.agents/skills/round-diagnosis/SKILL.md
+.agents/skills/campaign-ops/SKILL.md
+.agents/skills/rtl-analysis/SKILL.md
