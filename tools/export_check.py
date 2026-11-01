@@ -24,6 +24,13 @@ BINARY = {
     ".onnx",
 }
 DATA_SUFFIXES = {".jsonl", ".log", ".csv", ".tsv"}
+# Exact paths of reviewed binary presentation assets. Each entry must also be
+# on the release list. Only the text-pattern scans are skipped for these
+# paths, and only when the bytes carry genuine image magic.
+REVIEWED_IMAGE_ASSETS = {
+    "docs/assets/siliconshield-banner.png",
+}
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg"}
 TOKEN = re.compile(r"\b(?:hf_|gh[pousr]_|github_pat_|sk-)[A-Za-z0-9_-]{20,}")
 GPU = re.compile(r"GPU-[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 PRIVATE_KEY = re.compile(
@@ -51,6 +58,14 @@ def release_files():
     }
 
 
+def _image_magic(suffix, content):
+    if suffix == ".png":
+        return content[:8] == b"\x89PNG\r\n\x1a\n"
+    if suffix in {".jpg", ".jpeg"}:
+        return content[:2] == b"\xff\xd8"
+    return False
+
+
 def check(name, content, private_words=(), reviewed=None):
     p = Path(name)
     issues = []
@@ -64,6 +79,12 @@ def check(name, content, private_words=(), reviewed=None):
         issues.append("JSON is only allowed as an .example. file")
     if len(content) > 512 * 1024:
         issues.append("unexpected large source file")
+    if name in REVIEWED_IMAGE_ASSETS:
+        if p.suffix not in IMAGE_SUFFIXES or not _image_magic(
+            p.suffix, content
+        ):
+            issues.append("reviewed image asset has unexpected format")
+        return issues
     try:
         text = content.decode("utf-8")
     except UnicodeDecodeError:

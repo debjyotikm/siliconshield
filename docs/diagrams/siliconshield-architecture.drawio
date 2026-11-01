@@ -1,0 +1,438 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="system-overview" name="System Overview">
+    <mxGraphModel dx="1200" dy="830" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="830" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;fillColor=#FFFFFF;strokeColor=none;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1200" height="830" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-number" value="01" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="22" width="45" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-title" value="Runtime architecture" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=29;fontColor=#202020;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="18" width="1080" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-subtitle" value="Local specialist workers, caller-owned evidence, and an explicit agent boundary." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=18;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="67" width="1140" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="local" value="LOCAL APPLICATION AND MODEL ENVIRONMENTS" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;startSize=40;fillColor=#F3F3F3;swimlaneFillColor=#FCFCFC;strokeColor=#BBBBBB;fontSize=16;fontStyle=1;align=left;spacingLeft=16;" vertex="1" parent="1">
+          <mxGeometry x="30" y="130" width="815" height="610" as="geometry" />
+        </mxCell>
+        <mxCell id="caller" value="CLI / Python client" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="190" width="270" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="caller-body" value="Supply scope, RTL&#10;and requirement" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="caller">
+          <mxGeometry x="16" y="47" width="238" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="service" value="InferenceService" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="350" width="270" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="service-body" value="Route by measured support&#10;Validate expert evidence" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="service">
+          <mxGeometry x="16" y="47" width="238" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="registry" value="Registry + profiles" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#666666;fontColor=#666666;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="50" y="550" width="270" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="registry-body" value="Immutable exports&#10;Measured execution identity" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="registry">
+          <mxGeometry x="16" y="47" width="238" height="62" as="geometry" />
+        </mxCell>
+        <mxCell id="benchmark" value="Benchmark runner" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="390" y="190" width="430" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="benchmark-body" value="Score a pinned population&#10;through the production worker" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="benchmark">
+          <mxGeometry x="16" y="47" width="398" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="worker" value="OWNED MODEL WORKER" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;startSize=38;fillColor=#EEEEEE;swimlaneFillColor=#FFFFFF;strokeColor=#777777;fontSize=16;fontStyle=1;align=left;spacingLeft=16;" vertex="1" parent="1">
+          <mxGeometry x="390" y="360" width="430" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="protocol" value="Protocol endpoint&#10;Session + input binding" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="worker">
+          <mxGeometry x="16" y="65" width="200" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="model" value="Contract-1 / Contract-2&#10;Torch + LAYA runtime" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="worker">
+          <mxGeometry x="230" y="65" width="195" height="65" as="geometry" />
+        </mxCell>
+        <mxCell id="evidence" value="Assessment record" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="390" y="605" width="430" height="115" as="geometry" />
+        </mxCell>
+        <mxCell id="evidence-body" value="Labels, scores, errors and coverage&#10;Planned and effective routing" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="evidence">
+          <mxGeometry x="16" y="47" width="398" height="57" as="geometry" />
+        </mxCell>
+        <mxCell id="muse" value="Optional Muse arbitration" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="890" y="460" width="285" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="muse-body" value="Interpret bound evidence&#10;Return dissent and questions" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="muse">
+          <mxGeometry x="16" y="47" width="253" height="92" as="geometry" />
+        </mxCell>
+        <mxCell id="backend" value="Configured backend&#10;May be local or remote" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="900" y="380" width="270" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="input" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="caller" target="service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="profile" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="registry" target="service">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="worker-request" value="I01" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.285;startArrow=block;startFill=1;" edge="1" parent="1" source="service" target="worker">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="bench-worker" value="I02" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="benchmark" target="worker">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="response" value="I03" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="worker" target="evidence">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="effective" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.833;entryX=0;entryY=0.5;" edge="1" parent="1" source="service" target="evidence">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="350" y="450" />
+              <mxPoint x="350" y="662" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arbitrate" value="I04" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;startArrow=block;startFill=1;" edge="1" parent="1" source="evidence" target="muse">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="860" y="662" />
+              <mxPoint x="860" y="535" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="scope" value="I01–I04: interface schedule in architecture.md. Investigation and training have separate execution paths." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="775" width="1140" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="expert-assessment" name="Expert Assessment">
+    <mxGraphModel dx="1200" dy="980" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="980" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;fillColor=#FFFFFF;strokeColor=none;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1200" height="980" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-number" value="02" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="22" width="45" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-title" value="Expert assessment transaction" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=29;fontColor=#202020;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="18" width="1080" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-subtitle" value="One scoped request. Sequential specialist consultation. Optional structured Muse arbitration." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=18;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="67" width="1140" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="loop" value="" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;fillColor=#FAFAFA;strokeColor=#B0B0B0;" vertex="1" parent="1">
+          <mxGeometry x="270" y="335" width="650" height="345" as="geometry" />
+        </mxCell>
+        <mxCell id="loop-label" value="LOOP  Each eligible expert, in sequence" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="285" y="342" width="610" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="optional" value="" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;fillColor=#FAFAFA;strokeColor=#B0B0B0;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="805" width="1140" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="optional-label" value="OPTIONAL  Caller requests arbitration over the same assessment and requirement" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="45" y="811" width="1110" height="28" as="geometry" />
+        </mxCell>
+        <mxCell id="caller" value="Caller" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="20" y="145" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="caller-body" value="CLI / integration" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="caller">
+          <mxGeometry x="16" y="47" width="168" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="caller-life" edge="1" parent="1" style="edgeStyle=none;strokeColor=#BBBBBB;dashed=1;endArrow=none;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="245" as="sourcePoint" />
+            <mxPoint x="120" y="925" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="service" value="InferenceService" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="260" y="145" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="service-body" value="Profiles + routing" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="service">
+          <mxGeometry x="16" y="47" width="168" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="service-life" edge="1" parent="1" style="edgeStyle=none;strokeColor=#BBBBBB;dashed=1;endArrow=none;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="360" y="245" as="sourcePoint" />
+            <mxPoint x="360" y="925" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="pool" value="WorkerPool" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="500" y="145" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="pool-body" value="Processes + sessions" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="pool">
+          <mxGeometry x="16" y="47" width="168" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="pool-life" edge="1" parent="1" style="edgeStyle=none;strokeColor=#BBBBBB;dashed=1;endArrow=none;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="245" as="sourcePoint" />
+            <mxPoint x="600" y="925" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="worker" value="Model worker" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="740" y="145" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="worker-body" value="LAYA runtime" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="worker">
+          <mxGeometry x="16" y="47" width="168" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="worker-life" edge="1" parent="1" style="edgeStyle=none;strokeColor=#BBBBBB;dashed=1;endArrow=none;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="840" y="245" as="sourcePoint" />
+            <mxPoint x="840" y="925" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="muse" value="Muse backend" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="980" y="145" width="200" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="muse-body" value="Optional" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="muse">
+          <mxGeometry x="16" y="47" width="168" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="muse-life" edge="1" parent="1" style="edgeStyle=none;strokeColor=#BBBBBB;dashed=1;endArrow=none;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1080" y="245" as="sourcePoint" />
+            <mxPoint x="1080" y="925" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="assess" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="290" as="sourcePoint" />
+            <mxPoint x="360" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="assess-label" value="assess(scope, state)" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="132" y="261" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="consult" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="360" y="400" as="sourcePoint" />
+            <mxPoint x="600" y="400" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="consult-label" value="consult(expert, state)" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="372" y="371" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="load" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="450" as="sourcePoint" />
+            <mxPoint x="840" y="450" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="load-label" value="load [cold worker]" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="612" y="421" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="ready" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="840" y="500" as="sourcePoint" />
+            <mxPoint x="600" y="500" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="ready-label" value="ready(identity, session)" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="612" y="471" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="analyze" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="550" as="sourcePoint" />
+            <mxPoint x="840" y="550" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="analyze-label" value="analyze(request, state)" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="612" y="521" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="result" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="840" y="600" as="sourcePoint" />
+            <mxPoint x="600" y="600" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="result-label" value="result(scores, coverage)" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="612" y="571" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="validated" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="650" as="sourcePoint" />
+            <mxPoint x="360" y="650" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="validated-label" value="validated reply or error" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="372" y="621" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="reroute" value="Recompute effective routing from successful replies and observed identities." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="285" y="700" width="850" height="33" as="geometry" />
+        </mxCell>
+        <mxCell id="assessment" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="360" y="770" as="sourcePoint" />
+            <mxPoint x="120" y="770" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="assessment-label" value="Assessment + errors" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="132" y="741" width="224" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="arb-request" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="120" y="870" as="sourcePoint" />
+            <mxPoint x="1080" y="870" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arb-request-label" value="arbitrate(assessment, state, requirement)" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="132" y="841" width="944" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="arb-result" edge="1" parent="1" style="edgeStyle=none;html=0;strokeColor=#505050;strokeWidth=1.5;endArrow=block;endFill=1;dashed=1;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1080" y="915" as="sourcePoint" />
+            <mxPoint x="120" y="915" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="arb-result-label" value="structured arbitration or arbitration_error" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#202020;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="132" y="886" width="944" height="25" as="geometry" />
+        </mxCell>
+        <mxCell id="deadline" value="Load and analysis have fixed deadlines. Progress does not extend them. Failed calls remain errors." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="944" width="1140" height="28" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="decision-study" name="Decision Study">
+    <mxGraphModel dx="1200" dy="980" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="980" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="canvas" value="" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;fillColor=#FFFFFF;strokeColor=none;pointerEvents=0;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1200" height="980" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-number" value="03" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="30" y="22" width="45" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-title" value="Training round lifecycle" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=29;fontColor=#202020;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="85" y="18" width="1080" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="figure-subtitle" value="Persisted phases name boundaries. Each handler performs the work shown before advancing." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=18;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="67" width="1140" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="study" value="Frozen study" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="135" width="1140" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="study-body" value="Parent · accepted data · source/runtime · recipe · views · policy · command · budget" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="study">
+          <mxGeometry x="16" y="47" width="1108" height="42" as="geometry" />
+        </mxCell>
+        <mxCell id="prepare" value="prepare" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="290" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="prepare-body" value="Validate data&#10;and round inputs" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="prepare">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="validate_data" value="validate_data" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=18;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="265" y="290" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="validate_data-body" value="Prepare Operator&#10;Check bindings" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="validate_data">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="preflight" value="preflight" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="500" y="290" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="preflight-body" value="Wait for GPUs" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="preflight">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="acquire" value="acquire" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="735" y="290" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="acquire-body" value="Recheck policy&#10;Submit owned job" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="acquire">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="submit" value="submit" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="970" y="290" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="submit-body" value="Enter observation" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="submit">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="observe" value="observe" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="970" y="535" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="observe-body" value="Poll and finalize&#10;Evaluate candidate&#10;Bind export evidence" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="observe">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="evaluate" value="evaluate" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="735" y="535" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="evaluate-body" value="Apply frozen policy&#10;Commit promotion" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="evaluate">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="decide" value="decide" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="500" y="535" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="decide-body" value="Write round report" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="decide">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="report" value="report" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="265" y="535" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="report-body" value="Recover interrupted&#10;report closeout" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="report">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="done" value="done" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="535" width="200" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="done-body" value="Terminal receipt" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="done">
+          <mxGeometry x="16" y="47" width="168" height="82" as="geometry" />
+        </mxCell>
+        <mxCell id="start" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0.088;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="study" target="prepare">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="prepare-validate_data" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="prepare" target="validate_data">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="validate_data-preflight" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="validate_data" target="preflight">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="preflight-acquire" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="preflight" target="acquire">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="acquire-submit" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="acquire" target="submit">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="submit-observe" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="submit" target="observe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="observe-evaluate" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="observe" target="evaluate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="evaluate-decide" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="evaluate" target="decide">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="decide-report" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="decide" target="report">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="report-done" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=0;endArrow=block;endFill=1;strokeColor=#666666;strokeWidth=1.6;fontFamily=Inter,Arial,sans-serif;fontSize=14;fontColor=#666666;labelBackgroundColor=#FFFFFF;dashed=0;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="report" target="done">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="phase-persist" value="Persist phase and transition history." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="455" width="500" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="wait-note" value="Observe repeats while the owned job runs." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="670" y="455" width="500" height="35" as="geometry" />
+        </mxCell>
+        <mxCell id="failure-note" value="Refusal and failure" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="745" width="350" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="failure-note-body" value="Record the failed check&#10;Preserve evidence for recovery&#10;Reconcile before retrying" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="failure-note">
+          <mxGeometry x="16" y="47" width="318" height="97" as="geometry" />
+        </mxCell>
+        <mxCell id="promotion-note" value="Promotion transaction" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="425" y="745" width="350" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="promotion-note-body" value="Validate intent, export and policy&#10;Update incumbent atomically&#10;Preserve the prior reference" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="promotion-note">
+          <mxGeometry x="16" y="47" width="318" height="97" as="geometry" />
+        </mxCell>
+        <mxCell id="supervisor-note" value="Between rounds" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F4F4F4;swimlaneFillColor=#FFFFFF;strokeColor=#202020;fontColor=#202020;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="1">
+          <mxGeometry x="820" y="745" width="350" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="supervisor-note-body" value="Muse diagnoses the result&#10;Validate the next proposal&#10;Enforce budgets and stop rules" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#202020;fontStyle=0;" vertex="1" parent="supervisor-note">
+          <mxGeometry x="16" y="47" width="318" height="97" as="geometry" />
+        </mxCell>
+        <mxCell id="boundary-note" value="Validation can refuse without advancing. Reserved qualification and test remain outside this round loop." style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#202020;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=16;fontColor=#666666;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="30" y="926" width="1140" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

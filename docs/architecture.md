@@ -1,126 +1,192 @@
-# Architecture
+# System architecture
 
-[Documentation index](README.md) · [Campaign integration](campaigns.md) ·
-[Data pipeline](data-pipeline.md) · [Operations](operations.md)
+[Documentation](README.md) / Architecture specification
 
-SiliconShield connects a requirement-conditioned security model, an RTL
-investigation workflow, and a persistent training system. Its controllers have
-different responsibilities. The Muse coding agent plans campaign steps. The
-Glimmer operator handles bounded job decisions. Harness² tests and refines
-prompt guidance through replay.
+| Scope | Baseline | Related specifications |
+|---|---|---|
+| Implemented application, inference, and training boundaries | Current repository interfaces and serialized contracts | [Assessment](router.md) · [Studies](decision-study.md) · [Wire and artifact contracts](reference.md) |
 
-## Investigation path
+SiliconShield combines requirement-conditioned RTL assessment with a controlled
+model-improvement system. Contract-1 and Contract-2 are independently trained
+RTL decision models. The application routes a declared design scope to suitable
+models, preserves their evidence, and can request a Muse interpretation. A
+separate investigation path executes requirement checks and tests proposed repairs.
 
-The application preserves RTL, requirements, and assumptions, then obtains a
-SiliconShield-RTL assessment through a subprocess using the model's runtime.
-The assessment includes checkpoint identity, recorded question-contract
-version, and input-coverage information. Workers select the exact pinned
-question bytes from the export record, so a `v1` model is never scored
-through the legacy `v0` question.
+The training system uses accepted datasets, frozen study inputs, owned jobs,
+and explicit selection constraints. Model quality, execution completion, and
+campaign promotion have separate records and acceptance conditions.
 
-Requirement-bound Verilator checks supply executable evidence. A repair
-proposer receives the visible design and check outcomes, without the authored
-answer. The workflow applies validated replacements to a candidate copy,
-reruns requirement and regression checks, and records both outcomes. Custom
-CLI inputs do not inherit a demo testbench. Without an applicable check, their
-requirements remain unverified.
+## Functional correctness and security scope
 
-The application uses simulation checks. The training-data checker separately
-uses Icarus and Yosys SAT for registered local contracts.
+A configuration register can pass a basic write test while allowing an
+unprivileged requester to change protected state. That guard failure contradicts
+an authorization policy. A FIFO count can violate a hold requirement under
+backpressure, but its security impact depends on how the system uses the FIFO
+and whether an attacker can affect availability or an isolation boundary.
 
-## Campaign path
+The caller supplies that requirement and threat context. Contract-1 assesses
+visible local guards, while Contract-2 assesses focused FIFO, counter, and
+arbitration transitions. Neither release establishes clock-domain-crossing,
+whole-block, or whole-chip correctness. A model label prioritizes a check. It
+does not establish a counterexample or exploitability.
 
-```mermaid
-flowchart TD
-    Plan[Muse: plan or investigate] --> Prepare[Prepare and qualify dataset]
-    Prepare --> Bind[Freeze round identities and policy]
-    Bind --> Job[Owned training job]
-    Job --> Eval[Development results]
-    Eval --> Decide[Research and deployment gates]
-    Decide --> Keep[Promote or retain incumbent]
-    Decide --> Analyze[Muse: analyze evidence and propose next action]
-    Analyze --> Plan
-    Analyze --> Stop[Stop with recorded reason]
-    Eval --> Queue[Development procedure queue]
-    Queue --> Trials[Harness² trials and independent replay checks]
-    Trials --> Advice[Qualified prompt guidance]
-    Advice --> Plan
-```
+## 1. Runtime decomposition
 
-`execution/campaign_supervisor.py` coordinates agent sessions, preparation,
-recovery, and analysis. `execution/laya_campaign.py` owns round transitions,
-identity bindings, policy evaluation, and promotion. The operator and job
-runner submit and observe systemd-owned jobs independently of an agent's
-connection lifetime.
+![Runtime component map showing application processes, owned model workers, read-only configuration, assessment records, and the optional Muse backend.](diagrams/system-overview.svg)
 
-A round binds its parent export, incumbent reference, dataset version, recipe,
-selection policy, and reporting contract. Promotion verifies candidate export
-and result identities. Transaction records let the campaign resume an
-interrupted promotion or report. A failed candidate does not replace the
-incumbent. The latest resumable state is distinct from the selected export.
+**Figure 01.** Application and inference boundaries. I01–I04 are defined below.
+[Open full-size SVG](diagrams/system-overview.svg) ·
+[Editable draw.io source](diagrams/siliconshield-architecture.drawio)
 
-The trainer and campaign share selection predicates and versioned ranking.
-Protected development populations can enforce accuracy, false-safe, pair, and
-missing-context constraints. Research promotion and deployment acceptance are
-evaluated separately. Configuration changes are recorded so earlier results can
-still be interpreted under the rules that produced them.
+The control application does not import the model's Torch environment. It starts
+an owned Python worker using the registry's interpreter and runtime. Model
+execution stays inside that worker. Experts CLI, Python integrations, and
+benchmark code share contracts while retaining different application behavior.
 
-## Two controller paths
+| Runtime element | Responsibility | Lifetime and ownership |
+|---|---|---|
+| Experts integrator | Supply scope and state, instantiate `InferenceService`, provide worker transport, and optionally request arbitration. | CLI owns workers for one invocation. Python integrations can retain a `WorkerPool`. |
+| Model worker | Verify the export, resolve question bytes, load the model, score complete inputs, and return execution identity. | One subprocess per loaded expert. Calls to that worker are serialized. |
+| Muse integration | Interpret expert evidence or propose a repair through the applicable interface. | Explicit agent call. The configured backend can be outside the local host. |
+| Investigation engine | Execute registered checks, prepare a candidate copy, rerun checks, and write the engineering report. | One invocation with a caller-selected output directory. |
+| Training deployment | Supply the service driver, profiles, evaluator callback, and immutable source snapshot. | Supervisor and systemd-owned jobs can outlive a client session. |
 
-The **Muse coding-agent supervisor** asks the agent to analyze, prepare, recover,
-and plan within a campaign charter. The agent can propose a new hypothesis or
-request an investigation. The supervisor validates preparation before launch.
+The experts API performs multi-model consultation. Lexical inspection is a
+helper for the caller. It neither infers the CLI scope automatically nor
+elaborates SystemVerilog. A client remains responsible for choosing a complete
+region and declaring the property scope.
 
-The **Glimmer operator** exposes six bounded actions: continue, leave unchanged,
-stop, adjust learning rate, resume, and retry finalization. Execution tools
-validate authority and intervention budgets. Its separate offline replay
-interface cannot submit jobs. Glimmer adapter qualification measures actions,
-evidence, arithmetic, explanations, and final-response consistency. A running
-service alone does not qualify an adapter for job control.
+## 2. Interface schedule
 
-These paths are implemented separately. Deploying one does not require or
-implicitly activate the other.
+| ID | Boundary | Contract | Failure behavior |
+|---|---|---|---|
+| **I01** | Expert application ↔ worker process | Newline-delimited JSON over local pipes, protocol `1`. Load and analyze requests carry request identity. Replies bind model/session, input, coverage, and scores. | Timeout, malformed reply, identity mismatch, or truncation becomes an expert error. No synthetic label is substituted. |
+| **I02** | Benchmark → model worker | The shared load/analyze protocol invokes one selected model on a pinned population. | Failed rows remain in support, and execution coverage is reported separately from accuracy. |
+| **I03** | Worker evidence → assessment | `Assessment` preserves planned routing, successful responses, errors, and recomputed effective routing. | A failed expert loses its contribution to effective coverage. Thin evidence remains visible. |
+| **I04** | Assessment → optional Muse arbitration | Same state, full requirement, assumptions, request/scope identity, and validated expert evidence. | Incompatible evidence refuses arbitration. CLI reports `arbitration_error` alongside the preserved assessment. |
 
-## Three forms of learning
+The exact fields, score tolerances, deadline defaults, and schema owners are in
+[the interface reference](reference.md#decision-and-worker-contracts).
+Figure 02 in [the router specification](router.md#assessment-transaction)
+shows message ordering, including cold load and partial failure handling.
 
-**Security-model training** updates SiliconShield-RTL, including residual
-adapters and optionally encoder weights. It supports BF16 distributed training,
-explicit sampling pools, and a frozen-teacher preservation loss. Development
-views select a checkpoint. Calibration and final evaluation are separate. LAYA
-supplies the external foundation and runtime.
+`InferenceService` returns records to its caller. It does not persist an
+assessment database. The CLI prints JSON, and the integrator chooses storage.
+A finding is explicitly a `model_assessment`. Executable evidence belongs to
+the investigation application's separate result contract.
 
-**Glimmer fine-tuning** updates language-model LoRA parameters from reviewed
-operator episodes or preference pairs. The base and vision weights stay frozen.
-Task-based selection checks each action class and checkpoint-review cohort.
-Lower token loss alone is not enough to select an adapter.
+## 3. Data and artifact ownership
 
-**Harness² procedure learning** changes instructions. The Muse integration
-allows edits to `LongTermMEMORY.md`, checks the result through a separate
-signed development replay population, and publishes qualified guidance
-atomically. The supervisor consumes it at future session boundaries. It does
-not replace executable policy or train model weights. The older Glimmer
-Harness² adapter remains a separate integration.
+| Artifact class | Binding | Mutation rule |
+|---|---|---|
+| Model export | Weights, full export manifest, question record, and runtime/inference identity | Load immutable generations. Register and qualify an upgrade as a new identity. |
+| Capability profile | Expert/release identity, mechanism coverage, measured area counts, benchmark hash, execution identity | Re-measure when model or inference identity changes. Tiers are derived from counts. |
+| Dataset version | Split bytes, lineage audit, semantic review, pools, and acceptance record | New rows, pools, or audit bindings require a new accepted version. |
+| Study manifest | Parent, data, source, runtime, effective settings, views, policy, command, and budget | A changed bound input requires an explicit study amendment. |
+| Run and round receipts | Owned job, attempts, phase/history, evaluated export, results, decision, and transaction state | Append or atomically replace through the owning API. Preserve evidence needed for recovery. |
+| Reserved evaluation | Declared population identity and use history | Access only under its separate frozen evaluation protocol. No feedback into the same training study. |
 
-See [procedure learning](muse-procedures.md) for worker deployment and
-qualification, and [Glimmer](glimmer.md) for adapter training.
+Datasets, checkpoints, profiles, transcripts, and run evidence live outside the
+source checkout. Public model and dataset releases are separate Hub artifacts.
+The repository contains implementation, illustrative configurations, and tests.
 
-## Data and provenance
+Two identity levels are relevant. The export manifest identifies artifact bytes.
+The observed execution identity also names question construction, runtime Python
+code, backend/precision, Torch version, device type, batch behavior, token budgets,
+and option order. A matching weights hash alone is insufficient for a matched
+model comparison.
 
-Dataset versions pin split bytes and sampling-pool definitions. Proposal labels
-come from a fixed checker with declared `bound_cycles`/`induction_steps`, not
-the generator's claimed answer. Missing-context proposals need opposing
-verified completions. Acceptance records bind the lineage, canonical, and
-concentration audit plus `release_class` to the exact version. English
-requirements need agreed template reviews. Integrity and training acceptance
-are separate checks.
+## 4. Training control and recovery
 
-Controller episode ingestion uses development evidence and rejects final-test
-reports. Signed manifests bind episode membership to its split. Final
-evaluation is kept separate from training and procedure retention. Repeated
-development use is not an independent final benchmark.
+The [round lifecycle](campaigns.md#round-lifecycle) is persisted by
+`laya_campaign.py`. The supervisor coordinates analysis and proposals. `Operator`
+and `security_jobs` own preparation, submission, reconciliation, and recovery.
+A deployment provides the polling/service loop and an evaluator callback.
 
-Training implementations live under `training/`. Research orchestration reaches
-them through `research_loop/adapters/`. Source snapshots, model and dataset
-identities, tool receipts, and execution settings make comparisons traceable.
-Actual datasets, model artifacts, experiment definitions, reports, and machine
-settings remain outside the source repository.
+For study-bound work, validation occurs at supervisor commit, operator prepare,
+operator submit, and owned-worker execution. Each attempt reserves timeout plus
+stop grace against the durable study budget. Shared resource locks coordinate
+cooperating jobs that use the same resource root.
+
+Selection within the trainer and promotion within a campaign are different
+transactions. The trainer can retain initialization or select a checkpoint
+that preserves protected views but misses a new quality target. Round assessment
+recomputes metrics from aligned predictions and requires the full frozen gates
+before accepting an improvement.
+
+Promotion writes a durable intent before changing the incumbent. Recovery
+revalidates the candidate and completes the same recorded decision. It does not
+invent a new comparison after a partial write. The previous incumbent remains
+the reference for that transaction.
+
+| Event | Required system response | Implementation / regression coverage |
+|---|---|---|
+| Worker emits progress indefinitely | Honor the original request deadline and invalidate the failed worker generation. | `experts/worker.py` · [expert safety tests](../tests/test_expert_safety.py) |
+| Strongest planned expert fails | Return its error and rerank only surviving evidence. | `experts/service.py` · [expert safety tests](../tests/test_expert_safety.py) |
+| Submission client disappears | Reconcile the recorded systemd unit and receipts before any further submission. | `execution/operator.py` · [operator tests](../tests/test_operator.py) |
+| Prepared data, policy, or command changes | Refuse the bound launch or assessment until a reviewed specification is registered. | `execution/study_contract.py` · [study enforcement tests](../tests/test_study_enforcement.py) |
+| Crash during promotion or report closeout | Resume from transaction/phase evidence and revalidate the export before completing. | `execution/laya_campaign.py` · [campaign tests](../tests/test_laya_campaign.py) |
+
+Full operational procedures are in [operations and recovery](operations.md).
+Locks and identity checks coordinate trusted processes. Host/container isolation
+remains a deployment responsibility.
+
+## 5. Agent authority
+
+Muse has several independent integration roles. They share neither automatic
+launch authority nor a single model-quality claim.
+
+| Integration | Permitted output | Enforced boundary |
+|---|---|---|
+| Assessment arbitration | Model conclusion, evidence references, dissent, open questions | Input, requirement, and assessment identity |
+| Glimmer router session | Roster queries, assessment requests, and a conversational summary | Operator-bound registry and validated expert tool results. Final prose is not passed through the structured arbitration validator. |
+| Repair proposal | Exact replacements or a candidate RTL body | Patch validation and the same executable checks on a separate copy |
+| Research supervisor | Diagnosis, round proposal, recovery plan, or justified stop | Study pins, accepted data, job ownership, budget, and promotion policy |
+| Glimmer operator | Six bounded job actions | One authorized experiment and its intervention budget |
+| Harness² | Replay-qualified procedural advice | Guidance does not modify policy, execute plugins, or train decision weights |
+
+The coding-agent supervisor is independent of a served Glimmer adapter. The
+implemented [Glimmer router bridge](router.md#driving-assessments-from-glimmer)
+lets a local model request specialist assessments. It calls the experts path
+without CLI arbitration and returns a conversation trace. Evidence validation
+applies to each tool result, while the final prose still requires review.
+That integration does not qualify Glimmer for every agent role.
+Harness² is an optional procedure-learning path. A study that pins its guidance
+bundle must explicitly adopt a changed generation. Unbound future sessions can
+consume newly qualified guidance under their own configuration.
+
+## 6. Design trade-offs
+
+**Worker isolation.** Separate interpreters keep controller dependencies out
+of the Torch runtime and make worker failure recoverable. The cost is process
+startup, model loading, and a strict serialization boundary. Persistent Python
+clients can amortize load time.
+
+**Evidence-based routing.** Explicit scope tags and measured profiles make
+routing decisions inspectable. Coverage is limited by those profiles and the
+caller's scope choice. Adding a compatible expert is a registration and
+qualification operation. A different output task or protocol needs code changes.
+
+**Agent proposals with deterministic acceptance.** Muse can investigate a failed
+hypothesis while code controls what may launch and what may replace an incumbent.
+This preserves experimental authority without asserting that every proposed
+experiment will improve the model.
+
+**Scientific separation.** Development selects and diagnoses. Reserved
+populations evaluate frozen candidates. The [evaluation specification](evaluation.md)
+defines denominators, whole-triplet consistency, uncertainty, and comparison
+requirements. Infrastructure tests establish these contracts' behavior under
+fixtures, not model quality on arbitrary RTL.
+
+## 7. Extension points
+
+| Change | Required work |
+|---|---|
+| Upgrade Contract-1 or Contract-2 | Immutable export, fresh identity-bound measurements, profile/registry update, router checks, rollback entry |
+| Add another compatible specialist | New model id, supported mechanisms, qualification population, execution-bound profile |
+| Add an application client | Implement the caller contract and handle errors, thin evidence, and worker lifetime explicitly |
+| Add a new training objective | Versioned objective, trainer/study gate parity, resume signature, refusal tests, and runtime qualification |
+| Change a serialized interface | New schema/protocol version with explicit compatibility behavior and consumer tests |
+
+Use [expert qualification](expert-qualification.md), [decision studies](decision-study.md),
+and [development](development.md) as the corresponding integration procedures.

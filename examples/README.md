@@ -1,7 +1,11 @@
 # Configuration examples
 
-These files show the formats accepted by the training tools. The values and
-case names are examples; supply your own dataset definitions and training
+For analysis inputs, see the [router state-file example](../docs/router.md#run-one-assessment)
+and the [authored investigation](../docs/investigation.md). These examples
+demonstrate interfaces and selected behaviors, not benchmark accuracy.
+
+These configuration files show the formats accepted by the training tools. The values and
+case names are examples. Supply your own dataset definitions and training
 settings before running a job.
 
 | File | Purpose |
@@ -11,7 +15,7 @@ settings before running a job.
 | [glimmer-security.example.json](../configs/glimmer-security.example.json) | Paths and settings for a three-GPU SiliconShield-RTL job |
 
 Copy the files to a local directory outside the public checkout. Case IDs in
-the catalog must match the source dataset; the example IDs are placeholders.
+the catalog must match the source dataset. The example IDs are placeholders.
 The recipe values demonstrate the format and have not been tuned for a task.
 
 Small synthetic RTL examples are also available through the Python builders.

@@ -7,6 +7,13 @@ file's source repository and CWE tag do not determine that decision. Generated
 mutations may preserve behavior, and unresolved solver outcomes are not evidence
 of missing context.
 
+Admission requires evidence for the relationship between the local
+implementation and its requirement. Recheck each mutation: a change in syntax
+may preserve behavior, while a missing guard can change the answer under only
+some policies. Semantic review must also confirm that the checked assertion
+represents the English requirement. Compilation, proof status, and semantic
+review answer different questions and remain separate audit fields.
+
 ## Sources and builders
 
 | Module under `training/laya/` | Role |
@@ -31,6 +38,25 @@ Obtain their source and retain revision, license, and extraction provenance in
 local catalogs. The authored fallbacks exercise interfaces. They do not
 reproduce private experiment catalogs or establish broad coverage of either
 project.
+
+## Published collections
+
+The [training collection](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
+contains 19,050 rows: 16,350 tagged `contract-1-direct` and 2,700 tagged
+`contract-2-direct`. The first subset includes Contract-1's 576-row anchor
+and later study material that did not contribute to its released weights.
+Neither subset represents the full ancestor training history.
+
+The [benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark)
+contains 5,589 development decisions across 11 areas. Keep it out of training
+when using it for comparison. Contract-2 already used its focused temporal
+subset for selection, so that result is development evidence.
+
+A downloaded collection is source material for a new study, not an automatic
+training-acceptance record. Audit its lineage and template coverage, construct
+appropriate disjoint views, qualify the actual sampler, and freeze the accepted
+version. See [training recipes](training-recipes.md) and
+[benchmark](benchmark.md) for exact roles and pins.
 
 ## Catalog workflow
 
@@ -62,6 +88,36 @@ Install `requirements/data.txt` for parser-based extraction. Solvers and the
 compiler are separate executables. See each builder's `--help`. Local providers
 and recipes are executable configuration and must be trusted.
 
+`build_security_data` accepts its case catalog through `--cases-manifest` or
+`SILICONSHIELD_SECURITY_CASES`. An external provider named by
+`SILICONSHIELD_EXTERNAL_CASES_MODULE` exports `build_cases(sources)` and may
+provide `SPLIT_GROUP_ID`. A provider named by
+`SILICONSHIELD_SEMANTIC_RECIPE_MODULE` exports `scenario(seed, index)`.
+Augmentation commands take an explicit case count. The guard builder's seed
+controls group selection order.
+
+## Label evidence and semantic scope
+
+| Label or outcome | Required evidence |
+|---|---|
+| Satisfies | The registered assertion passes the supported induction check. For a recognized conditional assertion, the checker also requires a reachable antecedent. |
+| Violates | The checker finds a reachable counterexample under the registered reset and input assumptions. The receipt records the search horizon. |
+| Insufficient context | Two compatible completions of the same omission establish opposing outcomes under the same requirement and assumptions. |
+| Refused | Compilation failure, timeout, unsupported scope, or bounded success without induction. No training label is inferred. |
+
+The sequential builder first performs bounded counterexample search and then
+attempts temporal induction. Its default six-cycle counterexample horizon and
+12-step induction search budget are solver settings, not a claim that every
+property holds for only six or twelve cycles. An inductive result establishes
+the registered property within the modeled semantics. A bounded pass alone
+does not. Combinational contracts use their separately registered scope.
+
+The semantics are those of the extracted local model and its two-state,
+reset-conditioned assumptions. They do not establish four-state simulation,
+clock-domain crossing, timing closure, physical security, or correctness of
+omitted IP. English-to-assertion review addresses a different question: whether
+the formal property actually captures the stated requirement.
+
 ## Checking agent proposals
 
 `FixedChecker` loads a registry mapping contract IDs to exact requirement text,
@@ -81,6 +137,7 @@ The following is a local integration example, not a dataset recipe:
 
 ```python
 from pathlib import Path
+
 from siliconshield.training.laya.checker_adapter import FixedChecker
 from siliconshield.training.laya.proposer_ingest import ingest_proposals
 
@@ -121,7 +178,7 @@ overlap, `max_group_share` at or below 5%, `max_mechanism_share` at or
 below 15%, a bound `review_ledger_sha256` digest with a positive
 `reviewed_templates` count, and a `release_class` (`broad` or
 `narrow-pilot`) consistent with group counts. Audits without the strict
-schema are refused for new acceptances; markers written under a legacy
+schema are refused for new acceptances. Markers written under a legacy
 audit stay readable through `is_accepted()` but cannot back a new
 release. Acceptance records an audit supplied by the caller. It does not
 conduct an independent semantic review of the labels. `is_accepted()`
@@ -137,11 +194,15 @@ admitting English requirements: requirement and assumption hashes are
 recomputed from rendered row bytes, disagreements need an explicit
 resolved-and-approved status with evidence references, and prose alone never
 approves a template. Pin sampling pools before acceptance because pool
-bindings change the version manifest.
+bindings change the version manifest. Once a version is accepted, new
+owned training should proceed through a [decision study](decision-study.md),
+which binds the job to these exact bytes.
 
 ## Sampling without changing provenance
 
-Pools assign every TRAIN row exactly once. Weights determine grouped batch
+A `siliconshield-sampling-pools-v1` manifest assigns TRAIN row IDs to named
+pools. Validate it with `dataset_versions.verify_pools()` before launch. Pools
+assign every TRAIN row exactly once. Weights determine grouped batch
 quotas, while source and family identity remain on the rows for reporting.
 Each pool declares a `mode`: `cycle` stratifies mechanism then design,
 `flat` draws triplets uniformly. Triplet members must share a pool. Do not

@@ -45,6 +45,22 @@ def test_unreviewed_and_artifact_files_are_rejected():
     )
 
 
+def test_reviewed_image_asset_passes_and_others_still_fail():
+    banner = "docs/assets/siliconshield-banner.png"
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+    assert issues(banner, png) == []
+    assert any(
+        "binary/non-UTF-8" in i for i in issues("docs/assets/other.png", png)
+    )
+    assert any(
+        "unexpected format" in i for i in issues(banner, b"not image bytes\n")
+    )
+    assert any(
+        "unexpected large" in i
+        for i in issues(banner, png + b"\x00" * 512 * 1024)
+    )
+
+
 def test_private_content_patterns_are_rejected():
     # Fixtures are assembled at run time so this test file itself stays clean.
     path = ("/ho" + "me/someone/lab").encode()

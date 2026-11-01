@@ -5,7 +5,10 @@ import urllib.request
 
 import pytest
 
-from siliconshield.research_loop.controller.client import ChatClient
+from siliconshield.research_loop.controller.client import (
+    ChatClient,
+    run_agent,
+)
 
 
 def _ok_response(monkeypatch, seen):
@@ -111,3 +114,83 @@ def test_ssh_transport_carries_headers_off_the_command_line(
     envelope = json.loads(captured["input"])
     assert envelope["headers"]["Authorization"] == "Bearer secret-token"
     assert envelope["payload"]["model"] == "test-model"
+
+
+class _ScriptedClient:
+    model = "fake-model"
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.sent = []
+
+    def complete(self, messages, tools=()):
+        self.sent.append(list(messages))
+        return self.script.pop(0)
+
+
+def test_agent_keeps_wire_arguments_and_dispatches_dicts(tmp_path):
+    seen = {}
+
+    def dispatch(name, args):
+        seen["name"] = name
+        seen["args"] = args
+        return {"ok": True}
+
+    script = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call-1",
+                    "function": {
+                        "name": "router.roster",
+                        "arguments": "{}",
+                    },
+                }
+            ],
+        },
+        {"role": "assistant", "content": "done"},
+    ]
+    history = run_agent(
+        _ScriptedClient(script),
+        [{"role": "user", "content": "go"}],
+        [{"type": "function"}],
+        dispatch,
+        str(tmp_path / "trace.jsonl"),
+        max_turns=4,
+    )
+    assert seen == {"name": "router.roster", "args": {}}
+    echoed = history[1]["tool_calls"][0]["function"]["arguments"]
+    assert echoed == "{}"
+    assert history[-1]["content"] == "done"
+
+
+def test_agent_reports_malformed_arguments_as_tool_error(tmp_path):
+    def dispatch(name, args):
+        raise AssertionError("dispatch must not run")
+
+    script = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [
+                {
+                    "id": "call-1",
+                    "function": {"name": "x", "arguments": "{oops"},
+                }
+            ],
+        },
+        {"role": "assistant", "content": "done"},
+    ]
+    history = run_agent(
+        _ScriptedClient(script),
+        [{"role": "user", "content": "go"}],
+        [{"type": "function"}],
+        dispatch,
+        str(tmp_path / "trace.jsonl"),
+        max_turns=4,
+    )
+    tool_result = history[2]
+    assert tool_result["role"] == "tool"
+    assert json.loads(tool_result["content"])["error"] == "JSONDecodeError"

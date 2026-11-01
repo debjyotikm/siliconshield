@@ -1,26 +1,27 @@
-# Training recipes: Contract-1 and Contract-2
+# Decision-model training recipes: Contract-1 and Contract-2
 
-How the two released decision models were trained, which public
-rows each one actually saw, and how to rerun or extend the work
-with the trainer in this repository.
+[Documentation index](README.md) · [Training](security-model-training.md) ·
+[Research white paper](whitepaper.md)
+
+This guide records how the released decision models were trained, which public
+rows contributed to their weights, and the limits of reproducing those studies.
+Current launch procedures belong in the [trainer guide](security-model-training.md).
 
 Public data: the [combined training
 set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
 (19,050 rows, one v1 prompt). Public weights:
 [Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1)
-(`f4130223…`) and
-[Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2)
-(`f916444f…`).
+and [Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2).
 
-## Which rows each model saw
+## Published populations and weight lineage
 
 The two subsets have different relationships to the released
 weights. This distinction matters before any fine-tuning claim.
 
 - **Contract-2** trained directly on its subset: all 2,700
   `contract-2-direct` rows (2,691 focused temporal rows plus 9
-  solver-verified sibling rows) were the sprint's training
-  population.
+  solver-verified sibling rows) were the final study’s registered
+  training population.
 - **Contract-1** trained directly on 576 rows: the
   counterbalanced anchor population (192 complete triplets),
   which is included in the 16,350-row `contract-1-direct`
@@ -31,17 +32,20 @@ weights. This distinction matters before any fine-tuning claim.
   released weight comes from those rows. They are published
   for further training, not as rows Contract-1 saw.
 
-Both subsets are exactly label-balanced and share the
+These are registered populations. Delivered exposure at a particular selected
+update must be read from its sampling record, not inferred from the dataset
+size or terminal run. Both subsets are exactly label-balanced and share the
 `siliconshield-requirement-context-v1` prompt. Every model-visible
-requirement is plain English. No RTL, label, or verdict hint
-leaks into the questions.
+requirement is plain English. The three-way question is fixed across rows.
+Requirements belong in the state text, and acceptance reviews check for
+comments or wording that reveal the target without requiring a decision
+about the RTL.
 
 ## Contract-1: counterbalanced local specialist
 
-Continued from the OpenTitan-expansion winner `u175`
-(`b03c20a4…`) on DGX Spark. The run fitted a small corrected
-population hard: 576 TRAIN rows in 192 triplets, with a
-group-disjoint 288-row development set.
+Continued from the OpenTitan-expansion winner on DGX Spark.
+The specialization repeatedly sampled 576 reviewed TRAIN rows in 192 triplets,
+with a group-disjoint 288-row development set.
 
 | Setting | Value |
 |---|---|
@@ -56,12 +60,13 @@ Development gates admitted a checkpoint with at most 8
 false-safes, at least 48/96 per class, at least 10/96 whole
 triplets, and at least 159/288 correct. Ranking among eligible
 checkpoints ran false-safes, minimum class count, whole
-triplets, total correct, then NLL. Update 125 (257/288,
+triplets, total correct, then NLL. The checkpoint at (257/288,
 classes 96/95/66, zero false-safes, 66/96 triplets) is the
-released Contract-1. The study's own later pick at update 200
-(258/288) was not taken. Terminal TRAIN fit reached 576/576,
-so the weights memorize their small population. Development
-families are disjoint by design group, not by mechanism.
+Contract-1 release. A later study pick (258/288) was not taken.
+Terminal TRAIN fit reached 576/576. That measures fitting on the
+small training population, not independent generalization, and is
+distinct from the Contract-1 export. Development families are
+disjoint by design group, not by mechanism.
 
 The RTX improvement study then assembled the 16,350-row
 mixture around that anchor (per-update triplet quotas from
@@ -72,9 +77,9 @@ the parent was preserved unchanged.
 
 ## Contract-2: temporal specialist
 
-Continued from the four-arm sprint's F2 export (`d0a1696a…`),
+Continued from the temporal-pilot parent export,
 itself a low-learning-rate margin continuation of the focused
-temporal pilot. The sprint ran two single-GPU arms. The
+temporal pilot. The study ran two single-GPU arms. The
 triplet arm produced Contract-2.
 
 | Setting | Value |
@@ -94,90 +99,49 @@ hard pool. The frozen promotion floor demanded at least 202
 correct, 60 satisfies, 64 violates, all 78 context rows, at
 most 14 false-safes, 50 triplets, bounded NLL, and per-domain
 floors. The trainer's selector never left initialization.
-step 70 (203/234, classes 64/61/78, 17 false-safes, 51/78
-triplets) is an explicit owner research selection that fails
+The released Contract-2 (203/234, classes 64/61/78, 17 false-safes,
+51/78 triplets) is an explicit owner research selection that fails
 the violates, false-safe, and NLL gates. Fresh SDK scoring
 reproduces its development predictions exactly.
 
+## Research findings carried into the platform
+
+| Observation | What it supports | Implementation response |
+|---|---|---|
+| A selected export can equal the parent even after many optimizer updates. | A completed run does not establish an improved released model. | Distinct initial, selected, terminal, and incumbent identities, with retained evaluation tensors. |
+| Strong TRAIN fit can coexist with weak whole-triplet development results. | Fitting and transfer are separate problems. Low loss alone cannot distinguish them. | Delivered-exposure audit, TRAIN fitting qualification, class and triplet diagnostics. |
+| Better total accuracy can accompany worse violation recall or more false-safes. | Aggregate ranking can reward the wrong trade-off. | Frozen class, source, family, and retention constraints before promotion. |
+| The temporal study improved its focused triplet count but failed other frozen gates. | A useful research artifact need not be an automatic campaign promotion. | Explicit owner selection in the Contract-2 release record, with failed gates disclosed. |
+| Teacher agreement and weighted KL share can move differently. | The coefficient or loss fraction alone cannot rank preservation strength. | Masked teacher-correct preservation and behavioral diagnostics. |
+
+These are engineering lessons from the studies, not causal estimates of the
+benefit of each mechanism. Causal comparisons need matched initial weights,
+data, delivered exposure, optimization settings, and independent repetitions.
+The [evaluation protocol](evaluation.md) defines what can be claimed from each
+kind of comparison.
+
 ## Reproducing with this repository
 
-For new owned studies, follow [decision studies](decision-study.md).
-That path binds the actual job to accepted rows, the exact recipe,
-measured fitting qualification, and a cumulative time budget.
-The direct trainer command below describes the lower-level interface.
-It does not itself register an enforced study or qualify a recipe.
+Exact historical reproduction needs the original objective implementation as
+well as the parent, data, delivered exposure, and optimizer settings. Contract-2's
+worst-member triplet loss and semantic class margins ran in versioned study
+snapshots. They are not merged into the general trainer. Matching learning rates
+alone does not reproduce that study. Whole-triplet checkpoint selection is
+implemented in the repository, independently of those training losses.
 
+The 234-row `focused-temporal-dev-234` view used for Contract-2 selection is
+published in the benchmark. Contract-1's 288-row development view is not public.
+Previously used development data supports matched comparisons. New
+generalization claims require fresh group-disjoint evaluation, and the public
+collections exclude the reserved qualification and test populations.
 
-The public set plus the trainer below rerun the Contract-2
-shape and the Contract-1 improvement study. The original
-Contract-1 run executed on DGX Spark hardware with the same
-trainer family.
+For a new study, follow these maintained procedures:
 
-**1. Fetch the rows.** Download `data/train.jsonl` from the
-training set. Split out a development population before
-training. Never select checkpoints on TRAIN fit. The
-Contract-2 sprint selected on a 234-row development view
-that now ships inside the public benchmark (tagged
-`focused-temporal-dev-234`). Treat it as previously used
-development data, not fresh qualification, since
-Contract-2 was selected against it. The Contract-1
-study's 288-row view does not ship publicly. Either way,
-assemble a new group-disjoint development split first
-and freeze its hash.
-
-**2. Write a pools manifest.** The trainer samples grouped
-triplets from a `siliconshield-sampling-pools-v1` manifest:
-named pools of row ids with `mode` (`cycle` or `flat`) and
-`weight`. Every pool must hold complete triplets, and row
-assignment across pools must be mutually exclusive. The
-loader refuses anything else. Verify a manifest with
-`dataset_versions.verify_pools` before launching.
-
-**3. Launch.** The trainer entry point is
-`siliconshield.training.laya.security_train` under
-`torch.distributed.run`, with `LAYA_ROOT` pointing at a
-compatible runtime:
-
-```bash
-export LAYA_ROOT=/path/to/compatible-runtime
-python -m torch.distributed.run --standalone --nproc_per_node=1 \
-  siliconshield/training/laya/security_train.py \
-  --model /path/to/parent-export \
-  --data /path/to/dataset-dir \
-  --pools /path/to/pools.json \
-  --sampling grouped \
-  --continue-training --freeze-encoder \
-  --question-contract siliconshield-requirement-context-v1 \
-  --development-views /path/to/views.json \
-  --output /path/to/run --run-id example-01 \
-  --max-updates 300 --eval-every-updates 10 \
-  --min-updates 150 --patience 3 \
-  --plateau-requires-full-exposure
-```
-
-Learning rates, warmup, schedule (`constant`, `cosine`, or
-`hold-decay`), batch geometry, and seed are flags. See
-`--help` and the [trainer
-summary](../siliconshield/training/laya/README.md). A
-`SILICONSHIELD_SECURITY_RECIPE` file adds frozen-teacher
-preservation over named pools, which keeps correct parent
-behavior without preserving parent mistakes.
-
-**4. Select and export.** Development views partition the
-development rows exactly. `checkpoint_selection` ranks
-eligible checkpoints under a frozen protected-views
-objective (`protected-views-v2-triplets` or later), never
-on TRAIN fit. The selected export is reloaded through the
-production worker and must reproduce the trainer's
-predictions before it counts as a release candidate.
-
-Two honest boundaries: the worst-member triplet training
-loss and the semantic class margins behind Contract-2 ran
-in versioned campaign snapshots and are not merged into
-this trainer, which optimizes row cross-entropy with
-optional teacher preservation. Whole-triplet checkpoint
-*selection* is in the repository. Triplet-aware
-*optimization* is the documented next merge. And the public
-set intentionally excludes sealed qualification and test
-populations, so headline numbers always need a fresh
-group-disjoint evaluation to mean anything.
+1. [Qualify the dataset and sampling pools](data-pipeline.md#dataset-versions-and-acceptance).
+2. [Freeze the study](decision-study.md#freezing-the-plan), including the complete
+   recipe, evaluation views, fitting qualification, and resource budget.
+3. Use the [trainer guide](security-model-training.md) for current objectives,
+   launch arguments, continuation, and export. Use [campaigns](campaigns.md)
+   when submitting owned jobs.
+4. [Validate the exported model](evaluation.md#validate-the-exported-model)
+   before accepting it as a release candidate.

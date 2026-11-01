@@ -20,7 +20,7 @@ mypy, CPU fixtures, and wheel installation outside the checkout. CI runs it on
 Python 3.11 and 3.12. Keep the code compatible with Python 3.11.
 
 The lightweight gate excludes `test_security_training.py` and
-`test_fresh_selection.py`, which import Torch and the external runtime; run
+`test_fresh_selection.py`, which import Torch and the external runtime. Run
 those two suites with the security-model environment instead (see the
 runtime-specific fixtures below). Optional dependencies and toolchains cause
 explicit skips in other suites. A skipped integration is not a passing live
@@ -43,8 +43,10 @@ qualification. Pylint is a review signal rather than a blanket score gate.
 | Glimmer episodes, identity, training | `test_operator.py`, `test_episodes.py`, `test_glimmer_training.py` |
 | Action-class selection and checkpoint review | `test_glimmer.py`, `test_checkpoint_assessment.py` |
 | Inference interfaces and timing | `test_glimmer.py`, `test_selection.py` |
-| GUI fixtures and qualification | `test_gui.py`, `test_gui_workflow.py` |
 | Episodes and transfer | `test_episodes.py` |
+| Decision studies and enforcement | `test_decision_study.py`, `test_study_enforcement.py` |
+| Multi-expert routing and arbitration | `test_multi_expert.py`, `test_expert_safety.py` |
+| Area benchmark and router sampling | `test_benchmark.py` |
 | Harness² integration | `test_glimmer_harness2.py`, `test_muse_harness2.py`, `test_muse_procedures.py` |
 | Export privacy/allowlist | `test_export_check.py` |
 
@@ -53,7 +55,7 @@ Run runtime-specific fixtures with the appropriate environment:
 ```bash
 CUDA_VISIBLE_DEVICES='' LAYA_ROOT=/path/to/compatible-runtime \
   /path/to/security-environment/bin/python -m pytest -q \
-  tests/test_security_training.py tests/test_replay_preservation.py
+  tests/test_security_training.py tests/test_fresh_selection.py tests/test_data_contracts.py
 ```
 
 Put Yosys and Icarus on `PATH` to exercise the checker integration tests. Some
@@ -118,8 +120,19 @@ Review documentation changes as interface changes:
    needed instead of treating `--help` as an execution test.
 5. Update the canonical guide and link to it from setup/reference pages. Avoid
    independent copies of recipes or acceptance requirements that can diverge.
-6. Check the export allowlist and private-content scan before publishing.
+6. Review the technical claims as an RTL and ML interface: distinguish requests
+   from accepted transactions, declared assumptions from missing logic, and
+   predictions from executed checks. Name the measured population and denominator.
+7. Keep capability, implementation, and qualification status distinct. A registered
+   expert, a completed job, and a successful release evaluation are different results.
+8. Check the export allowlist and private-content scan before publishing.
+
+Diagrams have a multipage draw.io source and checked-in SVG previews under
+[docs/diagrams](diagrams/README.md). The [white-paper figures](whitepaper/figures/README.md)
+add research plots and their editable sources. Update source and preview
+in the same change and inspect the rendered output. Keep one canonical diagram per flow, link it from
+other pages, and describe its meaning in adjacent text for accessibility.
 
 The current CI gate checks source, fixtures, and installed entry points. It does
-not automatically validate Markdown links, render Mermaid, or execute every
-documentation example. Include those review results explicitly when relevant.
+not automatically validate Markdown links, render draw.io/SVG figures, or
+execute every documentation example. Include those review results explicitly when relevant.

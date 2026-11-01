@@ -130,6 +130,15 @@ running. **Installing this code does not activate it in an already running
 frozen supervisor.** Deploy the updated supervisor and configuration at a
 planned boundary. Do not replace code beneath a live process.
 
+## Guidance pinned by a decision study
+
+A decision-study manifest can pin the qualified bundle digest as well as queue
+and model settings. That pin is stricter than ordinary session-boundary reload.
+Replacing the bundle at the pinned path changes a study input and blocks further
+bound launches until the study is amended. Keep the pinned generation immutable
+and publish new trial results elsewhere when an ongoing study must continue
+unchanged. See [decision studies](decision-study.md).
+
 ## Inspect and test
 
 - `processed/` records each worker request, including failures.

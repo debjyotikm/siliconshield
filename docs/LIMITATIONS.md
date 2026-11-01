@@ -1,17 +1,18 @@
 # SiliconShield-RTL capabilities and limitations
 
 [Documentation index](README.md) · [Model-family card](siliconshield-rtl.md) ·
-[Evaluation protocol](evaluation.md) · [GUI guide](gui.md)
+[Evaluation protocol](evaluation.md) · [Router](router.md)
 
 Status: checkpoint-specific evidence summary  
 Verification method: every aggregate below was recomputed from the
 content-addressed evaluation receipts. No model was rerun and no solver was
 rerun for this write-up.
 
-This document describes the measured operating boundary of one release:
-SiliconShield-RTL Contract-1 (C1). It says nothing about other
-SiliconShield-RTL checkpoints, and it does not establish general RTL
-security competence.
+The detailed matrices and examples describe the SiliconShield-RTL Contract-1
+(C1) decision model. A separate [Contract-2 section](#contract-2-temporal-specialist)
+records the focused temporal decision model's results and limits. Counts from
+one release must not be assigned to another, and neither establishes general
+RTL security competence.
 
 In summary, this checkpoint is suited to explicit, local, synchronous rules
 whose guard is visible in the RTL. It should not be relied upon where the
@@ -29,9 +30,7 @@ runtime behavior, and label order are kept together.
 |---|---|
 | Release | SiliconShield-RTL Contract-1 (C1) |
 | Weights | [danieltombay/siliconshield-rtl-contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1) |
-| Weights SHA-256 | `f4130223ed19be5cc7e21b3da70cb7aebf944ad6ed4a8a80f11d8f59bcd05ee7` |
 | Question contract | `siliconshield-requirement-context-v1` |
-| Contract file SHA-256 | `dd1f38ee223abac1f75b19d9086fd26d90865c9aa43097674fffdd61dbbf8bd3` |
 | Adapter metadata | 28 residual-adapter layers, rank 256, scale 8 |
 | Evaluation precision | BF16 model inference, FP32 probabilities and metrics |
 | Input budgets | `max_len=1536`, `head_max_len=256` for the question and options |
@@ -56,7 +55,7 @@ Four kinds of evidence appear below. They answer different questions.
 | Frozen development views | Performance on populations used during model development | Independent generalization |
 | Family-disjoint qualification | Transfer to a small number of unseen authored families | Broad real-world RTL coverage |
 | Requirement-context test | Behavior under a deliberate wording and representation shift | Performance on every semantic shift |
-| Six-example GUI showcase | Correct behavior on those exact examples | An accuracy estimate |
+| Six-example authored local-guard set | Correct behavior on those exact examples | An accuracy estimate |
 
 The two unseen evaluations were frozen before inference. Both were balanced
 across the three labels, solver-checked, and group-disjoint from their matching
@@ -86,7 +85,7 @@ guard that can be read directly from one small RTL region. Examples include:
 - a sticky bit that may clear only under a declared condition
 - a local mask, strobe, owner-width, or default-deny rule
 
-The main GUI showcase uses three counterfactual pairs. Each pair keeps the
+The six authored local-guard examples form three counterfactual pairs. Each pair keeps the
 requirement fixed and changes one guard in the RTL.
 
 | Pair | Violating design | Satisfying design |
@@ -116,9 +115,8 @@ else if (wr_en && privileged)
   cfg_reg <= wdata;
 ```
 
-In one matched batch, the checkpoint classified all six showcase examples
-correctly. Scores below are raw SDK values. The window displays three
-decimals:
+In one matched batch, the checkpoint classified all six authored examples
+correctly. Scores below are raw SDK values:
 
 | Example | Expected decision | Winning model score |
 |---|---|---:|
@@ -131,8 +129,7 @@ decimals:
 
 These six examples were selected to demonstrate a measured strength rather
 than to estimate one. A 6/6 result is not a benchmark and must never be
-reported as 100% accuracy. The examples are available in
-[`examples/gui-demo`](../examples/gui-demo/README.md).
+reported as 100% accuracy. The table describes that measured batch only.
 
 ### Unseen counterbalanced write-path families
 
@@ -271,9 +268,11 @@ else if (wr_en && policy_allow)
   cfg_reg <= wdata;
 ```
 
-The truthful answer is `insufficient_context`. Compatible definitions of
-`policy_allow` can make the design satisfy or violate the requirement. In a
-small diagnostic screen, the checkpoint instead returned
+This fragment omits the internal definition of `policy_allow`. Compatible
+definitions can make it satisfy or violate the requirement, so its reviewed
+label is `insufficient_context`. This differs from a complete module that
+declares `policy_allow` as an unconstrained primary input: an allowed assignment
+that bypasses privilege would then be a violation. In a small diagnostic screen, the checkpoint instead returned
 `satisfies_requirement` with a score of 99.9512%.
 
 The same screen contained six newly authored insufficient-context examples and
@@ -364,8 +363,8 @@ On the shifted requirement-context evaluation:
 - 17 of 25 false-safes had confidence at or above 90%
 
 The almost identical confidence on correct and incorrect shifted examples is a
-serious calibration failure. The GUI should show all three scores, but neither
-the highest score nor a 99% display should be described as certainty.
+serious calibration failure. Reports should retain all three scores. Neither
+the highest score nor a value near 99% should be described as certainty.
 
 ## Coverage that has not been established
 
@@ -423,23 +422,25 @@ Use the [investigation workflow](investigation.md) when executable checks are
 available. A passing bounded simulation means that no counterexample was found
 within that check. It is not automatically a proof for all time.
 
-### Large files are assessed in excerpts
+### Assessments are bounded by the supplied RTL
 
-The GUI's large-file scan prefers complete `module` through `endmodule`
-regions. Modules that exceed the input bound and files without usable module
-boundaries fall back to overlapping line windows that are marked incomplete in
-the saved scan metadata. Each verdict applies only to the excerpt, requirement,
-and assumptions supplied to that model call. It does not establish that every
-writer, helper, generated block, or module instance was included. The scan
-table therefore labels rows as model assessments rather than verified
-findings.
+The router assesses the state supplied by its caller. It does not automatically
+elaborate a repository or prove that every writer, helper, generated block, or
+module instance is included. For a large design, supply a region containing the
+logic needed to judge one requirement and preserve its source locations. Each
+verdict applies to that region and its assumptions, not the entire design.
 
-### Truncated inputs receive no verdict
+### Worker token-budget truncation receives no verdict
 
 The evaluated model used a maximum sequence length of 1,536 tokens and a
 256-token budget for the question and options. Inputs that do not fit the
 configured contract must be rejected as truncated. They must not be silently
 shortened and must not be relabeled as `insufficient_context`.
+
+This guarantee covers truncation detected by the inference worker. It cannot
+detect source removed before a request was constructed. Integrators must
+preserve the relevant RTL and disclose any excerpt boundaries. A short input
+that fits the budget is not evidence that the full semantic context is present.
 
 ### Requirements must be precise
 
@@ -454,6 +455,38 @@ The model works best when the requirement:
 Better wording cannot recover missing design information. If the policy-to-RTL
 mapping is unknown, the right product behavior is to request that information
 or run a check over explicit alternatives.
+
+## Contract-2 (temporal specialist)
+
+A second release covers FIFO, counter, and arbitration behavior:
+[Contract-2 weights](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2).
+Its public-benchmark measurements show a narrow operating envelope.
+FIFO areas reach 97 of 108 and counter areas 92 of 108. Outside that
+scope the model degrades sharply: local-safety areas fall to 933 of
+2610 with 281 false-safe errors, transfer pairs to 275 of 621, and
+access-control areas to 77 of 108. Never route local-safety,
+transfer, requirement, or access-control scopes to this checkpoint
+alone. These are published development measurements, not independent qualification.
+The public benchmark's FIFO/counter/arbitration subset was used in Contract-2
+selection.
+
+| Focused development metric | Contract-2 |
+|---|---:|
+| Correct decisions | 203/234, 86.75% |
+| Satisfies / violates / context correct | 64/78 / 61/78 / 78/78 |
+| False-safes | 17/78 violations |
+| Whole triplets correct | 51/78, 65.38% |
+
+Commit/hold, arbiter-tree, empty-data-blanking, and stored-word-hold families
+remain unreliable. The release is an owner-selected research checkpoint. It
+did not pass the frozen violation-recall, false-safe, and NLL promotion gates,
+and the trainer's selector retained its parent. Public release and automatic
+promotion are distinct decisions.
+
+The [router](router.md) derives tiers from each deployment's measured profile
+and observed inference identity. It does not turn the historical table into
+current evidence for a different runtime. Arbitration quality must also be
+measured against individual experts. Agreement alone is not verification.
 
 ## Recommended use
 
@@ -521,8 +554,16 @@ well-scoped local contracts, followed by executable verification.
 ## Reproducibility notes
 
 The aggregate measurements above were transcribed from content-addressed
-receipts kept outside the public source tree. The public repository does not
-contain the benchmark rows, logits, or model weights.
+receipts kept outside the public source tree. Model weights and the development
+benchmark are now distributed separately through Hugging Face. The
+[benchmark guide](benchmark.md) describes the pinned public population.
+Private qualification/shifted-evaluation rows and complete historical logits
+are not supplied by the source repository. The public benchmark cannot
+reproduce every historical table above.
+
+Published campaign/SDK scores and single-row worker scores use different
+inference paths. Keep their batch, padding, runtime, question, and population
+identities attached rather than mixing their counts in one comparison.
 
 The first counterbalanced qualification attempt completed inference but failed
 before writing metrics because its reporting recipe did not declare a source

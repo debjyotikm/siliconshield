@@ -14,6 +14,12 @@ process-lifetime runtime lock. Configure one shared `resource_root` in profiles
 that compete for the same GPUs. Different directories do not coordinate with
 one another. `nvidia-smi` is an observation, not an ownership lock.
 
+Idle GPUs are the default preflight requirement. An explicitly configured
+`gpu_coexistence` exception can permit named resident processes, bound to PID,
+start time, and command hash, with a system-memory floor. The training launcher
+must enforce its memory cap. This does not authorize sharing with unknown work.
+See [decision studies](decision-study.md).
+
 Glimmer training, serving, and evaluation use the host-mounted file named by
 `SILICONSHIELD_GPU_LOCK`. All containers and host processes sharing a device
 must point at the same underlying file. A busy lease refuses acquisition.
@@ -90,9 +96,13 @@ an identity failure by editing its signature.
 | Selected step is zero | All later candidates may have failed protection or ranking. Inspect the curve and gates. |
 | Dataset accepted record invalid | Check manifest/pool drift, audit binding, split hashes, lineage/canonical overlap, concentration caps, and release class. Do not replace it with an empty success marker. |
 | Model assessment unavailable | Check configured worker Python, runtime import, checkpoint directory, model identity, and recorded question contract. |
+| Study binding mismatch | Compare job profile, dataset, recipe, and launch command against the frozen study manifest. Amend the study instead of editing evidence. |
+| Study budget exhausted | Read the refusal or parked reason. A new-model proposal exists only if its evidence gate passed. A fresh study needs owner authorization. |
 | Model input truncated | Increase a qualified budget or reconstruct complete relevant context. Do not publish its discarded judgment. |
 | Glimmer replay fails to parse | Verify model, adapter, native tool parser, response schema, and decoding settings together. |
 | Slow Glimmer loading/decoding | Separate load time, prefill, and decode. Inspect the qualified loading/runtime configuration before changing precision. |
+| Routing is thin or unrated | Check profile coverage and full observed identity against the measurements. Do not repair it by manually increasing a tier. |
+| Study guidance digest changed | Preserve both bundle generations. Explicitly amend the study before adopting new guidance. |
 | Procedure worker fails | Preserve its request/attempt receipt and use a fresh output after correction. Don't publish failed guidance. |
 
 See [inference](inference.md) for timing and loading details. After a

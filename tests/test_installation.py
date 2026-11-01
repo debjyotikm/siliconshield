@@ -29,6 +29,7 @@ def run(*args, **kwargs):
 
 
 def test_wheel_installs_and_runs_outside_checkout(tmp_path):
+    pytest.importorskip("pip", reason="wheel installation requires pip")
     source = tmp_path / "source"
     shutil.copytree(
         ROOT,
@@ -131,3 +132,59 @@ def test_package_version_comes_from_installed_metadata_or_source_fallback():
         assert siliconshield.__version__ == dist_version
     expected = read_project_version()
     assert expected and all(part.isdigit() for part in expected.split("."))
+
+
+def test_pinned_download_checks_bytes_before_publish(tmp_path, monkeypatch):
+    """A failed download must not become a usable model file."""
+    import hashlib
+    import io
+    import json
+
+    import pytest
+
+    from tools.download_models import prepare_model
+
+    body = b"synthetic model payload"
+    files = {"model.safetensors": hashlib.sha256(body).hexdigest()}
+    record = {
+        "repo_id": "example/synthetic",
+        "revision": "a" * 40,
+        "files": files,
+        "export_sha256": hashlib.sha256(
+            json.dumps(files, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+    target = tmp_path / "model"
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda *a, **k: io.BytesIO(b"damaged")
+    )
+    with pytest.raises(ValueError, match="Downloaded file checksum"):
+        prepare_model(record, target)
+    assert not list(target.iterdir())
+    urls = []
+
+    def download(url, **kwargs):
+        urls.append(url)
+        return io.BytesIO(body)
+
+    monkeypatch.setattr("urllib.request.urlopen", download)
+    assert prepare_model(record, target) == record["export_sha256"]
+    assert record["revision"] in urls[0]
+    assert prepare_model(record, target) == record["export_sha256"]
+    assert len(urls) == 1  # Reuse requires matching bytes, not a new request.
+    (target / "model.safetensors").write_bytes(b"changed")
+    with pytest.raises(ValueError, match="Existing file checksum"):
+        prepare_model(record, target)
+    assert len(urls) == 1
+
+
+def test_release_fingerprints_match_worker_identity_contract():
+    """Public payload pins use the same aggregate identity as live workers."""
+    import tomllib
+
+    from siliconshield.experts.identity import digest
+    from tools.download_models import MANIFEST
+
+    manifest = tomllib.loads(MANIFEST.read_text())
+    for record in manifest["models"].values():
+        assert record["export_sha256"] == digest(record["files"])

@@ -20,7 +20,9 @@ selection rules, evaluation configuration, and run budget. Check the model's
 complete input encoding, not only raw RTL token length. Use a new output
 directory for a new experiment. Training refuses rows whose question bytes
 differ from `--question-contract` and refuses unreviewed templates when
-`--review-ledger` is set.
+`--review-ledger` is set. For new owned work, record this plan as a
+[decision study](decision-study.md) instead of assembling it by hand.
+The campaign then enforces the frozen bytes at every launch.
 
 The training and development files are normally `train.jsonl` and `dev.jsonl`.
 The fitting mode reads TRAIN only. Calibration and test are reserved for a
@@ -40,6 +42,8 @@ python -m torch.distributed.run --standalone --nproc_per_node=3 \
   --data /path/to/accepted-dataset \
   --output /path/to/new-run --run-id example-continuation \
   --continue-training --sampling grouped \
+  --pools /path/to/pools.json --development-views /path/to/views.json \
+  --question-contract siliconshield-requirement-context-v1 \
   --micro-batch 4 --accumulation 4 \
   --max-updates 200 --eval-every-updates 25 \
   --no-final-evaluation
@@ -55,8 +59,10 @@ microbatch four, and accumulation four, the nominal global batch is 48 decision
 sequences. Three cards do not form a pooled memory allocation. Gradient
 accumulation avoids unnecessary intermediate synchronization. The trainer folds
 the preservation penalty into one supervised loss and calls `backward()` once
-per microbatch inside `no_sync`; `ddp_guard.require_coherent_training()`
-refuses a dual-backward regression at startup. At runtime the trainer also
+per microbatch. `no_sync()` wraps the non-final accumulated microbatches, while
+the final one synchronizes across ranks.
+`ddp_guard.require_coherent_training()` refuses a dual-backward regression at
+startup. At runtime the trainer also
 checks that DDP replicas agree and frozen parameters never move at early
 updates, every development evaluation, and pre-finalization, and retains
 every evaluated checkpoint's tensors under `eval_snapshots/` on rank 0.
@@ -67,25 +73,34 @@ every evaluated checkpoint's tensors under `eval_snapshots/` on rank 0.
 |---|---|
 | `--encoder-lr`, `--adapter-lr`, `--head-lr` | Separate optimizer rates. Adapter LR defaults to head LR. |
 | `--freeze-encoder` | Keep encoder weights fixed while training decision/adaptation parameters. |
-| `--disable-adapters` | Head-only control without adapter branches, for compatible unadapted initialization. |
+| `--encoder-trainable-blocks N` | Train only the last N encoder blocks alongside the decision/adaptation parameters. Incompatible with `--freeze-encoder`. |
+| `--disable-adapters` | Disable adapter branches for compatible unadapted initialization. Combine with `--freeze-encoder` for a true head-only control. |
 | `--adapter-scale` | Gain for newly created residual branches. Inherited checkpoints retain their configuration. |
 | `--checkpointing` / `--no-checkpointing` | Activation recomputation versus memory use. |
 | `--sampling grouped`, `--pools` | Complete groups with declared pool quotas and per-pool `cycle`/`flat` modes. |
 | `--max-updates`, `--epochs`, `--hours` | Update, epoch, and wall-clock bounds. |
-| `--warmup`, `--lr-schedule` | Constant or cosine schedule. Cosine requires a fixed update budget and ends at one tenth of peak. |
+| `--warmup`, `--lr-schedule` | `constant`, `cosine`, or `hold-decay`. Cosine ends at one tenth of peak. Hold-decay adds `--hold-updates` and a configurable `--lr-endpoint`. |
 | `--eval-every-updates` | Development cadence. Zero uses epoch boundaries. Terminal weights are evaluated too. |
 | `--eval-batch-size` | Evaluation batch per rank. Zero uses the training microbatch. |
 | `--min-updates`, `--patience` | Minimum updates and unsuccessful evaluation count for early stopping. |
 | `--checkpoint-interval` | Seconds between resumable saves. |
-| `--question-contract` | Pinned `v0`/`v1` question bytes; validated on every row and recorded on export. |
-| `--review-ledger` | JSONL English-to-assertion reviews; enforces agreed template coverage. |
+| `--question-contract` | Pinned `v0`/`v1` question bytes, validated on every row and recorded on export. |
+| `--review-ledger` | JSONL English-to-assertion reviews, enforcing agreed template coverage. |
 | `--review-packets` | Review-packet mapping for binding ledger entries to packet bytes (requires `--review-ledger`). |
 | `--plateau-requires-full-exposure` | Refuse plateau interventions until delivered draws cover a full first pass with closed triplets. |
 | `--no-diagnostic-weights` | Keep diagnostic metrics without saving alternative full model copies. |
-| `--report-bootstrap`, `--reporting-contract` | Reporting uncertainty budget and a content-bound reporting contract. |
+| `--report-bootstrap`, `--reporting-contract` | Bootstrap replicate count (default 1,000) and a content-bound reporting contract. |
 
 Read `--help` when preparing a command. The final recipe, not these example
-values, belongs in the run signature.
+values, belongs in the run signature. For v1 release data, explicitly pass
+`--question-contract siliconshield-requirement-context-v1`, plus the reviewed
+ledger, packets, pools, and development views required by the study. The trainer's default question contract is legacy
+`v0`, so omitting that flag is not a compatible reproduction of either release.
+
+Whole-triplet selection is implemented in the repository. The specialized
+triplet-aware optimization and semantic-margin objectives in the historical
+Contract-2 study used versioned study code. They are not enabled by a generic
+trainer flag here. See [training recipes](training-recipes.md).
 
 ## Select on the full task
 
@@ -95,9 +110,10 @@ exact `row_ids` so a reviewed, quarantined manifest maps onto the population.
 `score_triplets` enables strict whole-triplet scoring grouped by `pair_id`.
 A fresh single-view study uses `config_from_views_manifest()` to build an
 exact-id selection view (`single_view_study`) with no retention population.
+This predates decision-study manifests and is a different mechanism.
 Use views to keep new capability and retained capability visible separately.
 
-There are five selection paths:
+There are six selection paths:
 
 1. Legacy transfer ranking with a retention-accuracy tolerance. The trainer
    warns when a campaign selection reference is absent.
@@ -109,12 +125,24 @@ There are five selection paths:
    protecting prior capabilities from achieving the new task's target.
 4. A `protected-views-v2-triplets` objective ranking safety first, then whole
    triplets, correct decisions, false violations, unnecessary abstention, and
-   NLL. Views carry `triplets`/`triplets_correct`; gates support
+   NLL. Views carry `triplets`/`triplets_correct`. Gates support
    `max_false_violation`, `max_unnecessary_abstention`, and
    `whole_triplets_min` alongside false-safe floors.
 5. A `protected-views-v3-balanced` objective ranking whole triplets first with
    false-safe safeguards in feasibility and ranking: capability first, safety
    constrained.
+
+6. A `protected-views-v4-sourced` objective retaining the v3 ordering while
+   applying exact per-source floors to the protected views. Declared sources
+   must match the reported source breakdown, so a strong aggregate cannot hide
+   a missing or regressing source.
+
+For protected-view objectives, `protected_passed` and
+`quality_targets_passed` are separate fields. The sorting key prioritizes
+protected feasibility, then the version's metric order. Target attainment is
+reported but is not itself the first sorting component. A selected checkpoint
+can therefore miss the study's quality target. Round assessment and promotion
+must check the full frozen gates before accepting it.
 
 The campaign creates a round recipe containing its selection reference. Jobs
 must point at that recipe. Ranking or tolerance changes require explicit policy
@@ -133,6 +161,31 @@ contribute to the softened KL penalty. The caller applies normal sample and
 accumulation weights. Teacher artifacts are hashed into preparation and resume
 identity. Check protected development views for regressions even when this loss
 is enabled.
+
+### Optimization contract
+
+The general trainer minimizes supervised cross-entropy with optional
+preservation on eligible TRAIN rows. In schematic weighted-mean form:
+
+$$
+\mathcal{L}=\sum_i \bar w_i\left[-\log p_\theta(y_i\mid x_i)
++\lambda m_i T^2 D_{\mathrm{KL}}(p_{\mathrm{teacher}}^{(T)}
+\Vert p_\theta^{(T)})\right].
+$$
+
+Here $x_i$ includes RTL, requirement, and assumptions. The normalized weights
+$\bar w_i$ represent the configured sampling/loss contribution.
+$m_i$ is one only for valid rows in eligible pools where the frozen teacher's
+argmax matches the reviewed target. $T$ softens both distributions. The teacher
+is detached and supplies no replacement labels. The actual implementation
+applies validity and accumulation scaling within each distributed microbatch.
+See [preservation loss](../siliconshield/training/laya/replay_preservation.py).
+
+Loss share is not preservation strength: increasing $\lambda$ can reduce raw
+KL enough that its fraction of total loss falls. Evaluate parameter movement,
+teacher agreement on the eligible mask, and protected development performance
+alongside CE and KL. Gradient norms, clip scale, and parameter deltas answer
+different questions. None alone proves better generalization.
 
 ## Resume, continue, and finalize
 
@@ -157,7 +210,9 @@ test fresh again.
 
 Use TRAIN-only fitting to check whether the model can learn a complete fixed
 subset: `--limit-train-rows N` retains complete designs, so the actual count can
-exceed N. Its evaluation is training fit, not development generalization.
+exceed N. Evaluation uses that same fixed TRAIN population before and after
+fitting. These reports are not admitted as development evidence by the episode
+importer.
 
 Inspect class recalls, false-safes, complete pairs, and per-source/mechanism
 results. High missing-context recall can conceal poor satisfaction-versus-violation
@@ -172,8 +227,8 @@ draws in one epoch need not expose new option orders. Evaluate order robustness
 independently instead of assuming augmentation guarantees it.
 
 The selected export records its question contract in
-`question_contract.json`. Inference selects questions from that record;
-legacy exports without a record use the original contract.
+`question_contract.json`. Inference selects questions from that record.
+Legacy exports without a record use the original contract.
 
 Implementation: [trainer](../siliconshield/training/laya/security_train.py),
 [selection](../siliconshield/training/laya/development_views.py),

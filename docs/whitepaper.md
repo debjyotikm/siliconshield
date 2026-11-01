@@ -17,9 +17,10 @@ separates three responsibilities: executable construction of training labels,
 neural classification of an RTL requirement, and evidence-based agent decisions
 about experiments and findings.
 
-The research produced two specialists. Contract-1 addresses visible local guards
-and register-update conditions. It scores 257/288 on counterbalanced
-development, including 191/192 fully specified cases, and 249/288 on a
+The research produced two specialist RTL decision models. Contract-1 addresses
+visible local guards and register-update conditions. It scores 257/288 on
+counterbalanced development, including 191/192 fully specified cases, and 249/288
+on a
 four-family reserved qualification population, with no false-safe prediction
 among 96 violations. A separate wording and representation shift lowers accuracy
 to 330/756. Contract-2 addresses bounded FIFO, counter, and arbitration

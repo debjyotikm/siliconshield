@@ -1,104 +1,102 @@
-# SiliconShield documentation
+# SiliconShield engineering documentation
 
-SiliconShield combines requirement-conditioned RTL decisions, executable
-investigation, and agent-driven training. This guide describes the checked-in
-implementation. Model weights, experiment catalogs, run results, and deployment
-configuration are separate artifacts supplied by the operator.
+[Project overview](../README.md) · [Model releases](siliconshield-rtl.md) ·
+[Source contribution guide](../CONTRIBUTING.md)
 
-## Review the product first
+SiliconShield has two core workflows: investigate RTL bugs and security flaws
+with the router, Muse, and specialist decision models, and train new or improved
+decision models through reproducible studies. The document set covers their
+design, integration, scientific evidence, and operation. Specifications describe
+implemented contracts. Guides provide procedures. Model cards and evaluation
+documents state the evidence supporting released behavior.
 
-The [project brief](project.md) explains who SiliconShield is for, what it does,
-and where Meta AI is used. The [demo guide](demo.md) walks through an
-investigation and explains how to present an authored example or a live model
-run.
+For a reproducible first run, use [pinned model releases](releases.md).
+For the experimental rationale and results, read the [research white paper](whitepaper.md).
+Upstream attribution and dependency terms are in [NOTICE](../NOTICE.md).
 
-## Start here
+## Reading paths
 
-| Goal | Read |
-|---|---|
-| Scientific account of Muse-guided research, training methods, hardware, results, and bottlenecks | [Research white paper](whitepaper.md) |
-| Two Glimmer-operated training runs on local hardware: a verified toy loop and a real-scale null result | [Glimmer local-training case study](case-study-glimmer-local-training.md) |
-| Understand the components and controller boundaries | [Architecture](architecture.md) |
-| Run an authored RTL investigation | [Investigation walkthrough](investigation.md) |
-| Install the right environment | [Setup](setup.md) |
-| Build and qualify security training data | [Data pipeline](data-pipeline.md) |
-| Train or continue the decision model | [Security-model training](security-model-training.md) |
-| Wire an unattended campaign | [Campaigns and controllers](campaigns.md) |
-| Fine-tune and qualify Muse Glimmer | [Glimmer training](glimmer.md) |
-| Refine agent instructions with Harness² | [Muse procedure learning](muse-procedures.md) |
-| Serve models and measure inference | [Inference](inference.md) |
-| Interpret results and reserve final evaluation | [Evaluation](evaluation.md) |
-| Understand measured model strengths and limitations | [Model limitations](LIMITATIONS.md) |
-| Route scopes across experts and add models | [Router architecture](router.md) |
-| Diagnose jobs, recover, or stop a campaign | [Operations](operations.md) |
-| Find commands, settings, and artifact owners | [Reference](reference.md) |
-| Develop and verify changes | [Development and testing](development.md) |
-| Understand the security-model release scope | [Model-family card](siliconshield-rtl.md) |
-| Reproduce the Contract-1/2 training recipes | [Training recipes](training-recipes.md) |
-| Plan a reproducible model study | [Decision-model studies](decision-study.md) |
-
-## Choose the workflow
-
-**Investigating RTL:** start with the walkthrough. A model assessment is one
-input to the investigation. Executed checks establish the report's evidence. The
-shipped application does not generate a complete verification environment for
-arbitrary designs.
-
-**Training SiliconShield-RTL:** qualify a dataset, register the development
-selection rules, and run the distributed trainer. Validate the selected export
-before treating it as a deployable artifact. Calibration and final evaluation
-are separate from checkpoint selection.
-
-**Operating experiments:** choose the Muse coding-agent supervisor or the
-bounded Glimmer operator. They are separate integrations. The supervisor
-supports successive rounds through an application-supplied driver. The bounded
-operator handles one authorized experiment and its permitted interventions.
-
-**Improving the controller:** Glimmer SFT/DPO updates adapter weights. Harness²
-updates prompt procedures. Both require replay qualification. Neither implicitly
-deploys a new controller or grants additional execution authority.
-
-## Reading conventions
-
-Paths beginning `/path/to/` are placeholders. Run commands from the repository
-root unless a guide says otherwise. Keep outputs outside that checkout.
-Commands that launch a trainer, model server, or agent are instructions for an
-explicitly configured deployment, not part of the lightweight test gate.
-
-Each guide states what its checks establish. A fixture test checks code
-behavior, while a model evaluation measures predictions on a specified
-population. Promotion and deployment have their own acceptance rules.
-
-## Availability and remaining integration work
-
-| Interface | Available here | Still supplied by a deployment |
+| Reader | Start | Continue |
 |---|---|---|
-| Investigation CLI | Authored examples, report generation, repair checks | Custom design checks and trained model export |
-| Decision-model trainer | Distributed training, selection, resume, export | Compatible pinned runtime, qualified data/recipe, GPU environment |
-| Muse campaign supervisor | Round state machine and agent-session integration | Campaign initialization, evaluator callback, service/polling driver |
-| Glimmer controller | LoRA/DPO, replay grading, bounded job operator | Signed curriculum, qualified adapter and serving configuration |
-| Native inference | vLLM command builder and lease/identity checks | Compatible vLLM build and deployment image |
+| Hardware engineer | [Router and Muse assessment](router.md) | [Model capabilities](siliconshield-rtl.md) → [Investigation](investigation.md) |
+| Application integrator | [System architecture](architecture.md) | [Assessment protocol](router.md) → [Interface reference](reference.md) → [Expert qualification](expert-qualification.md) |
+| Model researcher | [Release recipes](training-recipes.md) | [Data qualification](data-pipeline.md) → [Decision studies](decision-study.md) → [Evaluation](evaluation.md) |
+| Platform operator | [Environment setup](setup.md) | [Campaign lifecycle](campaigns.md) → [Operations and recovery](operations.md) |
+| Contributor or reviewer | [Architecture](architecture.md) | [Development and tests](development.md) → [Python standard](python_style.md) |
 
-The model card names the current release checkpoint,
-SiliconShield-RTL Contract-1, and its provenance. Weights are published at
-[siliconshield-rtl-contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1),
-alongside the FIFO/counter specialist
-[siliconshield-rtl-contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2),
-the [RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark),
-and the [combined training set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training).
-Accuracy and throughput must be measured for that checkpoint and runtime.
+## Architecture and interfaces
 
-## Terms used in these guides
+| Document | Owns |
+|---|---|
+| [System architecture](architecture.md) | Process boundaries, interfaces I01–I04, artifact ownership, failure model, design trade-offs, extension points |
+| [Expert routing and assessment](router.md) | Scope selection, reliability tiers, transaction sequence, validated responses, Muse arbitration |
+| [Interface reference](reference.md) | Commands, wire fields, identity, score/coverage validation, timeouts, configuration and artifact names |
+| [Expert qualification](expert-qualification.md) | Registration, observed execution identity, benchmark-to-profile binding, upgrades |
+| [Architecture source](diagrams/README.md) | Editable draw.io diagrams and SVG previews for component, sequence, and lifecycle views |
 
-- **Requirement:** the specific behavior assessed, together with its assumptions.
-- **False-safe:** a violation classified as satisfying the requirement.
-- **Lineage / split group:** related designs or experiments kept together when
-  partitioning data. Count these groups when estimating independent sample size.
-- **Selected checkpoint:** weights chosen within one run under its frozen rules.
-- **Incumbent:** the model currently retained by the campaign's promotion policy.
-- **Research promotion:** acceptance as the next research incumbent.
-- **Deployment acceptance:** a separate set of suitability thresholds. It does
-  not by itself publish or serve the model.
+## Applications and operation
+
+| Document | Owns |
+|---|---|
+| [Setup](setup.md) | Separate controller, model-worker, and training environments |
+| [Investigation](investigation.md) | Requirement-bound simulation, proposed repairs, candidate rechecks, report interpretation |
+| [Campaigns](campaigns.md) | Persisted round transitions, agent callbacks, controller selection, promotion authority |
+| [Operations](operations.md) | Resource ownership, inspection, stop/recovery procedures, and deployment updates |
+| [Demo](demo.md) | Runnable presentation with explicit expected outputs and evidence boundaries |
+
+## Models, data, and research
+
+| Document | Owns |
+|---|---|
+| [Research white paper](whitepaper.md) | Scientific account of Muse-guided research, Contract-1 and Contract-2, training methods, hardware, results, and bottlenecks |
+| [Glimmer local-training case study](case-study-glimmer-local-training.md) | Two Glimmer-operated training runs on local hardware: a verified toy loop and a real-scale null result |
+| [Contract-1 and Contract-2 decision models](siliconshield-rtl.md) | Released artifacts, task definitions, domain strengths, headline evidence, lineage |
+| [Capabilities and limitations](LIMITATIONS.md) | Confusion matrices, failure examples, scope limits, and confidence behavior |
+| [Release recipes](training-recipes.md) | Historical optimization settings, population lineage, research lessons, reproduction limits |
+| [Data pipeline](data-pipeline.md) | Solver evidence, English-to-assertion reviews, lineage isolation, immutable acceptance, sampling coverage |
+| [Training](security-model-training.md) | Trainable parameters, optimization objective, DDP, selection versions, resume and export |
+| [Decision studies](decision-study.md) | Frozen manifests, launch qualification, budget enforcement, diagnosis, new-model recommendations |
+| [Evaluation](evaluation.md) | Metric definitions, uncertainty, matched comparisons, held-out roles, release protocol |
+| [Benchmark](benchmark.md) | Public area benchmark, population pin, CLI, metrics, and router sampling |
+| [Glimmer](glimmer.md) / [Inference](inference.md) | Local Muse backend: supported Glimmer-driven router sessions, with operator and serving qualification as research groundwork |
+| [Muse and Harness²](muse-procedures.md) | Replay-qualified procedure learning and guidance adoption |
+
+## Conventions and evidence
+
+Run examples from the repository root unless specified otherwise. Replace
+`/path/to/` values with local paths. Store generated outputs outside the
+checkout. A command's prerequisites and side effects are part of its guide.
+A `--help` check validates the interface, not a GPU or model-quality result.
+
+Decision-model releases: [Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1)
+and [Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2).
+Published data: [training collection](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
+and [development benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark).
+The [recipes](training-recipes.md) identify which populations contributed to
+which release. Downloading a previously used development set does not make it
+an independent final evaluation.
+
+Fixture tests, live integration, GPU execution, model quality, research promotion,
+and publication are distinct evidence levels. Each result should name its
+artifact, population, protocol, and acceptance rule. The [evaluation specification](evaluation.md)
+is the canonical reference for scientific claims.
+
+## Terms
+
+- **Decision model:** a trained classifier that assesses RTL against a requirement
+  and assumptions. Contract-1 and Contract-2 each return one of three labels and
+  all three class scores.
+- **Requirement:** the behavior assessed together with explicit assumptions.
+- **False-safe:** a true violation predicted as satisfying the requirement.
+- **Whole triplet:** linked satisfying, violating, and insufficient-context
+  decisions, scored correct only when all three are correct.
+- **Lineage / split group:** related designs or experiments assigned together
+  when partitioning data. Use these groups as the clustering unit for uncertainty
+  estimates. A distinct group ID alone does not establish independence.
+- **Selected checkpoint:** the weights chosen inside one run by its rules.
+- **Incumbent:** the model retained by the campaign's promotion policy.
+- **Thin evidence:** insufficient routing support, weak measured capability, or
+  unresolved coverage. It is not the model's `insufficient_context` label.
 - **Receipt:** structured evidence about inputs, execution, identity, or a decision.
-- **Replay:** execution of a declared controller task through controlled tools.
-  Fixture replay and live-model replay measure different things.
+- **Replay:** a declared controller task executed through controlled tools.
+  Fixture replay and live generation answer different questions.

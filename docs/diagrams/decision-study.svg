@@ -1,0 +1,458 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; background-color: light-dark(#ffffff, #121212);" version="1.1" width="1220px" height="1000px" viewBox="0 0 1220 1000" role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">Training round lifecycle</title>
+  <desc id="figure-description">Rendered from the accompanying editable draw.io source. Training round lifecycle.</desc>
+  <defs />
+  <rect fill="#ffffff" width="100%" height="100%" x="0" y="0" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
+  <g>
+    <g data-cell-id="0">
+      <g data-cell-id="1">
+        <g data-cell-id="canvas">
+          <g>
+            <rect x="10" y="10" width="1200" height="980" fill="#ffffff" stroke="none" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
+          </g>
+        </g>
+        <g data-cell-id="figure-number">
+          <g>
+            <rect x="40" y="32" width="45" height="35" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#666666" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="16px" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));">
+              <text x="40" y="56.5">03</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="figure-title">
+          <g>
+            <rect x="95" y="28" width="1080" height="45" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="29px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="95" y="64">Training round lifecycle</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="figure-subtitle">
+          <g>
+            <rect x="40" y="77" width="1140" height="35" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#666666" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="18px" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));">
+              <text x="40" y="102.5">Persisted phases name boundaries. Each handler performs the work shown before advancing.</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="study">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 40 183 L 40 145 L 1180 145 L 1180 183" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 183 L 40 245 L 1180 245 L 1180 183" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 183 L 1180 183" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="58" y="172.5">Frozen study</text>
+            </g>
+          </g>
+          <g data-cell-id="study-body">
+            <g>
+              <rect x="56" y="192" width="1108" height="42" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="56" y="220.5">Parent · accepted data · source/runtime · recipe · views · policy · command · budget</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="prepare">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 40 338 L 40 300 L 240 300 L 240 338" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 338 L 40 440 L 240 440 L 240 338" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 338 L 240 338" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="58" y="327.5">prepare</text>
+            </g>
+          </g>
+          <g data-cell-id="prepare-body">
+            <g>
+              <rect x="56" y="347" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="56" y="385.5">Validate data</text>
+                <text x="56" y="405.5">and round inputs</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="validate_data">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 275 338 L 275 300 L 475 300 L 475 338" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 275 338 L 275 440 L 475 440 L 475 338" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 275 338 L 475 338" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="18px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="293" y="327">validate_data</text>
+            </g>
+          </g>
+          <g data-cell-id="validate_data-body">
+            <g>
+              <rect x="291" y="347" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="291" y="385.5">Prepare Operator</text>
+                <text x="291" y="405.5">Check bindings</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="preflight">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 510 338 L 510 300 L 710 300 L 710 338" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 510 338 L 510 440 L 710 440 L 710 338" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 510 338 L 710 338" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="528" y="327.5">preflight</text>
+            </g>
+          </g>
+          <g data-cell-id="preflight-body">
+            <g>
+              <rect x="526" y="347" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="526" y="395.5">Wait for GPUs</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="acquire">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 745 338 L 745 300 L 945 300 L 945 338" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 745 338 L 745 440 L 945 440 L 945 338" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 745 338 L 945 338" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="763" y="327.5">acquire</text>
+            </g>
+          </g>
+          <g data-cell-id="acquire-body">
+            <g>
+              <rect x="761" y="347" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="761" y="385.5">Recheck policy</text>
+                <text x="761" y="405.5">Submit owned job</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="submit">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 980 338 L 980 300 L 1180 300 L 1180 338" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 980 338 L 980 440 L 1180 440 L 1180 338" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 980 338 L 1180 338" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="998" y="327.5">submit</text>
+            </g>
+          </g>
+          <g data-cell-id="submit-body">
+            <g>
+              <rect x="996" y="347" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="996" y="395.5">Enter observation</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="observe">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 980 583 L 980 545 L 1180 545 L 1180 583" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 980 583 L 980 685 L 1180 685 L 1180 583" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 980 583 L 1180 583" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="998" y="572.5">observe</text>
+            </g>
+          </g>
+          <g data-cell-id="observe-body">
+            <g>
+              <rect x="996" y="592" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="996" y="620.5">Poll and finalize</text>
+                <text x="996" y="640.5">Evaluate candidate</text>
+                <text x="996" y="660.5">Bind export evidence</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="evaluate">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 745 583 L 745 545 L 945 545 L 945 583" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 745 583 L 745 685 L 945 685 L 945 583" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 745 583 L 945 583" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="763" y="572.5">evaluate</text>
+            </g>
+          </g>
+          <g data-cell-id="evaluate-body">
+            <g>
+              <rect x="761" y="592" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="761" y="630.5">Apply frozen policy</text>
+                <text x="761" y="650.5">Commit promotion</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="decide">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 510 583 L 510 545 L 710 545 L 710 583" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 510 583 L 510 685 L 710 685 L 710 583" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 510 583 L 710 583" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="528" y="572.5">decide</text>
+            </g>
+          </g>
+          <g data-cell-id="decide-body">
+            <g>
+              <rect x="526" y="592" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="526" y="640.5">Write round report</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="report">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 275 583 L 275 545 L 475 545 L 475 583" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 275 583 L 275 685 L 475 685 L 475 583" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 275 583 L 475 583" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="293" y="572.5">report</text>
+            </g>
+          </g>
+          <g data-cell-id="report-body">
+            <g>
+              <rect x="291" y="592" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="291" y="630.5">Recover interrupted</text>
+                <text x="291" y="650.5">report closeout</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="done">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 40 583 L 40 545 L 240 545 L 240 583" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 583 L 40 685 L 240 685 L 240 583" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 583 L 240 583" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="58" y="572.5">done</text>
+            </g>
+          </g>
+          <g data-cell-id="done-body">
+            <g>
+              <rect x="56" y="592" width="168" height="82" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="56" y="640.5">Terminal receipt</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="start">
+          <g>
+            <path d="M 140.32 245 L 140.3 272.5 L 140.1 290.61" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 140.02 298.21 L 136.3 290.57 L 143.9 290.65 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="prepare-validate_data">
+          <g>
+            <path d="M 240 370 L 265.61 370" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 273.21 370 L 265.61 373.8 L 265.61 366.2 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="validate_data-preflight">
+          <g>
+            <path d="M 475 370 L 500.61 370" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 508.21 370 L 500.61 373.8 L 500.61 366.2 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="preflight-acquire">
+          <g>
+            <path d="M 710 370 L 735.61 370" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 743.21 370 L 735.61 373.8 L 735.61 366.2 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="acquire-submit">
+          <g>
+            <path d="M 945 370 L 970.61 370" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 978.21 370 L 970.61 373.8 L 970.61 366.2 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="submit-observe">
+          <g>
+            <path d="M 1080 440 L 1080 535.61" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 1080 543.21 L 1076.2 535.61 L 1083.8 535.61 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="observe-evaluate">
+          <g>
+            <path d="M 980 615 L 954.39 615" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 946.79 615 L 954.39 611.2 L 954.39 618.8 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="evaluate-decide">
+          <g>
+            <path d="M 745 615 L 719.39 615" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 711.79 615 L 719.39 611.2 L 719.39 618.8 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="decide-report">
+          <g>
+            <path d="M 510 615 L 484.39 615" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 476.79 615 L 484.39 611.2 L 484.39 618.8 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="report-done">
+          <g>
+            <path d="M 275 615 L 249.39 615" fill="none" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+            <path d="M 241.79 615 L 249.39 611.2 L 249.39 618.8 Z" fill="#666666" stroke="#666666" stroke-width="1.6" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149)); stroke: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));" />
+          </g>
+        </g>
+        <g data-cell-id="phase-persist">
+          <g>
+            <rect x="40" y="465" width="500" height="35" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#666666" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));">
+              <text x="40" y="490">Persist phase and transition history.</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="wait-note">
+          <g>
+            <rect x="680" y="465" width="500" height="35" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#666666" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));">
+              <text x="680" y="490">Observe repeats while the owned job runs.</text>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="failure-note">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 40 793 L 40 755 L 390 755 L 390 793" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 793 L 40 910 L 390 910 L 390 793" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 40 793 L 390 793" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="58" y="782.5">Refusal and failure</text>
+            </g>
+          </g>
+          <g data-cell-id="failure-note-body">
+            <g>
+              <rect x="56" y="802" width="318" height="97" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="56" y="838">Record the failed check</text>
+                <text x="56" y="858">Preserve evidence for recovery</text>
+                <text x="56" y="878">Reconcile before retrying</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="promotion-note">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 435 793 L 435 755 L 785 755 L 785 793" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 435 793 L 435 910 L 785 910 L 785 793" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 435 793 L 785 793" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="453" y="782.5">Promotion transaction</text>
+            </g>
+          </g>
+          <g data-cell-id="promotion-note-body">
+            <g>
+              <rect x="451" y="802" width="318" height="97" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="451" y="838">Validate intent, export and policy</text>
+                <text x="451" y="858">Update incumbent atomically</text>
+                <text x="451" y="878">Preserve the prior reference</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="supervisor-note">
+          <g transform="translate(0.5,0.5)">
+            <path d="M 830 793 L 830 755 L 1180 755 L 1180 793" fill="#f4f4f4" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(244, 244, 244), rgb(27, 27, 27)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 830 793 L 830 910 L 1180 910 L 1180 793" fill="#ffffff" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18)); stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+            <path d="M 830 793 L 1180 793" fill="none" stroke="#202020" stroke-width="1.4" stroke-miterlimit="10" pointer-events="all" style="stroke: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));" />
+          </g>
+          <g>
+            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+              <text x="848" y="782.5">Between rounds</text>
+            </g>
+          </g>
+          <g data-cell-id="supervisor-note-body">
+            <g>
+              <rect x="846" y="802" width="318" height="97" fill="none" stroke="none" pointer-events="all" />
+            </g>
+            <g>
+              <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
+                <text x="846" y="838">Muse diagnoses the result</text>
+                <text x="846" y="858">Validate the next proposal</text>
+                <text x="846" y="878">Enforce budgets and stop rules</text>
+              </g>
+            </g>
+          </g>
+        </g>
+        <g data-cell-id="boundary-note">
+          <g>
+            <rect x="40" y="936" width="1140" height="30" fill="none" stroke="none" pointer-events="all" />
+          </g>
+          <g>
+            <g fill="#666666" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="16px" style="fill: light-dark(rgb(102, 102, 102), rgb(149, 149, 149));">
+              <text x="40" y="958">Validation can refuse without advancing. Reserved qualification and test remain outside this round loop.</text>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

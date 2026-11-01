@@ -13,9 +13,8 @@ Prefix module names below with `python -m`.
 | Module | Purpose | Main inputs |
 |---|---|---|
 | `siliconshield.app` | Investigate a demo or supplied RTL. | `--case` or `--rtl --requirement`, `--output` |
-| `siliconshield.gui` | Native desktop analysis window (demo). | `--checkpoint`, `--python`, `--laya-root`, `--device` |
 | `siliconshield.experts` | Route and consult security experts from the CLI. | `assess --registry`, `--scope`, `--state-file`, `--arbitrate` |
-| `siliconshield.benchmark` | Score models on the RTL benchmark. | `run --registry`, `--dataset`, `--models`, `--areas`, `--out-dir` |
+| `siliconshield.benchmark` | List areas, score models, or sample routing. | `areas`, `run --registry --out-dir`, `router-eval --registry --out`, optional `--dataset` |
 | `siliconshield.training.laya.build_source_security` | Build verified source-catalog data. | `--catalog`, `--output`, `--verification`, solver paths |
 | `siliconshield.training.laya.build_security_data` | Build catalog cases. | `--sources`, `--cases-manifest`, output/evidence paths |
 | `siliconshield.training.laya.security_train` | Distributed decision-model trainer. Also supports direct script launch. | `--model`, `--data`, `--output`, `--run-id` |
@@ -32,13 +31,57 @@ Prefix module names below with `python -m`.
 | `siliconshield.research_loop.controller.evaluate` | Matched in-process controller comparison. | model/adapter/episodes/output, optional `--final` |
 | `siliconshield.research_loop.controller.serve` | Transformers reference server. | model/adapter/name, host/port/context |
 | `siliconshield.research_loop.controller.serve_fast` | Native vLLM launcher. | model, named adapters, optional draft, `--dry-run` |
+| `siliconshield.research_loop.procedures.glimmer_router` | Local Glimmer session over roster and assessment tools. | `--registry`, `--endpoint`, `--model`, `--task-file`, `--output`, optional `--ssh-host` |
 | `siliconshield.research_loop.procedures.muse_harness2` | Muse procedure trial or queue worker. | `--episodes` or `--queue`, `--checks`, `--output`, `--bundle` |
 | `siliconshield.research_loop.procedures.harness2_adapter` | Glimmer procedure trials. | episodes/endpoint/model/output/adapter |
 
 `laya_campaign`, `campaign_supervisor`, `dataset_versions`, `checker_adapter`,
-and `proposer_ingest` are Python integration APIs, not equivalent launch CLIs.
+`proposer_ingest`, `decision_study`, and `study_contract` are Python
+integration APIs, not equivalent launch CLIs.
 `owned_job` is the operator's execution worker, not an alternative way to bypass
 preparation. See [campaigns](campaigns.md).
+
+## Decision and worker contracts
+
+The three labels are fixed: `satisfies_requirement`, `violates_requirement`,
+and `insufficient_context`. They classify one supplied requirement. The last
+label describes answer-changing missing information. Transport failure,
+truncation, low confidence, and unsupported scope are separate conditions.
+
+| Boundary | Specification | Implementation owner |
+|---|---|---|
+| State text | `REQUIREMENT`, optional `ASSUMPTIONS`, then `RTL` as exact full-line headers. Requirement and RTL are nonempty. Arbitration validates these sections. | [identity.py](../siliconshield/experts/identity.py) |
+| Request transport | Local subprocess pipes, protocol `1`. Requests are `load`, `analyze`, or `shutdown`. Replies are `progress`, `ready`, `result`, or `error`. | [contracts.py](../siliconshield/experts/contracts.py), [worker.py](../siliconshield/experts/worker.py) |
+| Score validation | Three required finite scores in [0, 1], total within `1e-3` of one, label equal to the maximum. Ties use satisfies, violates, context order. These checks do not calibrate confidence. | `contracts.validate_result` |
+| Coverage | Explicit `truncated: false`, `state_tokens_dropped: 0`, and empty `truncated_questions`. Contradictory usage fields refuse the result. | `contracts.validate_result` |
+| Identity | Weights, full export digest, question bytes/version, runtime Python tree, precision/backend, Torch version, device type, batch size, option order, token budgets, and length sorting. Each result also binds its input and worker session. | [identity.py](../siliconshield/experts/identity.py), `worker.py` |
+| Deadlines | Default load deadline 180 seconds and analysis deadline 60 seconds. Progress does not reset a deadline. Calls to one worker are serialized. | `contracts.py`, `worker.py` |
+
+The standard release budgets are 1,536 model tokens and 256 head tokens, as
+recorded by each export. They are not character or source-line limits. A longer
+file needs explicitly selected excerpts or modules. A passing excerpt does not
+establish the status of the entire file.
+
+## Assessment and error contract
+
+| Record | Required interpretation |
+|---|---|
+| `Assessment` | Request, input, and scope hashes, planned/effective routing, successful responses, separate errors, elapsed time. |
+| `ExpertResponse` | Expert/release identity, label, all three scores, input hash, question contract, observed execution identity, complete coverage. |
+| `ExpertError` | Expert id, stage (`route`, `transport`, or `validate`), and error detail. It is never a model label. |
+| Routing result | Consulted ids, tiers, partial coverage, unsupported tags, rationale, and `thin_evidence`. Effective routing excludes failed replies. |
+| Arbitration / finding | Same assessment and requirement binding, model conclusion, explanation, dissent/open questions, and optional issue/relevance/RTL locations. A finding is marked `model_assessment`. |
+
+The separate Glimmer router bridge returns a conversation history. Its tool
+results use the expert assessment contract, but its final prose does not use
+the structured arbitration validator. Keep these two agent paths distinct.
+
+An expert CLI exit of zero means a JSON report was produced. Inspect
+`assessment.errors`, effective coverage, and `arbitration_error` before using
+its conclusion. The application report has a different evidence contract,
+including requirement checks and candidate repair acceptance. See
+[router](router.md), [investigation](investigation.md), and
+[response types](../siliconshield/experts/responses.py).
 
 ## Configuration boundaries
 
@@ -53,7 +96,10 @@ preparation. See [campaigns](campaigns.md).
 | Review packets | Packet mapping binding each approved template to its reviewed assertion bytes. |
 | Reporting contract | Locally reviewed reporting requirements, bound by content hash. |
 | New-study manifest | Parent/split identities and retired evaluation populations. |
+| Decision-study manifest | Frozen parent, data, code, recipe, views, budget, launch command, and qualification receipts. |
 | Glimmer operator config | Endpoint, adapter identity, one experiment, poll budget, and intervention budget. |
+| Expert registry | Model id, interpreter, runtime, immutable export files, device, optional profile and release/qualification references. |
+| Capability profile | Domain claims, known failures, and measurements. Matching `routing_evidence` plus observed identity determines tiers. |
 | Supervisor config | Muse binary/model/workspace, bounded session settings, optional procedure queue/bundle. |
 
 The profile examples in [configs](../configs/) are illustrative. Real values,
@@ -98,6 +144,11 @@ object does not mean an arbitrary JSON file is a valid deployment configuration.
 | Campaign `incumbent.json` | Accepted research checkpoint plus bound evidence. |
 | Round receipt and decision intent | Frozen inputs, transitions, and recoverable promotion transaction. |
 | Supervisor `handoff.json` | Pending proposal, observations, active round, and stop/park reasons. |
+| Study `study.json` plus probe and resource receipts | Frozen plan with measured fitting and resource qualification. |
+| Study `budget.json` | Durable round and time reservations. |
+| Study `new-model-proposal.json` | Parked specialist proposal after budget exhaustion. |
+| Expert registry and profiles | Pinned checkpoints with measured capability evidence. |
+| Benchmark `comparison.json` and router-eval report | Model comparison and sampled routing outcomes. |
 | Glimmer `latest` / `latest.previous` | Current and fallback adapter/resume generations. |
 | Glimmer replay output | Per-task traces, grades, and comparison identities. |
 | Procedure bundle | Qualified prompt advice with identity and replay grades. |

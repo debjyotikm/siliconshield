@@ -1,5 +1,8 @@
 # Decision-model studies
 
+[Documentation index](README.md) · [Training](security-model-training.md) ·
+[Campaigns](campaigns.md) · [Release recipes](training-recipes.md)
+
 A reproducible path from a user-supplied dataset to an improved
 model or a justified new one. Everything a run depends on is
 frozen in one study manifest before training starts, and the
@@ -10,10 +13,21 @@ records are historical evidence and must be re-frozen before
 using the enforced launch path. Existing jobs without a study
 binding retain their legacy behavior.
 
+## Study lifecycle
+
+The [campaign lifecycle specification](campaigns.md#round-lifecycle) defines
+persisted states, transition work, waiting, and recovery. Figure 03 separates
+owned execution from between-round agent analysis. This study guide defines
+the immutable inputs and qualifications that must hold across that lifecycle.
+
+Selection inside a run and promotion into a campaign are distinct operations.
+The initial checkpoint may remain selected. An accepted candidate's reserved
+evaluation is a separate release protocol.
+
 ## Dataset format
 
 The user supplies JSONL rows. Each row carries an `id`, a `state`
-(RTL plus `REQUIREMENT`, `ASSUMPTIONS`, and `RTL` sections), a
+with `REQUIREMENT`, `ASSUMPTIONS`, and `RTL` sections, a
 `template_id`, and an `assertion_sha256`. Rows group into
 decision triplets (satisfies, violates, insufficient context)
 that share one situation. Related rows share a `split_group_id`
@@ -58,7 +72,8 @@ contract, sampling pools, learning rates, seed, hardware,
 evaluation views, frozen selection objective, and the exact
 launch command into one digest-pinned manifest. Reserved
 splits are hash-bound, never read. `verify_study_manifest`
-re-checks every byte. The supervisor runs it before each
+rechecks the bound execution inputs. Reserved split identities are recorded
+without opening their data. The supervisor runs verification before each
 round commit and refuses on any drift. Freeze a source
 snapshot, never the live tree: caches and edits under an
 unfrozen checkout can invalidate the code check. Python bytecode
@@ -92,8 +107,8 @@ Objectives start from a measured baseline of the starting
 checkpoint, then freeze target improvements and retention
 limits as exact counts through the shared gate vocabulary
 (`constraint_violations`). Trainable parameters are declared
-explicitly: full encoder, partial block list, or adapters
-only. A small fitting probe must show movement in declared
+explicitly: full encoder, the last N encoder blocks, or frozen encoder
+with adaptation/decision parameters. A small fitting probe must show movement in declared
 groups, none in frozen groups, and strict TRAIN-fit gain
 before larger runs. A resource check refuses recipes that
 exceed offered GPUs, memory, or hours.
@@ -104,10 +119,19 @@ The supervisor runs the study within `max_rounds` (compute
 hours are recorded and enforced by the job operator). Each
 round records its hypothesis and delivered exposure. When a
 round misses its objectives, `diagnose` classifies the
-failure in fixed precedence: execution defect, poor labels,
-insufficient exposure, failure to fit, poor generalization,
-or retention trade-off. Failed execution and incomplete
-training are never reported as modeling verdicts.
+failure using the evidence checks below. This ordering matches `diagnose()`:
+
+| Check, in order | Diagnosis when it fails |
+|---|---|
+| Job completion and known SDK parity | Execution defect |
+| Required training exposure delivered | Insufficient exposure |
+| Registered TRAIN-fit criterion met | Failure to fit |
+| Label audit has no reported verification failure | Poor labels |
+| Target passes but protected retention fails | Retention trade-off |
+| TRAIN fits but target still fails | Poor generalization |
+
+An attempt that meets every objective has no failure to diagnose. This ordering
+prevents incomplete execution or exposure from being called a modeling limit.
 
 Every terminal analysis carries a machine-checked diagnosis
 block (category, completion/exposure booleans, reasons).
@@ -163,15 +187,17 @@ memory cap. The default still requires idle GPUs.
 
 One pass through the loop covers, in order:
 
-1. The agent proposes the next round: hypothesis, dataset
-   plan, and any selection or recipe change.
+1. The agent proposes a hypothesis and next round within the frozen settings.
+   A dataset, recipe, or policy change requires an explicitly reviewed study
+   amendment before the changed specification can be committed.
 2. The supervisor re-verifies the study manifest, the
    dataset acceptance from live bytes, and the round budget,
    then prepares the round against the frozen spec.
 3. The owned job runner trains through `security_train.py`
    with checkpointing, resume, and recovery intact.
-4. Development evaluation and frozen-gate selection rank
-   checkpoints. The winner promotes or the incumbent stays.
+4. Development evaluation selects a checkpoint within the run. Round assessment
+   then checks the complete promotion policy and either promotes that candidate
+   or preserves the incumbent.
 5. The agent analyzes the terminal round and its diagnosis
    feeds the next proposal until the budget is spent.
 
@@ -185,6 +211,33 @@ changes policy, tools, or authority, and learning failures
 degrade to unavailable without stalling owned GPU jobs.
 Without a procedure block the loop runs identically minus
 the advice.
+
+The study pins the qualified bundle digest. If the worker publishes a new bundle
+at the same path, the existing study refuses the changed binding at the next
+verification. Adopt the new guidance through an explicit study amendment, or
+keep the study's bundle generation immutable while new trials publish elsewhere.
+The unbound supervisor path can consume newly qualified bundles at future
+sessions without this additional study pin.
+
+## Integration entry points
+
+These are Python APIs, not a `decision_study` launch command:
+
+| API | Input and output |
+|---|---|
+| `freeze_study_manifest(spec)` | Validates the specification and returns a digest-bearing manifest. It does not write it. |
+| `verify_study_manifest(manifest)` | Revalidates execution inputs and returns `study_id` with `verified: true`. |
+| `qualify_fitting_probe(report)` | Checks declared parameter movement and TRAIN fitting evidence. |
+| `check_resources(requirement, available)` | Checks finite capacity and budget requirements. |
+| `assess_round(...)` | Recomputes view counts from aligned development predictions and checks export/run identity and exposure. |
+| `diagnose(evidence)` | Returns a failure category and bounded advice. |
+
+Persist `study.json` under the supervisor's `campaign/studies/<study_id>/`
+layout, configure its `study_id`, and bind the same manifest and digest into the
+owned-job profile. Probe and resource receipts must reference real artifacts.
+The [synthetic study tests](../tests/test_decision_study.py) and
+[enforcement tests](../tests/test_study_enforcement.py) show complete contract
+shapes. They are fixture examples, not substitutes for measured launch evidence.
 
 ## Recommending a new model
 

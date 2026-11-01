@@ -2,11 +2,17 @@
 
 [Documentation index](README.md)
 
-The application evaluates an implementation against an explicit requirement and
-assumptions. It preserves inputs, requests a security-model assessment, extracts
-relevant statements, executes checks, and verifies a proposed repair against the
-same checks. See [workflow.py](../siliconshield/app/workflow.py) for aggregation
-and report construction.
+The investigation application keeps a model assessment and executable evidence
+in one report. It preserves the input, optionally requests a specialist
+prediction, extracts relevant statements, and runs supplied simulation checks.
+A demonstrated violation can trigger a repair proposal. The candidate then runs
+against the same requirement and regression checks. A candidate that fixes
+the violation by breaking legitimate behavior is rejected: a guard that blocks
+all writes is not a fix.
+See [workflow.py](../siliconshield/app/workflow.py) for aggregation
+and report construction. To consult several specialists on one scope
+with arbitration, use the [expert router](router.md) instead of this
+single-model path.
 
 ## Run the authored demonstration
 
@@ -83,9 +89,11 @@ python -m siliconshield.app \
   --output /path/to/new-investigation
 ```
 
-The CLI expects the `topmodule` interface described in its help. Custom input
-has no inherited demo checks: its requirement is `requirement_not_verified`
-until an integration supplies checks bound to that design and requirement.
+The authored testbenches use `topmodule`. Custom model assessment is not
+restricted to that module name, but an integration must match its testbench to
+the actual design interface. Custom input has no inherited demo checks. Its
+requirement remains `requirement_not_verified` until an integration supplies
+checks bound to that design and requirement.
 
 For a checked custom case, call `workflow.investigate(case, output, ...)` from
 a local integration. Follow the case structure in
@@ -106,12 +114,12 @@ anchors or endpoint failures become `patch_error`. The workflow does not guess
 where to apply a change. Original files remain intact. A candidate must pass all
 required checks, including regressions, before its repair is accepted.
 
-The chat client sends no credentials by default, which suits a loopback
-service. For a hosted endpoint, supply `api_key` (or an env-var name via
-`api_key_env`) so requests carry a Bearer token, always over HTTPS except
-to loopback addresses — plaintext HTTP elsewhere is refused. Bound live use
-with `max_calls`; the client raises instead of silently exceeding the
-budget. Keys never appear in reports or transcripts.
+The application CLI exposes endpoint and model options, not API-key or call-
+budget flags. An integration using `ChatClient` can configure `api_key`,
+`api_key_env`, and `max_calls`. The client permits plaintext HTTP only for
+loopback addresses and uses HTTPS elsewhere. Keys stay out of its reports.
+A hosted proposer receives the RTL and requirement supplied in its context.
+Choose a backend appropriate for the design's confidentiality.
 
 The default demo uses its authored patch when no live proposer is configured.
 A report produced that way must not be described as a model-generated repair.
@@ -120,7 +128,7 @@ A report produced that way must not be described as a model-generated repair.
 
 | Status | Interpretation |
 |---|---|
-| `demonstrated_violation_fixed` | The original violates the requirement. The candidate passes all required checks. |
+| `demonstrated_violation_fixed` | A supplied check demonstrates an original violation. The candidate passes all supplied required checks. |
 | `demonstrated_violation_unfixed` | Original violation remains unresolved. |
 | `repair_rejected_regression` | Candidate passes requirement checks but fails a regression. |
 | `repair_verification_incomplete` | Requirement repair appears successful, but required candidate checks are incomplete. |
@@ -138,9 +146,17 @@ Check classification uses full captured output, not only displayed tails.
 Abnormal execution takes precedence over markers: a timeout, missing exit
 code, or nonzero exit is an error without counterexample evidence, even when
 partial output contains `CHECK_FAIL` lines. On a clean exit,
-`CHECK_FAIL` takes precedence over `CHECK_PASS`; no marker is inconclusive.
+`CHECK_FAIL` takes precedence over `CHECK_PASS`. No marker is inconclusive.
 A demonstrated counterexample remains evidence even if a separate check fails
 to execute.
 
 The application currently uses Verilator simulation. Solver-backed label
 verification runs in the [data pipeline](data-pipeline.md).
+
+## Execution isolation
+
+Tool subprocesses have timeouts, resource limits, an allowlisted environment,
+and owned process groups. These controls are not a filesystem or network
+sandbox. The processes retain the host user's file permissions. Use public
+synthetic inputs for the demonstration. Untrusted designs require stronger
+isolation supplied by the deployment before compilation or simulation.

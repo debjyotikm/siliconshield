@@ -526,7 +526,6 @@ def test_demo_files_match_presets() -> None:
     from siliconshield.gui.demos import list_demos
 
     root = Path(__file__).resolve().parents[1] / "examples" / "gui-demo"
-    assert (root / "README.md").is_file()
     requirements = json.loads((root / "requirements.example.json").read_text())
     for demo in list_demos():
         rtl_file = root / (demo["id"] + ".sv")

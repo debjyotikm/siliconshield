@@ -155,11 +155,16 @@ class ChatClient:
                 "The model response was cut short; increase the token or context limit"
             )
         message = choice["message"]
+        # Validate only: the message stays in wire format so the next
+        # turn can echo it. Strict servers reject parsed arguments.
         for call in message.get("tool_calls", []):
             args = call["function"]["arguments"]
             if isinstance(args, str):
-                call["function"]["arguments"] = json.loads(args)
-            if not isinstance(call["function"]["arguments"], dict):
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    raise ValueError("Tool arguments must be an object")
+            if not isinstance(args, dict):
                 raise ValueError("Tool arguments must be an object")
         if not message.get("content") and not message.get("tool_calls"):
             raise ValueError("Empty model completion")
@@ -206,9 +211,12 @@ def run_agent(client, messages, tools, dispatch, trace_path, max_turns=20):
             return history
         for call in calls:
             try:
-                result = dispatch(
-                    call["function"]["name"], call["function"]["arguments"]
-                )
+                args = call["function"]["arguments"]
+                if isinstance(args, str):
+                    args = json.loads(args)
+                if not isinstance(args, dict):
+                    raise ValueError("Tool arguments must be an object")
+                result = dispatch(call["function"]["name"], args)
             except (KeyError, ValueError, OSError) as exc:
                 result = {"error": type(exc).__name__, "detail": str(exc)}
             tool_result = {

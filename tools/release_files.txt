@@ -20,12 +20,10 @@ docs/demo.md
 docs/development.md
 docs/evaluation.md
 docs/glimmer.md
-docs/gui.md
 docs/inference.md
 docs/investigation.md
 docs/muse-procedures.md
 docs/operations.md
-docs/project.md
 docs/python_style.md
 docs/reference.md
 docs/security-model-training.md
@@ -48,7 +46,6 @@ docs/whitepaper/figures/09-feedback.svg
 docs/whitepaper/figures/README.md
 docs/whitepaper/figures/plot_temporal.py
 examples/README.md
-examples/gui-demo/README.md
 examples/gui-demo/address-check-too-broad.sv
 examples/gui-demo/big-faulty-design.sv
 examples/gui-demo/big-mixed-design.sv
@@ -134,6 +131,7 @@ siliconshield/research_loop/execution/strategy.py
 siliconshield/research_loop/procedures/__init__.py
 siliconshield/research_loop/procedures/bundles.py
 siliconshield/research_loop/procedures/campaign_learning.py
+siliconshield/research_loop/procedures/glimmer_router.py
 siliconshield/research_loop/procedures/harness2_adapter.py
 siliconshield/research_loop/procedures/muse_client.py
 siliconshield/research_loop/procedures/muse_harness2.py
@@ -187,6 +185,7 @@ tests/test_fresh_selection.py
 tests/test_glimmer.py
 tests/test_glimmer_contracts.py
 tests/test_glimmer_harness2.py
+tests/test_glimmer_router.py
 tests/test_glimmer_training.py
 tests/test_gui.py
 tests/test_gui_workflow.py
@@ -221,6 +220,7 @@ docs/decision-study.md
 .agents/skills/round-diagnosis/SKILL.md
 
 .agents/skills/campaign-ops/SKILL.md
+.agents/skills/glimmer-router/SKILL.md
 .agents/skills/rtl-analysis/SKILL.md
 docs/benchmark.md
 docs/expert-qualification.md
@@ -251,6 +251,17 @@ siliconshield/experts/worker.py
 tests/test_benchmark.py
 tests/test_expert_safety.py
 tests/test_multi_expert.py
+docs/diagrams/README.md
+docs/diagrams/decision-study.svg
+docs/diagrams/expert-assessment.svg
+docs/diagrams/system-overview.svg
+docs/diagrams/siliconshield-architecture.drawio
+docs/assets/siliconshield-banner.png
+configs/model-releases.toml
+docs/releases.md
+tools/download_models.py
+docs/diagrams/product-workflows.svg
+docs/diagrams/product-workflows.drawio
 siliconshield/training/laya/validate_study_inputs.py
 tests/test_validate_study_inputs.py
 .agents/skills/glimmer-study/SKILL.md

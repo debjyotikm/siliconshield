@@ -2,6 +2,15 @@
 
 [Documentation index](README.md)
 
+This page covers the language-model controller, Muse Glimmer. For Contract-1
+and Contract-2 decision-model inference, use [router](router.md)
+and [expert qualification](expert-qualification.md).
+
+Local Glimmer drives router assessments through the router skill, and the
+serving tools here support research and qualification. The current router
+arbitration invokes the configured Muse CLI, and a healthy Glimmer endpoint
+alone does not establish arbitration quality.
+
 The Transformers server is the reference implementation. For repeated
 operator replays, use a vLLM build with native Muse Glimmer support and the
 `muse_glimmer` tool-call and reasoning parsers. Keep the inference environment

@@ -19,6 +19,42 @@ These are separate paths. The campaign supervisor does not require a locally
 served Glimmer adapter. The Glimmer operator does not create an unrestricted
 follow-on research campaign.
 
+## Prepare an owned security-model job
+
+Copy [the job profile](../configs/glimmer-security.example.json) outside Git.
+Set its interpreter, frozen source, runtime checkout, model, dataset, run root,
+GPU indices, and defaults. Profiles sharing GPUs must use the same
+`resource_root`. Optional `recipe`, `reporting_contract`, `review_ledger`,
+and `review_packets` keys name reviewed local files. `defaults` may pin
+`question_contract` using the full id `siliconshield-requirement-context-v0`
+or `siliconshield-requirement-context-v1`. Training validates every row against it
+and records it on export. `defaults` may also set
+`plateau_requires_full_exposure` to block plateau interventions until
+delivered draws cover a full first pass.
+
+Inspect the prepared command and hashes without launching:
+
+```bash
+python -m siliconshield.research_loop.execution.security_jobs \
+  --profile /path/to/security.local.json --experiment-id experiment-a
+```
+
+This preparation writes local receipts. Add `--launch` only when ready to
+submit through the owned-job launcher. Campaigns use the Operator API for their
+state and intervention contract. Active GPU processes can cause preflight to refuse.
+Resource contention at submission can return a waiting result. Inspect the
+returned state before retrying the same experiment.
+
+The service explicitly receives `CUDA_VISIBLE_DEVICES`, `LAYA_ROOT`, and
+`SILICONSHIELD_SECURITY_RECIPE` when the profile supplies `recipe`. It does not
+inherit arbitrary shell variables. Passing a recipe only in your interactive
+shell is not equivalent to registering it in the profile.
+
+For new owned work, freeze the plan as a [decision study](decision-study.md)
+before preparing the profile. The sections below cover repeated-round
+integration. For status, stop, and recovery, use [operations](operations.md).
+Never launch a second driver merely because the first client's connection ended.
+
 ## Register a campaign
 
 A deployment calls `laya_campaign.init_campaign(root, config)` once. Required
@@ -37,31 +73,66 @@ policy, question contract, review ledger and packets, and report bindings.
 A fresh single-view study freezes an exact-id selection view with no
 retention population. Its generated
 recipe contains the incumbent-derived selection reference and must be the
-recipe used by the training profile.
+recipe used by the training profile. This single-view flow is a
+different mechanism from decision-study manifests. New owned work
+should use a [decision study](decision-study.md).
 
 Campaign configuration and dataset registration use Python APIs. The regression fixtures in
 [test_laya_campaign.py](../tests/test_laya_campaign.py) show the complete contract
 using synthetic artifacts. Do not substitute dummy evidence to initialize a real
 campaign.
 
+## Decision studies
+
+New owned work freezes its full plan as a [decision
+study](decision-study.md) before training: parent export, accepted
+dataset version, code and runtime identity, sampling pools, recipe,
+evaluation views, frozen selection objective, budget, and the exact
+launch command. The job profile names the manifest and its digest.
+Supervisor commit, operator prepare and submit, and the owned worker
+all verify the binding. An agent proposal cannot silently change settings
+already frozen in that study. A changed recipe or policy needs a reviewed
+amendment and new identity before a bound launch. Each submission reserves its timeout plus
+stop grace in a locked budget beside the study.
+
+Budget limits block further launches. A new-model recommendation additionally
+requires every terminal round to be analyzed and at least one qualified
+attempt with full exposure, demonstrated TRAIN fit, SDK parity, and a
+poor-generalization or retention-trade-off diagnosis. Execution defects or
+incomplete training do not justify a new model. A valid recommendation parks
+with a domain, dataset plan, and evaluation plan while preserving the incumbent.
+A fresh study requires owner authorization.
+
 ## Round lifecycle
 
-```mermaid
-stateDiagram-v2
-    [*] --> prepare
-    prepare --> validate_data
-    validate_data --> preflight
-    preflight --> acquire
-    acquire --> submit
-    submit --> observe
-    observe --> evaluate
-    evaluate --> decide
-    decide --> report
-    report --> done
-```
+![Persisted campaign phases and the owned job, promotion, and between-round supervision boundaries.](diagrams/decision-study.svg)
 
-A failed phase can terminate in `failed`. Waiting for a running job returns the
-persisted state for a later pass. A restart rereads the receipt. It does not
+**Figure 03.** The state names match `PHASES` in `laya_campaign.py`.
+[Open full-size SVG](diagrams/decision-study.svg) ·
+[Editable draw.io source](diagrams/siliconshield-architecture.drawio)
+
+A phase is a persisted boundary. Its handler performs work before advancing:
+
+| Persisted phase | Work on the next driver pass | Successful next state |
+|---|---|---|
+| `prepare` | Validate the registered dataset and round inputs. | `validate_data` |
+| `validate_data` | Prepare/preflight the Operator and check campaign/profile bindings. | `preflight` |
+| `preflight` | Wait for GPU availability. | `acquire` |
+| `acquire` | Recheck the frozen policy and submit the owned job idempotently. | `submit` |
+| `submit` | Enter observation. | `observe` |
+| `observe` | Reconcile the unit, finalize a completed job, invoke the evaluator, and attach the verified candidate. | `evaluate` |
+| `evaluate` | Apply selection, revalidate evidence, and complete the promotion transaction. | `decide` |
+| `decide` | Write and close the round report. | `report`, then `done` |
+| `report` | Recover an interrupted report closeout. | `done` |
+
+The live-job wait remains in `observe`. An unavailable resource can keep the
+round in `preflight`. Any active phase may explicitly transition to `failed`.
+Some validation failures raise before a transition, preserving the last phase
+for diagnosis. A refused operation therefore does not necessarily produce a
+terminal round receipt.
+
+
+A restart rereads the receipt. It does not
 unconditionally submit a new job. Promotion uses a transaction intent and
 revalidates the candidate export, evaluation receipt, frozen policy, and
 incumbent before completing the change.
@@ -101,7 +172,7 @@ The agent runs sandboxed by default with web tools disabled. Set
 trusted coding-agent path with workspace access — never by default for
 unattended sessions, and never as a substitute for deployment isolation.
 Agent and tool subprocesses inherit only an allowlisted environment and run
-under bounded CPU, memory, output, and process limits; filesystem access
+under bounded CPU, memory, output, and process limits. Filesystem access
 itself is unchanged, so untrusted work still belongs on an isolated host.
 Deterministic campaign checks protect launch and promotion. They do not turn
 the coding agent itself into a sandbox.
