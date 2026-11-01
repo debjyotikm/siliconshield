@@ -28,6 +28,7 @@ runtime behavior, and label order are kept together.
 | Field | Evaluated value |
 |---|---|
 | Release | SiliconShield-RTL Contract-1 (C1) |
+| Weights | [danieltombay/siliconshield-rtl-contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1) |
 | Weights SHA-256 | `f4130223ed19be5cc7e21b3da70cb7aebf944ad6ed4a8a80f11d8f59bcd05ee7` |
 | Question contract | `siliconshield-requirement-context-v1` |
 | Contract file SHA-256 | `dd1f38ee223abac1f75b19d9086fd26d90865c9aa43097674fffdd61dbbf8bd3` |

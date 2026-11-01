@@ -31,6 +31,8 @@ run.
 | Find commands, settings, and artifact owners | [Reference](reference.md) |
 | Develop and verify changes | [Development and testing](development.md) |
 | Understand the security-model release scope | [Model-family card](siliconshield-rtl.md) |
+| Reproduce the Contract-1/2 training recipes | [Training recipes](training-recipes.md) |
+| Plan a reproducible model study | [Decision-model studies](decision-study.md) |
 
 ## Choose the workflow
 
@@ -76,7 +78,11 @@ population. Promotion and deployment have their own acceptance rules.
 
 The model card names the current release checkpoint,
 SiliconShield-RTL Contract-1, and its provenance. Weights are published at
-[siliconshield-rtl-contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1).
+[siliconshield-rtl-contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1),
+alongside the FIFO/counter specialist
+[siliconshield-rtl-contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2),
+the [RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark),
+and the [combined training set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training).
 Accuracy and throughput must be measured for that checkpoint and runtime.
 
 ## Terms used in these guides

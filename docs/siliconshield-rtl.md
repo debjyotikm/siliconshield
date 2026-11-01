@@ -150,8 +150,14 @@ Training lineage moves from broad security adaptation through
 transfer continuation plus joint preservation plus OpenTitan
 expansion to a compact counterbalanced specialist. Training data
 combines source backed contracts with solver evidence plus authored
-semantic scenarios plus guarded mutations. Catalogs plus recipes
-plus datasets plus checkpoints live outside this repository.
+semantic scenarios plus guarded mutations. The direct training rows
+for Contract-2 and the Contract-1 anchor population plus its
+follow-up study mixture are published as the [SiliconShield RTL
+training set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training).
+See [training recipes](training-recipes.md) for which rows each
+release actually saw.
+Catalogs plus recipes plus full run datasets plus checkpoints live
+outside this repository.
 `examples/` shows formats only. Source families and their mutations
 share a partition. Continuing from a test touched checkpoint needs
 a new study manifest that retires old evaluation populations.
@@ -201,6 +207,8 @@ plus a small licensed subset without exposing private rows.
 | Evaluation precision | BF16 model inference, FP32 probabilities and metrics |
 | Input budgets | `max_len=1536`, `head_max_len=256` for question and options |
 | Weights | [danieltombay/siliconshield-rtl-contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1) |
+| Area benchmark | [danieltombay/siliconshield-rtl-benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark) |
+| Public training rows | [danieltombay/siliconshield-rtl-training](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training) |
 
 Model bytes plus question contract plus runtime behavior plus label
 order are one identity. Loading the same weights with a different

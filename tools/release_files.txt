@@ -217,3 +217,5 @@ tests/test_verification_bounds.py
 tools/check.sh
 tools/export_check.py
 tools/release_files.txt
+
+docs/training-recipes.md

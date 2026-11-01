@@ -81,8 +81,12 @@ Directly measured on balanced, group-disjoint development families:
 Unseen qualification reaches 86.46 percent with zero false safes on
 96 violations, while shifted evaluation records 43.65 percent. That
 gap defines the measured operating envelope. Full matrices live in
-[measured limits](docs/LIMITATIONS.md). Weights are published at
-[Contract-1 on Hugging Face](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1).
+[measured limits](docs/LIMITATIONS.md). Published artifacts are
+[Contract-1 weights](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1),
+the FIFO/counter specialist
+[Contract-2 weights](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2),
+the [RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark),
+and the [combined training set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training).
 
 ## How it fits together
 
@@ -275,6 +279,10 @@ and [NOTICE.md](NOTICE.md).
 
 ## References
 
+- [SiliconShield-RTL Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1)
+- [SiliconShield-RTL Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2)
+- [SiliconShield RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark)
+- [SiliconShield RTL training set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
 - [Meta Muse Glimmer](https://huggingface.co/meta-models/Muse-Glimmer-30B)
 - [Muse Glimmer post-training](https://dev.meta.ai/docs/muse-glimmer/post-training)
 - [Google Research Harness²](https://github.com/google-research/harness2)
