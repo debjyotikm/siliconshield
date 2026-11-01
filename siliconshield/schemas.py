@@ -40,3 +40,7 @@ REPLAY_PRESERVATION_SCHEMA = "replay-teacher-v1"
 REVIEW_LEDGER_SCHEMA = "siliconshield-review-ledger-v1"
 INDEPENDENCE_AUDIT_SCHEMA = "siliconshield-independence-audit-v1"
 EXPERT_CAPABILITY_SCHEMA = "siliconshield-expert-capability-v1"
+STUDY_MANIFEST_SCHEMA = "siliconshield-decision-study-v1"
+NEW_MODEL_PROPOSAL_SCHEMA = "siliconshield-new-model-proposal-v1"
+
+STUDY_MANIFEST_V2_SCHEMA = "siliconshield-decision-study-v2"

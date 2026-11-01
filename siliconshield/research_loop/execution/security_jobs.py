@@ -407,7 +407,63 @@ class SecurityJobs:
             timeout=15,
             check=True,
         )
-        return not result.stdout.strip()
+        pids = result.stdout.split()
+        if not pids:
+            return True
+        sharing = self.profile.get("gpu_coexistence")
+        if not isinstance(sharing, dict):
+            return False
+        return qualified_coexistence(pids, sharing)
+
+
+def process_identity(pid: str, proc: Path = Path("/proc")) -> dict:
+    """Identify an explicitly approved resident process without using its name."""
+    if not pid.isdecimal():
+        raise ValueError("Invalid process identifier")
+    root = proc / pid
+    # comm may contain spaces and parentheses. Fields after its last ')' start
+    # at field 3, so starttime (field 22) is item 19 in this suffix.
+    start = (root / "stat").read_text().rsplit(")", 1)[1].split()[19]
+    return {
+        "start_ticks": start,
+        "command_sha256": hashlib.sha256(
+            (root / "cmdline").read_bytes()
+        ).hexdigest(),
+    }
+
+
+def qualified_coexistence(
+    pids: list[str], sharing: dict, proc: Path = Path("/proc")
+) -> bool:
+    """Permit only pinned resident processes with reserved system-memory headroom.
+
+    This opt-in is for unified-memory hosts with a separately owned serving
+    process. Unknown processes and reused PIDs fail closed. It never stops or
+    adopts an existing process. The training launcher must also cap its memory.
+    """
+    try:
+        allowed = sharing["processes"]
+        if not isinstance(allowed, dict) or not allowed:
+            return False
+        required = sharing["min_available_bytes"]
+        if type(required) is not int or required <= 0:
+            return False
+        for pid in pids:
+            if (
+                pid not in allowed
+                or process_identity(pid, proc) != allowed[pid]
+            ):
+                return False
+        memory = dict(
+            line.split(":", 1)
+            for line in (proc / "meminfo").read_text().splitlines()
+        )
+        available = int(memory["MemAvailable"].split()[0]) * 1024
+        return available >= required
+    except (KeyError, IndexError, ValueError, OSError):
+        # A process disappearing during preflight is retried with a fresh
+        # inventory rather than silently weakening the ownership check.
+        return False
 
 
 def main():

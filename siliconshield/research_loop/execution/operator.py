@@ -25,6 +25,7 @@ from siliconshield.research_loop.episodes.contracts import (
     read_json,
 )
 from siliconshield.research_loop.execution.security_jobs import (
+    PATH_FLAGS,
     SecurityJobs,
     command_for,
     laya_root_for,
@@ -66,6 +67,7 @@ def execution_inputs(profile, overrides):
         Path(profile["model"]).rglob("*.safetensors")
     )
     files += preservation_teacher_files(profile)
+    files += [Path(values[key]) for key in PATH_FLAGS if values.get(key)]
     root = laya_root_for(profile)
     if root:
         files += list((Path(root) / "laya").rglob("*.py"))
@@ -195,7 +197,12 @@ class Operator:
         return Path(output) / "run-manifest.json"
 
     def prepare(self, experiment_id, overrides=None, intervention_budget=None):
+        from siliconshield.research_loop.execution import study_contract
+
         overrides = overrides or {}
+        study = study_contract.verify_job(
+            self.profile, experiment_id, overrides
+        )
         key = idempotency_key(self.profile, experiment_id, overrides)
         inputs = execution_inputs(self.profile, overrides)
         command, output = command_for(self.profile, experiment_id, overrides)
@@ -207,7 +214,10 @@ class Operator:
                 # upgrades instead of orphaning an owned job. Drift is recorded.
                 if existing.get("attempts", 0) > 0 or existing.get(
                     "phase"
-                ) not in ("prepare", "preflight"):
+                ) not in (
+                    "prepare",
+                    "preflight",
+                ):
                     submitted = existing["command"]
                     current, _ = command_for(
                         self.profile, experiment_id, overrides
@@ -239,6 +249,8 @@ class Operator:
             return existing
         manifest = {
             "schema": RUN_MANIFEST_SCHEMA,
+            "study": study,
+            "study_profile": dict(self.profile) if study else None,
             "experiment_id": experiment_id,
             "idempotency_key": key,
             "phase": "prepare",
@@ -393,6 +405,22 @@ class Operator:
                 and execution.get("identity") != manifest["idempotency_key"]
             ):
                 raise ValueError("Execution receipt identity mismatch")
+            from siliconshield.research_loop.execution import study_contract
+
+            study = study_contract.verify_job(
+                self.profile, manifest["experiment_id"], manifest["overrides"]
+            )
+            if study != manifest.get("study"):
+                raise ValueError("Study binding changed before submission")
+            if study:
+                study_manifest = study_contract.load(self.profile)
+                base = Path(study["path"]).parent
+                study_contract.verify_receipts(
+                    study_manifest,
+                    read_json(base / "fitting-probe.json"),
+                    read_json(base / "resource-check.json"),
+                )
+            study_contract.reserve_budget(self.profile, manifest)
             manifest["attempts"] += 1
             manifest["unit"] = (
                 "laya-glimmer-job-"

@@ -23,16 +23,21 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from siliconshield.research_loop.adapters.laya_training import decision_study
 from siliconshield.research_loop.episodes.contracts import (
     atomic_json,
     read_json,
 )
-from siliconshield.research_loop.execution import laya_campaign
+from siliconshield.research_loop.execution import laya_campaign, study_contract
 from siliconshield.research_loop.procedures.bundles import read_bundle
 from siliconshield.research_loop.procedures.campaign_learning import (
     queue_report,
 )
-from siliconshield.training.laya import dataset_versions, new_study
+from siliconshield.schemas import NEW_MODEL_PROPOSAL_SCHEMA
+from siliconshield.training.laya import (
+    dataset_versions,
+    new_study,
+)
 
 HANDOFF_SCHEMA = "siliconshield-supervisor-handoff-v1"
 ANALYSIS_SCHEMA = "siliconshield-round-analysis-v1"
@@ -137,6 +142,226 @@ def load_reference(home: Path) -> Optional[dict[str, Any]]:
     return reference["results"]  # type: ignore[no-any-return]
 
 
+def study_dir(home: Path) -> Path:
+    """Study manifests beside the campaign registry."""
+    path = campaign_dir(Path(home)) / "studies"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def load_study(home: Path, study_id: str) -> dict[str, Any]:
+    """Read a study manifest and re-verify every frozen byte."""
+    path = study_dir(home) / study_id / "study.json"
+    manifest = read_json(path)
+    if not isinstance(manifest, dict):
+        raise ValueError("Study manifest is not an object")
+    decision_study.verify_study_manifest(manifest)
+    return manifest
+
+
+def _study_max_rounds(home: Path, study_id: str) -> int:
+    """Round budget from the manifest without byte verification.
+
+    Used only for cheap per-pass guards; every commit and every
+    recommendation re-verifies the manifest bytes first.
+    """
+    path = study_dir(Path(home)) / study_id / "study.json"
+    manifest = read_json(path)
+    if not isinstance(manifest, dict):
+        raise ValueError("Study manifest is not an object")
+    return int(manifest["budget"]["max_rounds"])
+
+
+def study_exhausted(home: Path, study_id: str) -> bool:
+    """True once prepared rounds reach the frozen round budget."""
+    root = campaign_dir(Path(home))
+    total = sum(
+        (laya_campaign.read_round(root, rid).get("study") or {}).get("study_id")
+        == study_id
+        for rid in laya_campaign.list_rounds(root)
+    )
+    return bool(total >= _study_max_rounds(home, study_id))
+
+
+def study_procedure(home: Path, study_id: str) -> dict[str, Any]:
+    """Procedure block from the study manifest without byte checks.
+
+    Only supplies default bundle/queue/model paths; every use
+    revalidates the bundle bytes, and every commit re-verifies
+    the whole manifest.
+    """
+    path = study_dir(Path(home)) / study_id / "study.json"
+    manifest = read_json(path)
+    if not isinstance(manifest, dict):
+        raise ValueError("Study manifest is not an object")
+    procedure = manifest.get("procedure", {"enabled": False})
+    if not isinstance(procedure, dict):
+        raise ValueError("Study procedure block is not an object")
+    return procedure
+
+
+def recommend_new_model(
+    home: Path, study_id: str, proposal: dict[str, Any]
+) -> dict[str, Any]:
+    """Propose a separate specialist after the budget is exhausted.
+
+    Requires the frozen study manifest to verify, the round
+    budget spent, every terminal round analyzed with a recorded
+    diagnosis, and at least one qualified attempt: a finished
+    job with complete delivered exposure. The two load-bearing
+    claims are re-derived from run records — receipt phase for
+    completion, tracked draws for exposure — and any overclaim
+    refuses the recommendation. Execution-only failures can
+    never justify a new model. The incumbent is recorded,
+    never touched; the handoff parks until the owner approves
+    the new study.
+    """
+    home = Path(home)
+    manifest = load_study(home, study_id)
+    campaign = campaign_dir(home)
+    rounds = [
+        rid
+        for rid in laya_campaign.list_rounds(campaign)
+        if (laya_campaign.read_round(campaign, rid).get("study") or {}).get(
+            "sha256"
+        )
+        == manifest["manifest_sha256"]
+    ]
+    if len(rounds) < manifest["budget"]["max_rounds"]:
+        raise ValueError("Study budget is not exhausted yet")
+    diagnoses: dict[str, dict[str, Any]] = {}
+    for round_id in rounds:
+        phase = laya_campaign.read_round(campaign, round_id)["phase"]
+        if phase not in TERMINAL_PHASES:
+            raise ValueError("Study still has an active round: " + round_id)
+        files = _round_files(home, round_id)
+        if not files["analysis"].is_file():
+            raise ValueError("Terminal round lacks analysis: " + round_id)
+        analysis = read_json(files["analysis"])
+        if not isinstance(analysis, dict):
+            raise ValueError("Round analysis is not an object: " + round_id)
+        diagnosis = analysis.get("diagnosis")
+        if not isinstance(diagnosis, dict):
+            raise ValueError("Round lacks a diagnosis: " + round_id)
+        if diagnosis.get("category") not in decision_study.DIAGNOSES:
+            raise ValueError("Round diagnosis names no known cause")
+        evidence = diagnosis.get("evidence")
+        if not isinstance(evidence, dict):
+            raise ValueError("Round diagnosis lacks evidence: " + round_id)
+        claimed_job = evidence.get("job_complete") is True
+        claimed_exposure = evidence.get("exposure_complete") is True
+        derived = _derived_attempt(home, round_id)
+        if claimed_job and not derived["job_complete"]:
+            raise ValueError(
+                "Round %s claims a finished job its records deny" % round_id
+            )
+        if claimed_exposure and not derived["exposure_complete"]:
+            raise ValueError(
+                "Round %s claims full exposure its draws deny" % round_id
+            )
+        decision = (
+            laya_campaign.read_round(campaign, round_id).get("decision") or {}
+        )
+        if (
+            decision.get("promote_research") is True
+            or analysis.get("promoted") is True
+        ):
+            raise ValueError(
+                "A successful improvement cannot justify an exhausted-model claim"
+            )
+        if diagnosis["category"] in (
+            "poor_generalization",
+            "retention_tradeoff",
+        ):
+            if (
+                evidence.get("sdk_parity_ok") is not True
+                or evidence.get("train_fit_ok") is not True
+            ):
+                raise ValueError(
+                    "New-model advice requires verified SDK parity and TRAIN fit"
+                )
+        diagnoses[round_id] = {
+            "category": diagnosis["category"],
+            "job_complete": derived["job_complete"],
+            "exposure_complete": derived["exposure_complete"],
+        }
+    qualified = [
+        round_id
+        for round_id, item in diagnoses.items()
+        if item["job_complete"]
+        and item["exposure_complete"]
+        and item["category"] in ("poor_generalization", "retention_tradeoff")
+    ]
+    if not qualified:
+        raise ValueError(
+            "No qualified attempt yet: failed execution cannot justify a new model"
+        )
+    if not isinstance(proposal, dict):
+        raise ValueError("New-model proposal must be an object")
+    record = {
+        "schema": NEW_MODEL_PROPOSAL_SCHEMA,
+        "study_id": study_id,
+        "domain": _require_text(proposal, "domain", "A proposal"),
+        "dataset_plan": _require_text(proposal, "dataset_plan", "A proposal"),
+        "eval_plan": _require_text(proposal, "eval_plan", "A proposal"),
+        "preserved_incumbent": laya_campaign.load_incumbent(campaign)["export"],
+        "diagnoses": diagnoses,
+        "qualified_rounds": qualified,
+    }
+    atomic_json(study_dir(home) / study_id / "new-model-proposal.json", record)
+    handoff = load_handoff(home)
+    handoff["parked_reason"] = (
+        "study %s exhausted its round budget; new-model proposal "
+        "awaits owner approval" % study_id
+    )
+    handoff["mode"] = "parked"
+    save_handoff(home, handoff)
+    return record
+
+
+def _derived_attempt(home: Path, round_id: str) -> dict[str, bool]:
+    """Re-derive completion and exposure from run records.
+
+    A done receipt with a written trainer report counts as a
+    finished job; anything else does not. Exposure comes from
+    the run's own tracked draws, never from the analysis. Both
+    default to false when their records are missing.
+    """
+    campaign = campaign_dir(Path(home))
+    try:
+        phase = laya_campaign.read_round(campaign, round_id)["phase"]
+    except (OSError, ValueError):
+        return {"job_complete": False, "exposure_complete": False}
+    report = _job_report_path(home, round_id)
+    if phase != "done" or report is None:
+        return {"job_complete": False, "exposure_complete": False}
+    events = report.parent / "events.jsonl"
+    try:
+        exposure = decision_study.read_terminal_exposure(events)
+    except (OSError, ValueError):
+        return {"job_complete": True, "exposure_complete": False}
+    return {
+        "job_complete": True,
+        "exposure_complete": decision_study.exposure_gate_passed(exposure),
+    }
+
+
+def _require_first_commit_qualification(home: Path, study_id: str) -> None:
+    """Require measured receipts bound to this exact study and recipe."""
+    base = study_dir(Path(home)) / study_id
+    try:
+        manifest = load_study(home, study_id)
+        probe = read_json(base / "fitting-probe.json")
+        resources = read_json(base / "resource-check.json")
+        if not isinstance(probe, dict) or not isinstance(resources, dict):
+            raise ValueError("Qualification receipts must be objects")
+        study_contract.verify_receipts(manifest, probe, resources)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise PrepCommitError(
+            "Study fitting probe/resource qualification failed: %s" % exc
+        ) from exc
+
+
 def _require_text(record: dict[str, Any], key: str, what: str) -> str:
     value = record.get(key)
     if not isinstance(value, str) or not value.strip():
@@ -185,6 +410,20 @@ def check_proposal_next_action(next_action: Any) -> dict[str, Any]:
             "type": "stop",
             "reason": _require_text(next_action, "reason", "A stop action"),
         }
+    if kind == "recommend_new_model":
+        return {
+            "type": "recommend_new_model",
+            "study_id": _require_text(
+                next_action, "study_id", "A recommendation"
+            ),
+            "domain": _require_text(next_action, "domain", "A recommendation"),
+            "dataset_plan": _require_text(
+                next_action, "dataset_plan", "A recommendation"
+            ),
+            "eval_plan": _require_text(
+                next_action, "eval_plan", "A recommendation"
+            ),
+        }
     raise ValueError("Unknown next-action type: " + repr(kind))
 
 
@@ -211,9 +450,36 @@ def check_analysis(record: Any, round_id: str) -> dict[str, Any]:
         "falsifier",
     ):
         _require_text(record, key, "An analysis")
+    diagnosis = record.get("diagnosis")
+    checked_diagnosis = None
+    if diagnosis is not None:
+        if not isinstance(diagnosis, dict):
+            raise ValueError("Analysis diagnosis must be an object")
+        if diagnosis.get("category") not in decision_study.DIAGNOSES:
+            raise ValueError("Analysis diagnosis names no known cause")
+        evidence = diagnosis.get("evidence")
+        if not isinstance(evidence, dict):
+            raise ValueError("Analysis diagnosis lacks evidence")
+        for key in ("job_complete", "exposure_complete"):
+            if not isinstance(evidence.get(key), bool):
+                raise ValueError("Analysis diagnosis evidence needs " + key)
+        reasons = diagnosis.get("reasons")
+        if (
+            not isinstance(reasons, list)
+            or not reasons
+            or any(not isinstance(item, str) for item in reasons)
+        ):
+            raise ValueError("Analysis diagnosis needs reasons")
+        checked_diagnosis = {
+            "category": diagnosis["category"],
+            "evidence": dict(evidence),
+            "reasons": list(reasons),
+            "next": _require_text(diagnosis, "next", "A diagnosis"),
+        }
     return {
         "schema": ANALYSIS_SCHEMA,
         "round_id": round_id,
+        "diagnosis": checked_diagnosis,
         "verdict_summary": record["verdict_summary"],
         "what_failed": {
             "metrics": failed["metrics"],
@@ -430,10 +696,19 @@ def build_prompt(kind: str, context: dict[str, Any]) -> str:
             "Record: what failed with exact metrics and artifacts; your "
             "leading explanation; the proposed change; the predicted "
             "improvement and possible regressions; what result would "
-            "contradict the explanation. Then propose the next action: "
-            "prepare_round (with hypothesis, dataset_plan, and optional "
-            "selection/recipe_plan/overrides), investigate (with a "
-            "question), or stop (with a reason).\n" % context
+            "contradict the explanation. Classify the failure with one "
+            "machine-checked diagnosis category: execution_defect, "
+            "poor_labels, insufficient_exposure, failure_to_fit, "
+            "poor_generalization, or retention_tradeoff. Derive "
+            "job_complete and exposure_complete from the trainer "
+            "report and its tracked draws "
+            "(decision_study.assess_round), never from guesses; run "
+            "a fitting probe for TRAIN fit. Then propose the next "
+            "action: prepare_round (with hypothesis, dataset_plan, "
+            "and optional selection/recipe_plan/overrides), "
+            "investigate (with a question), recommend_new_model "
+            "(with study_id, domain, dataset_plan, eval_plan), or "
+            "stop (with a reason).\n" % context
         )
         schema = (
             '{"schema": "%s", "round_id": "%s", '
@@ -441,11 +716,16 @@ def build_prompt(kind: str, context: dict[str, Any]) -> str:
             '{"metrics": object, "artifacts": [str]}, "explanation": str, '
             '"proposed_change": str, "predicted_improvement": str, '
             '"possible_regressions": str, "falsifier": str, '
+            '"diagnosis": {"category": str, "evidence": '
+            '{"job_complete": bool, "exposure_complete": bool}, '
+            '"reasons": [str], "next": str}, '
             '"next_action": {"type": "prepare_round", "round_id": str, '
             '"hypothesis": str, "dataset_plan": str, '
             '"selection": object|null, "recipe_plan": object|null, '
             '"overrides": object} | {"type": "investigate", '
-            '"question": str} | {"type": "stop", "reason": str}}'
+            '"question": str} | {"type": "recommend_new_model", '
+            '"study_id": str, "domain": str, "dataset_plan": str, '
+            '"eval_plan": str} | {"type": "stop", "reason": str}}'
             % (ANALYSIS_SCHEMA, context["round_id"])
         )
     elif kind == "prepare":
@@ -488,8 +768,9 @@ def build_prompt(kind: str, context: dict[str, Any]) -> str:
     elif kind == "plan":
         body = (
             "No round is active and no proposal is pending. Review the "
-            "campaign state and either propose the next round or stop "
-            "with a reason.\n"
+            "campaign state and either propose the next round, "
+            "recommend a separate new model once the study budget "
+            "is spent, or stop with a reason.\n"
             "Handoff: %(handoff)s\n"
             "Incumbent: %(incumbent)s\n"
             "Leaderboard: %(leaderboard)s\n" % context
@@ -498,7 +779,9 @@ def build_prompt(kind: str, context: dict[str, Any]) -> str:
             '{"type": "prepare_round", "round_id": str, '
             '"hypothesis": str, "dataset_plan": str, '
             '"selection": object|null, "recipe_plan": object|null, '
-            '"overrides": object} | {"type": "stop", "reason": str}.'
+            '"overrides": object} | {"type": "recommend_new_model", '
+            '"study_id": str, "domain": str, "dataset_plan": str, '
+            '"eval_plan": str} | {"type": "stop", "reason": str}.'
         )
     else:
         raise ValueError("Unknown agent session kind: " + kind)
@@ -555,6 +838,85 @@ def commit_prep(
             not in TERMINAL_PHASES
         ):
             raise PrepCommitError("A round is still active: " + round_id)
+    study_manifest = None
+    if config.get("study_id"):
+        try:
+            manifest = load_study(home, config["study_id"])
+        except (OSError, ValueError) as exc:
+            raise PrepCommitError(
+                "Study manifest failed verification: %s" % exc
+            ) from exc
+        study_manifest = manifest
+        spent = sum(
+            (laya_campaign.read_round(campaign, rid).get("study") or {}).get(
+                "study_id"
+            )
+            == config["study_id"]
+            for rid in laya_campaign.list_rounds(campaign)
+        )
+        if spent >= manifest["budget"]["max_rounds"]:
+            raise PrepCommitError(
+                "Study round budget exhausted: %d of %d spent"
+                % (spent, manifest["budget"]["max_rounds"])
+            )
+        live_policy = laya_campaign.load_campaign(campaign)["selection"]
+        if (
+            decision_study.policy_digest(live_policy)
+            != manifest["evaluation"]["selection_policy_sha256"]
+        ):
+            raise PrepCommitError(
+                "Campaign selection drifted from the frozen study; "
+                "amend the study before committing"
+            )
+        _require_first_commit_qualification(home, config["study_id"])
+        if (
+            prep.get("selection") is not None
+            and decision_study.policy_digest(prep["selection"])
+            != manifest["evaluation"]["selection_policy_sha256"]
+        ):
+            raise PrepCommitError(
+                "Proposed selection differs from the frozen study"
+            )
+    if study_manifest is not None:
+        profile_path = Path(
+            laya_campaign.load_campaign(campaign)["operator_profile"]
+        )
+        raw_profile = read_json(profile_path)
+        if not isinstance(raw_profile, dict):
+            raise PrepCommitError("Operator profile must be an object")
+        proposed = dict(raw_profile)
+        if prep.get("recipe_path"):
+            proposed["recipe"] = prep["recipe_path"]
+        proposed["decision_study_manifest"] = str(
+            study_dir(home) / config["study_id"] / "study.json"
+        )
+        proposed["decision_study_sha256"] = study_manifest["manifest_sha256"]
+        expected_dataset = study_manifest["dataset"]
+        if (
+            prep["dataset_version"] != expected_dataset["version"]
+            or Path(prep["manifest_path"]).resolve()
+            != Path(expected_dataset["root"])
+            / "versions"
+            / expected_dataset["version"]
+            / "manifest.json"
+        ):
+            raise PrepCommitError(
+                "Prepared dataset differs from the frozen study"
+            )
+        experiment = (
+            laya_campaign.load_campaign(campaign)["campaign_id"]
+            + "-"
+            + prep["round_id"]
+        )
+        try:
+            study_contract.verify_job(
+                proposed, experiment, proposal.get("overrides") or {}
+            )
+        except (OSError, ValueError, KeyError) as exc:
+            raise PrepCommitError(
+                "Study execution binding failed: %s" % exc
+            ) from exc
+        atomic_json(profile_path, proposed)
     store = Path(prep["manifest_path"]).parents[2]
     version = prep["dataset_version"]
     manifest = dataset_versions.verify_version(store, version)
@@ -628,6 +990,12 @@ def commit_prep(
         prep["hypothesis"],
         proposal.get("overrides") or None,
     )
+    if study_manifest is not None:
+        receipt["study"] = {
+            "study_id": study_manifest["study_id"],
+            "sha256": study_manifest["manifest_sha256"],
+        }
+        atomic_json(_round_files(home, prep["round_id"])["receipt"], receipt)
     round_recipe = (receipt.get("bindings") or {}).get("round_recipe") or {}
     if not round_recipe.get("path"):
         raise PrepCommitError("Prepared round lacks a round recipe")
@@ -802,6 +1170,16 @@ def _analyze_event(
         return "analyze_failed"
     try:
         analysis = check_analysis(read_json(files["analysis"]), round_id)
+        if config.get("study_id"):
+            if analysis.get("diagnosis") is None:
+                raise ValueError(
+                    "Study analysis requires an evidence-based diagnosis"
+                )
+            derived = _derived_attempt(home, round_id)
+            evidence = analysis["diagnosis"]["evidence"]
+            for key in ("job_complete", "exposure_complete"):
+                if evidence[key] and not derived[key]:
+                    raise ValueError("Diagnosis overclaims " + key)
     except (OSError, ValueError) as exc:
         _note_agent_failure(handoff, "analysis for " + round_id)
         handoff["last_error"] = "analysis invalid: %s" % exc
@@ -841,6 +1219,16 @@ def _analyze_event(
     elif action["type"] == "investigate":
         handoff["investigation"] = action["question"]
         handoff["mode"] = "observe"
+    elif action["type"] == "recommend_new_model":
+        try:
+            recommend_new_model(home, action["study_id"], action)
+            parked = load_handoff(home)
+            handoff["parked_reason"] = parked["parked_reason"]
+            handoff["mode"] = "parked"
+        except (OSError, ValueError) as exc:
+            handoff["last_error"] = "recommendation refused: %s" % exc
+            handoff["mode"] = "observe"
+            return "recommendation_invalid"
     else:
         handoff["stopped_reason"] = action["reason"]
         handoff["mode"] = "stopped"
@@ -854,7 +1242,6 @@ def _prepare_event(
     agent_runner: Callable[..., dict[str, Any]],
 ) -> str:
     """Run data/code preparation for the pending proposal."""
-    proposal = handoff["pending_proposal"]
     round_id = handoff["proposal_round"]
     files = _round_files(home, round_id)
     context: dict[str, Any] = {
@@ -900,7 +1287,7 @@ def _commit_attempt(
     files = _round_files(home, round_id)
     try:
         prep = check_prep_receipt(read_json(files["prep"]), round_id)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError):
         return "prepare_invalid"
     try:
         commit_prep(home, handoff, prep, config)
@@ -1008,6 +1395,31 @@ def _plan_event(
             )
             handoff["mode"] = "parked"
         return "planned_investigate"
+    if action["type"] == "recommend_new_model":
+        try:
+            recommend_new_model(home, action["study_id"], action)
+        except (OSError, ValueError) as exc:
+            _note_agent_failure(handoff, "planning")
+            handoff["last_error"] = "recommendation refused: %s" % exc
+            return "plan_invalid"
+        parked = load_handoff(home)
+        handoff["parked_reason"] = parked["parked_reason"]
+        handoff["mode"] = "parked"
+        _reset_agent_failures(handoff)
+        return "planned_recommendation"
+    if config.get("study_id"):
+        try:
+            exhausted = study_exhausted(home, config["study_id"])
+        except (OSError, ValueError) as exc:
+            handoff["last_error"] = "study guard unreadable: %s" % exc
+            return "plan_invalid"
+        if exhausted:
+            handoff["parked_reason"] = (
+                "study %s exhausted its round budget; propose "
+                "recommend_new_model or stop" % config["study_id"]
+            )
+            handoff["mode"] = "parked"
+            return "study_exhausted"
     _reset_agent_failures(handoff)
     handoff["pending_proposal"] = action
     handoff["proposal_round"] = action["round_id"]
@@ -1228,6 +1640,16 @@ def supervise_once(
     home = Path(home)
     campaign = campaign_dir(home)
     runner = agent_runner or run_muse_session
+    if config.get("study_id") and not config.get("procedure_bundle"):
+        try:
+            frozen = study_procedure(home, config["study_id"])
+        except (OSError, ValueError):
+            frozen = {"enabled": False}
+        if frozen.get("enabled"):
+            config = dict(config)
+            config.setdefault("procedure_bundle", frozen["bundle"]["path"])
+            config.setdefault("procedure_queue", frozen["queue"])
+            config.setdefault("model", frozen["model"])
     handoff = load_handoff(home)
     try:
         reference = load_reference(home)

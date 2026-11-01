@@ -39,6 +39,16 @@ def run(manifest_path, resource_root, action):
         }
         atomic_json(output / "execution.json", receipt)
         try:
+            if manifest.get("study"):
+                from siliconshield.research_loop.execution import study_contract
+
+                bound = study_contract.verify_job(
+                    manifest["study_profile"],
+                    manifest["experiment_id"],
+                    manifest["overrides"],
+                )
+                if bound != manifest["study"]:
+                    raise ValueError("Owned worker study identity mismatch")
             for name, expected in manifest.get("input_hashes", {}).items():
                 if (
                     hashlib.sha256(Path(name).read_bytes()).hexdigest()

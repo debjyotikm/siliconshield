@@ -10,7 +10,11 @@ from siliconshield.research_loop.execution.security_jobs import (
     SecurityJobs,
     command_for,
 )
-from siliconshield.training.laya import dataset_versions, development_views
+from siliconshield.training.laya import (
+    dataset_versions,
+    decision_study,
+    development_views,
+)
 
 TRAINER = (
     Path(__file__).resolve().parents[2]
@@ -101,6 +105,7 @@ __all__ = [
     "build_selection_reference_from_results",
     "check_selection_reference",
     "command_for",
+    "decision_study",
     "dataset_version_accepted",
     "new_coverage_gain_ok",
     "normalize_family_caps",

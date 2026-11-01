@@ -239,3 +239,13 @@ siliconshield/experts/service.py
 siliconshield/experts/worker.py
 tests/test_expert_safety.py
 tests/test_multi_expert.py
+
+siliconshield/research_loop/execution/study_contract.py
+
+tests/test_study_enforcement.py
+
+siliconshield/training/laya/decision_study.py
+
+tests/test_decision_study.py
+
+docs/decision-study.md
