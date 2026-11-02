@@ -17,6 +17,7 @@ run.
 | Goal | Read |
 |---|---|
 | Scientific account of Muse-guided research, training methods, hardware, results, and bottlenecks | [Research white paper](whitepaper.md) |
+| Two Glimmer-operated training runs on local hardware: a verified toy loop and a real-scale null result | [Glimmer local-training case study](case-study-glimmer-local-training.md) |
 | Understand the components and controller boundaries | [Architecture](architecture.md) |
 | Run an authored RTL investigation | [Investigation walkthrough](investigation.md) |
 | Install the right environment | [Setup](setup.md) |

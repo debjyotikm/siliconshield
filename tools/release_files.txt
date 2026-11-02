@@ -254,3 +254,4 @@ tests/test_multi_expert.py
 siliconshield/training/laya/validate_study_inputs.py
 tests/test_validate_study_inputs.py
 .agents/skills/glimmer-study/SKILL.md
+docs/case-study-glimmer-local-training.md
