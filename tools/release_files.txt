@@ -253,3 +253,4 @@ tests/test_expert_safety.py
 tests/test_multi_expert.py
 siliconshield/training/laya/validate_study_inputs.py
 tests/test_validate_study_inputs.py
+.agents/skills/glimmer-study/SKILL.md

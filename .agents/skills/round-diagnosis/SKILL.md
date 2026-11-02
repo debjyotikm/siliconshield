@@ -24,6 +24,14 @@ support poor-generalization or retention-trade-off advice.
 
 ## Evidence to pull first
 
+- `execution.json`: the `failure` field names the child
+  traceback summary, timeout, quota, or abandon note for a
+  dead run. Read it before the log. The full child output
+  stays in the referenced log file.
+- Per-eval feasibility: each snapshot record carries
+  `checkpoint_acceptance` with named `protected_violations`
+  and target failures. Read it before re-deriving class
+  counts. A rejected aggregate gain always names its floor.
 - `report.json`: stop reason, selected step, dev trajectory,
   train-loss curve. Falling loss with stalled dev is a
   hypothesis to investigate using measured TRAIN accuracy
@@ -67,7 +75,10 @@ because TRAIN fit improved.
 - Scoring path: batching, precision, and runtime differences
   can change boundary decisions. Compare checkpoints under
   matched inference settings before attributing a change
-  to training.
+  to training. For promotion, require both the trainer and
+  SDK paths to agree on the direction of every comparison.
+  A one-path improvement with an unexplained cross-path gap
+  is a measurement defect, not a promotion.
 - Distributed coherence: one combined backward per
   microbatch. Cross-rank gradient and weight checks after
   any objective change. Mixed-replica scores are not

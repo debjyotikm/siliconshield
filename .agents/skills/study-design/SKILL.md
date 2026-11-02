@@ -82,6 +82,15 @@ single-view mode. Views must partition the frozen population
 exactly. A schema-valid manifest alone cannot catch a
 missing trainer field.
 
+Preflight the study data on CPU through
+`siliconshield.training.laya.validate_study_inputs` with the
+same pools, recipe, seed, and batch size the job will use.
+It runs split loading, pool assignment, sampler coverage,
+and reporting-weight checks with the trainer's own gates.
+An undeclared source or broken triplet fails here, not on
+the GPU. See the glimmer-study skill for the full
+pre-submit flow.
+
 A failed fitting probe leaves that recipe unqualified.
 Investigate labels, exposure, learning rate, and parameter
 movement before changing capacity. Bind a revised recipe to
