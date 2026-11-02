@@ -941,9 +941,10 @@ def test_probability_and_logit_paths_agree_and_missing_class_is_explicit():
 
 
 def test_trainer_attaches_reporting_without_changing_selection(monkeypatch):
-    pytest.importorskip(
-        "torch"
-    )  # trainer import needs torch; rest is NumPy-only
+    # Importing the trainer requires the complete optional training runtime.
+    # The remaining reporting tests need only NumPy.
+    for dependency in ("torch", "transformers", "safetensors.torch", "laya"):
+        pytest.importorskip(dependency)
     from argparse import Namespace
 
     from siliconshield.training.laya import security_train as train
