@@ -1,7 +1,7 @@
 # Configuration examples
 
 For analysis inputs, see the [router state-file example](../docs/router.md#run-one-assessment)
-and the [authored investigation](../docs/investigation.md). These examples
+and the [RTL requirement examples](../docs/rtl-requirements.md). These examples
 demonstrate interfaces and selected behaviors, not benchmark accuracy.
 
 These configuration files show the formats accepted by the training tools. The values and
@@ -10,6 +10,7 @@ settings before running a job.
 
 | File | Purpose |
 |---|---|
+| [qualify_experts.py](qualify_experts.py) | Real inference measurement to validated routing profiles, with a new output registry |
 | [security_cases.example.json](security_cases.example.json) | Dataset cases, split assignments, and mutation locations |
 | [security_recipe.example.json](security_recipe.example.json) | Source sampling weights and checkpoint acceptance thresholds |
 | [glimmer-security.example.json](../configs/glimmer-security.example.json) | Paths and settings for a three-GPU SiliconShield-RTL job |

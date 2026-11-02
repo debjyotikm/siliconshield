@@ -23,15 +23,12 @@ Prefix module names below with `python -m`.
 | `siliconshield.research_loop.execution.security_jobs` | Prepare a job. Add `--launch` to submit it. | `--profile`, `--experiment-id`, optional `--overrides`, `--launch` |
 | `siliconshield.research_loop.execution.glimmer_operator` | Bounded live Glimmer operator. | `--config` |
 | `siliconshield.research_loop.execution.strategy` | Configured fitting/development sequence. | `--config` |
-| `siliconshield.research_loop.execution.campaign` | Watch Glimmer training and evaluate. | `--root`, `--run`, container/image/key options |
 | `siliconshield.research_loop.episodes.dataset` | Convert development reports into episodes. | `--runs`, `--output` |
 | `siliconshield.research_loop.episodes.operator_curriculum` | Build catalog-defined operator exercises. | `--catalog`, `--output`, optional `--replay-train` |
 | `siliconshield.research_loop.episodes.operator_baseline` | Build or replay operator checks. | `--build` or `--episodes`, `--output`, endpoint or `--fixture` |
-| `siliconshield.training.glimmer.train` | LoRA supervised training. | model/data/output, purpose, task-selection options |
-| `siliconshield.training.glimmer.dpo` | Frozen reference log-probabilities or preference training. | `--mode reference\|train`, model/adapter/pairs/output |
-| `siliconshield.research_loop.controller.evaluate` | Matched in-process controller comparison. | model/adapter/episodes/output, optional `--final` |
-| `siliconshield.research_loop.controller.serve` | Transformers reference server. | model/adapter/name, host/port/context |
-| `siliconshield.research_loop.controller.serve_fast` | Native vLLM launcher. | model, named adapters, optional draft, `--dry-run` |
+| `siliconshield.research_loop.controller.evaluate` | Optional existing-adapter comparison, inference only. | model/adapter/episodes/output, optional `--final` |
+| `siliconshield.research_loop.controller.serve` | Transformers reference server. | model/name, host/port/context, optional external adapter |
+| `siliconshield.research_loop.controller.serve_fast` | Native vLLM launcher. | model, optional draft or external adapters, `--dry-run` |
 | `siliconshield.research_loop.procedures.glimmer_router` | Local Glimmer session over roster and assessment tools. | `--registry`, `--endpoint`, `--model`, `--task-file`, `--output`, optional `--ssh-host` |
 | `siliconshield.research_loop.procedures.muse_harness2` | Muse procedure trial or queue worker. | `--episodes` or `--queue`, `--checks`, `--output`, `--bundle` |
 | `siliconshield.research_loop.procedures.harness2_adapter` | Glimmer procedure trials. | episodes/endpoint/model/output/adapter |
@@ -81,8 +78,23 @@ An expert CLI exit of zero means a JSON report was produced. Inspect
 `assessment.errors`, effective coverage, and `arbitration_error` before using
 its conclusion. The application report has a different evidence contract,
 including requirement checks and candidate repair acceptance. See
-[router](router.md), [investigation](investigation.md), and
+[router](router.md), [repair report contract](#repair-report-contract), and
 [response types](../siliconshield/experts/responses.py).
+
+The runnable onboarding examples are maintained in
+[decision-model qualification](expert-qualification.md#register-and-measure-the-published-models),
+[study assembly](study-walkthrough.md), and
+[local Glimmer operation](decision-model-training-with-glimmer.md). This reference owns field
+and interface semantics, rather than repeating those procedures.
+
+### Pre-submit data validation
+
+`python -m siliconshield.training.laya.validate_study_inputs` runs CPU input and
+sampler checks from the training environment. Its required input is `--data`.
+Use `--question-contract`, `--pools`, `--recipe`, `--seed`, `--global-batch`,
+`--world`, `--max-updates` and `--output-receipt` to bind the registered plan.
+This is not a GPU launch or semantic-review approval. The complete command is
+in [local training](decision-model-training-with-glimmer.md#validate-the-data-on-cpu).
 
 ## Configuration boundaries
 
@@ -98,7 +110,7 @@ including requirement checks and candidate repair acceptance. See
 | Reporting contract | Locally reviewed reporting requirements, bound by content hash. |
 | New-study manifest | Parent/split identities and retired evaluation populations. |
 | Decision-study manifest | Frozen parent, data, code, recipe, views, budget, launch command, and qualification receipts. |
-| Glimmer operator config | Endpoint, adapter identity, one experiment, poll budget, and intervention budget. |
+| Glimmer operator config | Endpoint, model identity, one experiment, poll budget, and intervention budget. |
 | Expert registry | Model id, interpreter, runtime, immutable export files, device, optional profile and release/qualification references. |
 | Capability profile | Domain claims, known failures, and measurements. Matching `routing_evidence` plus observed identity determines tiers. |
 | Supervisor config | Muse binary/model/workspace, bounded session settings, optional procedure queue/bundle. |
@@ -124,7 +136,7 @@ object does not mean an arbitrary JSON file is a valid deployment configuration.
 | `SILICONSHIELD_IMAGE_DIGEST` | Resolved Glimmer execution image identity. |
 | `SILICONSHIELD_MODEL_FINGERPRINT` | Expected base snapshot fingerprint when configured. |
 | `SILICONSHIELD_DRAFT_FINGERPRINT` | Expected speculative assistant identity when configured. |
-| `SILICONSHIELD_GPU_LOCK` | Shared Glimmer training/serving/evaluation lease file. |
+| `SILICONSHIELD_GPU_LOCK` | Shared Glimmer serving/evaluation lease file. |
 | `SILICONSHIELD_EXECUTION_MANIFEST` | Set by the owned job wrapper for the registered process. |
 
 ## Artifact ownership
@@ -150,7 +162,6 @@ object does not mean an arbitrary JSON file is a valid deployment configuration.
 | Study `new-model-proposal.json` | Parked specialist proposal after budget exhaustion. |
 | Expert registry and profiles | Pinned checkpoints with measured capability evidence. |
 | Benchmark `comparison.json` and router-eval report | Model comparison and sampled routing outcomes. |
-| Glimmer `latest` / `latest.previous` | Current and fallback adapter/resume generations. |
 | Glimmer replay output | Per-task traces, grades, and comparison identities. |
 | Procedure bundle | Qualified prompt advice with identity and replay grades. |
 
@@ -159,3 +170,76 @@ meaning from the basename or feed an arbitrary report into episode construction.
 Serialized identifiers are maintained in [schemas.py](../siliconshield/schemas.py)
 and the relevant module contracts. Preserve existing values when evolving an
 interface. Package version ownership is separate and lives in `pyproject.toml`.
+
+## Study-manifest compatibility
+
+New studies use `siliconshield-decision-study-v2`. Version 1 records are
+historical evidence and must be re-frozen before using the enforced launch
+path. Existing jobs without a study binding retain their legacy behavior and
+do not acquire the study's additional validation by running through the same
+infrastructure. Use the [walkthrough](study-walkthrough.md) for new work.
+
+## Selection compatibility reference
+
+The six implemented paths are:
+
+1. Legacy transfer ranking with a retention-accuracy tolerance. The trainer
+   warns when a campaign selection reference is absent.
+2. A frozen campaign reference sharing improvement, false-safe, missing-context,
+   pair, and family-cap gates with the campaign. `v1-transfer` and `v2-retention`
+   select different post-feasibility orderings.
+3. A `protected-views-v1` objective declaring protection for every view, a target
+   view, and explicit count-based quality targets. This path distinguishes
+   protecting prior capabilities from achieving the new task's target.
+4. A `protected-views-v2-triplets` objective ranking safety first, then whole
+   triplets, correct decisions, false violations, unnecessary abstention, and
+   NLL. Views carry `triplets`/`triplets_correct`. Gates support
+   `max_false_violation`, `max_unnecessary_abstention`, and
+   `whole_triplets_min` alongside false-safe floors.
+5. A `protected-views-v3-balanced` objective ranking whole triplets first with
+   false-safe safeguards in feasibility and ranking: capability first, safety
+   constrained.
+
+6. A `protected-views-v4-sourced` objective retaining the v3 ordering while
+   applying exact per-source floors to the protected views. Declared sources
+   must match the reported source breakdown, so a strong aggregate cannot hide
+   a missing or regressing source.
+
+See the [trainer guide](security-model-training.md#select-on-the-full-task)
+for current objective selection and the distinction between checkpoint ranking
+and promotion gates.
+
+## Existing-adapter compatibility
+
+The servers also accept externally supplied adapters. Native serving uses
+`--adapter NAME=PATH` and supports LoRA ranks up to 16. Each adapter receives its
+own identity and must be qualified with its parser and runtime. The
+`controller.evaluate` command compares an existing adapter with a base or
+reference adapter without optimizer updates. These are compatibility paths,
+not prerequisites for the local Glimmer workflow.
+
+The optional `controller.evaluate` compatibility path requires an existing
+external adapter. Its `--final` mode requires authenticated split membership
+and cannot be combined with `--harness2-output`. Dataset identity records final
+use and blocks reuse for training. Bind the external adapter and serving
+configuration before spending that population. This command performs inference
+comparisons, not Glimmer training.
+
+## Repair report contract
+
+The optional `siliconshield.app` path runs supplied Verilator checks and can
+request a repair. It is separate from multi-model routing. See the
+[release example](releases.md#real-muse-repair) for model and proposer setup.
+Custom RTL has no inherited demonstration testbenches. Without supplied checks,
+its requirement remains `requirement_not_verified`.
+
+`requirement_verified` means required checks completed with pass/fail outcomes,
+not that the design passed. `repair_accepted` records whether the candidate
+passed the supplied requirement and regression checks. Inspect incomplete
+checks and execution logs. A timeout or abnormal exit is an execution error,
+not a model verdict or proof of a violation.
+
+Tool subprocesses have timeouts, resource limits, an allowlisted environment,
+and owned process groups. They retain the host user's file permissions and do
+not provide a filesystem or network sandbox. Untrusted RTL needs deployment
+isolation before compilation or simulation.

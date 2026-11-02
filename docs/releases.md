@@ -1,6 +1,6 @@
 # Pinned decision-model releases
 
-[Documentation](README.md) · [Setup](setup.md) · [Demo](demo.md) · [Model card](siliconshield-rtl.md)
+[Documentation](README.md) · [Setup](setup.md) · [Demo](web-demo.md) · [Model card](siliconshield-rtl.md)
 
 This is the reproducible inference path for the Contract-1 and Contract-2
 RTL decision models. It is separate from reproducing their full training
@@ -11,10 +11,6 @@ file and the compatible runtime. Downloads do not change a Hub repository.
 
 | Component | Pinned value |
 |---|---|
-| SiliconShield inference source | `23eea64b281088fe69919b3153ee37f73d4044e6` |
-| LAYA Next | `55862a438a0f2e2ffec7a8db138bab537ac8a6d9` |
-| Contract-1 Hub revision | `2f63a4a87d0d6010fca033b1637ff4142ff7cc60` |
-| Contract-2 Hub revision | `b96211872d573ae48b6dabe128c0d96aad291156` |
 | Worker Python | 3.11.15 |
 | Torch / Transformers | 2.14.0+cu130 / 5.5.0 |
 | Safetensors / NumPy | 0.8.0 / 2.4.6 |
@@ -24,10 +20,10 @@ file and the compatible runtime. Downloads do not change a Hub repository.
 | Label order | satisfies, violates, insufficient context |
 | Budgets | 1,536 input tokens, 256 question/options tokens |
 
-The release-preparation changes add the downloader and documentation on top of
-that source commit. The model worker and inference contracts are unchanged.
-Before publishing the final source revision, record its commit alongside this
-manifest. The rehearsal used fresh public downloads and a fresh runtime checkout
+The release manifest owns the exact model and runtime identities.
+This is a historical inference rehearsal, not a claim that every later source
+revision was GPU-qualified. Record `git rev-parse HEAD` beside each new
+measurement. The payload and runtime pins remain the reproducible artifact tuple. The rehearsal used fresh public downloads and a fresh runtime checkout
 with an existing pinned worker environment. It did not rebuild the GPU driver
 or install every dependency into an empty operating system.
 
@@ -43,21 +39,15 @@ python tools/download_models.py --model all \
   --output "$SILICONSHIELD_WORKSPACE/models"
 git clone https://github.com/debjyotikm/laya-next.git \
   "$SILICONSHIELD_WORKSPACE/laya-next"
-git -C "$SILICONSHIELD_WORKSPACE/laya-next" checkout \
-  55862a438a0f2e2ffec7a8db138bab537ac8a6d9
+SILICONSHIELD_RUNTIME_REVISION="$(python3 -c 'import tomllib; from pathlib import Path; print(tomllib.loads(Path("configs/model-releases.toml").read_text())["runtime"]["revision"])')"
+git -C "$SILICONSHIELD_WORKSPACE/laya-next" checkout "$SILICONSHIELD_RUNTIME_REVISION"
 ```
 
 Each export contains exactly six inference files. The downloader verifies full
 SHA-256 values, publishes each file only after checking its bytes, and refuses
-existing mismatched or extra files. Retrying reuses verified files. It prints
-these complete payload fingerprints:
+existing mismatched or extra files. Retrying reuses verified files. It prints the verified payload identities recorded in the release manifest.
 
-| Model | Inference payload fingerprint |
-|---|---|
-| Contract-1 | `bd18becfd65f99b5e04f9150da460b158970d0fb5cf4c7a077c30635f6f6b9ef` |
-| Contract-2 | `9c3080509bba9b2973f384a342fb801a7b6861d05f07a8c937235ac45658c5eb` |
-
-These hashes match the worker's `execution_identity.export_sha256`: SHA-256
+The payload identities match the worker's `execution_identity.export_sha256`: SHA-256
 of the sorted file-hash mapping encoded as compact JSON, with separators
 `(',', ':')`. The application checkpoint-manifest helper uses spaced JSON and
 therefore has a different aggregate digest over the same files. It excludes Hub presentation files such as
@@ -65,9 +55,8 @@ README and benchmark summaries. It must not be compared to a historical export
 that contains a different file set. The manifest also contains the full weights
 hash and question-record hash for each model.
 
-Use these commits, not an assumed `v1.0.0` tag. Contract-1's older public card
-referenced that nonexistent tag. The prepared card correction uses the immutable
-revision above.
+Use the manifest revisions, not an assumed `v1.0.0` tag. Contract-1's older public card
+referenced that nonexistent tag. The download commands above use the immutable revision directly.
 
 ## Worker environment and first assessment
 
@@ -93,9 +82,22 @@ coverage and actual status, as well as the executable checks. A missing model
 assessment must not be presented as a successful model demonstration.
 
 For both-model registration and measured routing, follow
-[expert qualification](expert-qualification.md). A model without matching
+[decision-model qualification](expert-qualification.md). A model without matching
 capability measurements can run individually but must not inherit an unrelated
 expert's routing authority.
+
+### Verilator build failures
+
+Use Verilator 5.024 or newer for the executable-repair workflow. Version 5.020
+can abort intermittently with `attempted to destroy locked Thread Pool` during
+compiler shutdown. The upstream fix is recorded in the
+[5.024 release notes](https://github.com/verilator/verilator-announce/issues/69).
+Check the installed version with `verilator --version`.
+
+This is a tool execution failure, not an RTL verdict. SiliconShield records a
+compile error and leaves the investigation inconclusive. Preserve the failed
+build log and rerun into a new output directory with a fixed toolchain. A
+successful retry alone does not establish that an older toolchain is reliable.
 
 ## Real Muse repair
 
@@ -147,31 +149,31 @@ claims. One successful repair is an integration result, not a repair benchmark.
 ## Release terms
 
 The owner selected **Apache-2.0 for Contract-1** on November 1, 2026, consistent
-with Contract-2. The LAYA foundation card declares Apache-2.0 at
-[revision 7b928d8](https://huggingface.co/convaiinnovations/laya/blob/7b928d828b7b0e022f929d9bd2e44165aa270148/README.md).
+with Contract-2. The LAYA foundation card declares Apache-2.0 in the
+[foundation model card](https://huggingface.co/convaiinnovations/laya).
 The tested LAYA Next runtime includes its
-[Apache-2.0 license](https://github.com/debjyotikm/laya-next/blob/55862a438a0f2e2ffec7a8db138bab537ac8a6d9/LICENSE).
-This check records published terms at those revisions. It does not reconstruct
-an unspecified historical foundation revision or relicense source datasets.
+[Apache-2.0 license](https://github.com/debjyotikm/laya-next/blob/main/LICENSE).
+These links point to the current upstream pages. The inference runtime remains
+pinned by the release manifest. This license check does not reconstruct an
+unspecified historical foundation revision or relicense source datasets.
 Retain upstream attribution and applicable source terms.
 
-The pinned Contract-1 Hub card predates this decision and still says the license
-is pending. Corrected card and LICENSE files are prepared outside Git for a
-separate Hub publication. Until that publication, repository intent and the old
-Hub metadata are not synchronized. Model payload hashes are unaffected by a
-card-only update.
+### Publication status checked on 3 November 2026
 
-## Submission closeout
+Both public model cards now declare Apache-2.0, resolving the previously
+recorded Contract-1 metadata discrepancy. Neither model repository's file
+listing contains a standalone LICENSE file at the checked revision.
 
-Before declaring the submission frozen:
+| Model | Public model card | Declared license |
+|---|---|---|
+| Contract-1 | [Model card](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1) | Apache-2.0 |
+| Contract-2 | [Model card](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2) | Apache-2.0 |
 
-1. Publish the approved Contract-1 license/card correction and verify its links.
-2. Record the final source commit and retain the release manifest.
-3. Publish the genuine CLI/report demonstration assets and add their URLs to
-   the README. No placeholder media URL should be presented as a recording.
-4. Run the documented commands under the selected environment and retain their
-   receipts. Code gates, live inference, and model-quality results stay separate.
+The Hub revisions checked on this date differ from the pinned inference
+revisions in the release manifest. This metadata check did not re-download or qualify their current model payloads.
+The release manifest retains the tested inference pins. Review payload identity
+and terms before adopting a newer revision.
 
-The CLI demonstration uses complete authored inputs and explicit backend
-configuration. Assessments apply only to the supplied RTL and assumptions.
-The router and repair application have separate invocation and output contracts.
+For a release handoff, retain the measured source revision, environment,
+worker identity, and execution receipts. Live inference, fixture checks,
+and model-quality evaluation remain separate qualifications.

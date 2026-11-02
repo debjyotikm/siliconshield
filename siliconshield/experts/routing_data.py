@@ -9,7 +9,7 @@ when the benchmark or a checkpoint changes.
 """
 
 BENCHMARK_SOURCE = (
-    "hf://danieltombay/siliconshield-rtl-benchmark"
+    "hf://debjyotikm/siliconshield-rtl-benchmark"
     "@ab2b7dbee3158a292edc4f7a0127379aab996636:data/benchmark.jsonl"
 )
 

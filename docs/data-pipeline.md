@@ -1,37 +1,44 @@
-# Building and qualifying security data
+# Decision-model dataset construction and qualification
 
-[Documentation index](README.md)
+[Documentation index](README.md) · [Study walkthrough](study-walkthrough.md) ·
+[Training](security-model-training.md) · [Evaluation](evaluation.md)
 
-The training unit is a decision about **RTL, a requirement, and assumptions**. A
-file's source repository and CWE tag do not determine that decision. Generated
-mutations may preserve behavior, and unresolved solver outcomes are not evidence
-of missing context.
+This guide turns source RTL into an accepted dataset for a decision-model
+study. Each example asks whether an implementation satisfies an English
+requirement under stated assumptions. Source repository names and CWE tags
+provide provenance. They do not determine the answer.
 
-Admission requires evidence for the relationship between the local
-implementation and its requirement. Recheck each mutation: a change in syntax
-may preserve behavior, while a missing guard can change the answer under only
-some policies. Semantic review must also confirm that the checked assertion
-represents the English requirement. Compilation, proof status, and semantic
-review answer different questions and remain separate audit fields.
+The construction process is **source RTL → requirement → verified examples →
+semantic review → split audit → accepted dataset**. Lineage is assigned before
+variants are generated, then checked again before acceptance.
 
-## Sources and builders
+| Stage | Work | Retained evidence |
+|---|---|---|
+| Source RTL | Select a local design region and record its origin, revision, and lineage. | Source catalog and split-group identity |
+| Requirement | State the behavior and assumptions, then define the assertion that checks it. | English requirement, assertion, clock/reset scope |
+| Verified examples | Construct satisfying, violating, and missing-context cases. Recheck every mutation. | Compilation and solver receipts, including opposing completions for missing context |
+| Semantic review | Check that the assertion captures the English requirement. Resolve disagreements. | Template review ledger bound to the reviewed input bytes |
+| Split and exposure audit | Check lineage isolation, overlap, concentration, complete inputs, and planned sampling coverage. | Audit results and pinned sampling pools |
+| Dataset acceptance | Bind the reviewed audit and pools to exact split files. | Version manifest and acceptance record |
 
-| Module under `training/laya/` | Role |
-|---|---|
-| `build_security_data` | Catalog-driven cases, mutations, rendering, compilation, and solver evidence with declared bounds. |
-| `source_contracts` | Optional parser-based extraction of local transition contracts. |
-| `build_source_security` | Validate a source-backed catalog and write partitions. |
-| `expand_security_data` | Add scenarios from a supplied semantic recipe. |
-| `augment_security_policies` | Requirement/policy counterfactuals. |
-| `augment_security_guards` | Guard-related variants with explicit case budget and seed. |
-| `build_security_external` | Separate evaluation construction through a supplied cases provider. |
-| `checker_adapter` / `proposer_ingest` | Check agent proposals and publish accepted evidence. |
-| `question_contracts` | Versioned model-visible question bytes and export records. |
-| `review_ledger` | Independent English-to-assertion review and template coverage. |
-| `coverage_audit` | Triplet integrity, quota schedules, and delivered exposure. |
-| `inventory` | Eligible origins/groups inventory and broad/narrow-pilot check. |
-| `ddp_guard` | Single-backward plus `no_sync` coherence gate. |
-| `dataset_versions` | Pin split bytes, bind pools, and record dataset acceptance. |
+Compilation, solver evidence, and semantic review answer different questions.
+A syntactic mutation may preserve behavior. A proved assertion may encode the
+wrong requirement. An unresolved proof is not evidence of missing context.
+The sections below define the admission checks for each case.
+
+## Published collections
+
+| Collection | Role in a new study | Detailed reference |
+|---|---|---|
+| [Training collection](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training) | Reusable source material to audit and qualify for the proposed task. It is not the complete training history of either release. | [Release recipes and lineage](training-recipes.md#published-populations-and-weight-lineage) |
+| [Development benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark) | Comparison and capability measurements. Keep it out of TRAIN when using it for evaluation. | [Benchmark populations and protocols](benchmark.md) |
+
+A downloaded collection does not supply a new study's acceptance record.
+Audit its lineage and template coverage, construct appropriate disjoint views,
+qualify the sampler, and freeze the accepted version. The linked guides own
+population counts, release lineage, and evaluation pins.
+
+## Catalog workflow
 
 OpenTitan and HardSecBench are supported source materials, not bundled datasets.
 Obtain their source and retain revision, license, and extraction provenance in
@@ -39,38 +46,11 @@ local catalogs. The authored fallbacks exercise interfaces. They do not
 reproduce private experiment catalogs or establish broad coverage of either
 project.
 
-## Published collections
-
-The [training collection](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
-contains 19,050 rows: 16,350 tagged `contract-1-direct` and 2,700 tagged
-`contract-2-direct`. The first subset includes Contract-1's 576-row anchor
-and later study material that did not contribute to its released weights.
-Neither subset represents the full ancestor training history.
-
-The [benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark)
-contains 5,589 development decisions across 11 areas. Keep it out of training
-when using it for comparison. Contract-2 already used its focused temporal
-subset for selection, so that result is development evidence.
-
-A downloaded collection is source material for a new study, not an automatic
-training-acceptance record. Audit its lineage and template coverage, construct
-appropriate disjoint views, qualify the actual sampler, and freeze the accepted
-version. See [training recipes](training-recipes.md) and
-[benchmark](benchmark.md) for exact roles and pins.
-
-## Catalog workflow
-
-1. Identify an implementation and a precise local requirement. Specify reset,
-   clock, and other verification assumptions.
-2. Keep satisfying, violating, rewritten, and missing-context variants attached
-   to their original lineage. Assign that lineage to one partition before
-   expanding variants.
-3. Compile complete examples and run the registered assertion. Require proof
-   evidence for satisfaction and a reachable counterexample for violation.
-4. For missing context, show that filling the declared omission in different
-   valid ways produces opposing established answers.
-5. Audit overlap, count definitions, label support, and complete model encoding.
-6. Pin the finished dataset and its audit before training.
+Keep satisfying, violating, rewritten, and missing-context variants in the
+same lineage. Assign that lineage to a partition before expanding it. The
+[study walkthrough](study-walkthrough.md#understand-a-complete-row-and-triplet)
+shows the row and linked-triplet format. Labels belong in metadata, not in
+model-visible comments such as “faulty case.”
 
 The catalog structure is illustrated in
 [security_cases.example.json](../examples/security_cases.example.json).
@@ -164,25 +144,7 @@ batch. Failures do not replace the previous good generation. Accepted proposals
 still need downstream conversion and dataset qualification before entering the
 trainer.
 
-## Dataset versions and acceptance
-
-`write_version(root, version, splits)` records existing split paths, hashes, and
-row counts. It does not copy or protect their files. Do not modify those source
-files after registration. `verify_version()` detects changes. Register a new
-version when the data changes.
-
-`accept_version()` binds an audit to the exact manifest. New releases must
-carry the strict audit schema (`siliconshield-dataset-audit-v2`): matching
-split hashes, zero reported exact-RTL, retired-RTL, lineage, and canonical
-overlap, `max_group_share` at or below 5%, `max_mechanism_share` at or
-below 15%, a bound `review_ledger_sha256` digest with a positive
-`reviewed_templates` count, and a `release_class` (`broad` or
-`narrow-pilot`) consistent with group counts. Audits without the strict
-schema are refused for new acceptances. Markers written under a legacy
-audit stay readable through `is_accepted()` but cannot back a new
-release. Acceptance records an audit supplied by the caller. It does not
-conduct an independent semantic review of the labels. `is_accepted()`
-revalidates the record, its audit, and referenced bytes.
+## Semantic review and split isolation
 
 Use the overlap helpers, lineage/canonical checks, concentration audit, and
 complete runtime tokenization to produce the audit. The canonical screen maps
@@ -193,10 +155,7 @@ independence. Require template reviews from `review_ledger.py` before
 admitting English requirements: requirement and assumption hashes are
 recomputed from rendered row bytes, disagreements need an explicit
 resolved-and-approved status with evidence references, and prose alone never
-approves a template. Pin sampling pools before acceptance because pool
-bindings change the version manifest. Once a version is accepted, new
-owned training should proceed through a [decision study](decision-study.md),
-which binds the job to these exact bytes.
+approves a template.
 
 ## Sampling without changing provenance
 
@@ -224,6 +183,31 @@ Parameter variants and repeated samples do not add independent families. Use
 `inventory.summarize()` and `feasibility()` to classify a short inventory as
 a narrower pilot with disclosed gaps.
 
+## Dataset versions and acceptance
+
+`write_version(root, version, splits)` records existing split paths, hashes, and
+row counts. It does not copy or protect their files. Do not modify those source
+files after registration. `verify_version()` detects changes. Register a new
+version when the data changes.
+
+`accept_version()` binds an audit to the exact manifest. New releases must
+carry the strict audit schema (`siliconshield-dataset-audit-v2`): matching
+split hashes, zero reported exact-RTL, retired-RTL, lineage, and canonical
+overlap, `max_group_share` at or below 5%, `max_mechanism_share` at or
+below 15%, a bound `review_ledger_sha256` digest with a positive
+`reviewed_templates` count, and a `release_class` (`broad` or
+`narrow-pilot`) consistent with group counts. Audits without the strict
+schema are refused for new acceptances. Markers written under a legacy
+audit stay readable through `is_accepted()` but cannot back a new
+release. Acceptance records an audit supplied by the caller. It does not
+conduct an independent semantic review of the labels. `is_accepted()`
+revalidates the record, its audit, and referenced bytes.
+
+Pin sampling pools before acceptance because pool
+bindings change the version manifest. Once a version is accepted, new
+owned training should proceed through a [decision study](study-walkthrough.md),
+which binds the job to these exact bytes.
+
 ## What coverage means
 
 Distinguish decision rows, source files, catalog records, extracted design IDs,
@@ -236,3 +220,26 @@ Keep calibration and test material out of generation feedback. A diagnostic
 view used to decide the next training change is spent as independent evidence.
 See [evaluation](evaluation.md) and [training](security-model-training.md) for
 continued studies and retired populations.
+
+## Sources and builders
+
+Use this module reference when extending the construction pipeline. Dataset
+acceptance ends at the version record. The [study contract](study-walkthrough.md)
+binds that version to an experiment, and the [trainer](security-model-training.md)
+executes its optimization plan.
+
+| Module under `training/laya/` | Role |
+|---|---|
+| `build_security_data` | Catalog-driven cases, mutations, rendering, compilation, and solver evidence with declared bounds. |
+| `source_contracts` | Optional parser-based extraction of local transition contracts. |
+| `build_source_security` | Validate a source-backed catalog and write partitions. |
+| `expand_security_data` | Add scenarios from a supplied semantic recipe. |
+| `augment_security_policies` | Requirement/policy counterfactuals. |
+| `augment_security_guards` | Guard-related variants with explicit case budget and seed. |
+| `build_security_external` | Separate evaluation construction through a supplied cases provider. |
+| `checker_adapter` / `proposer_ingest` | Check agent proposals and publish accepted evidence. |
+| `question_contracts` | Versioned model-visible question bytes and export records. |
+| `review_ledger` | Independent English-to-assertion review and template coverage. |
+| `coverage_audit` | Triplet integrity, quota schedules, and delivered exposure. |
+| `inventory` | Eligible origins/groups inventory and broad/narrow-pilot check. |
+| `dataset_versions` | Pin split bytes, bind pools, and record dataset acceptance. |

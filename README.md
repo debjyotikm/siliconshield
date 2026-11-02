@@ -12,27 +12,45 @@
   <p>
     <a href="#get-started">Get started</a> ·
     <a href="#decision-models">Decision models</a> ·
-    <a href="docs/decision-study.md">Train a specialist</a> ·
+    <a href="docs/study-walkthrough.md">Train a specialist</a> ·
     <a href="docs/README.md">Engineering documentation</a>
   </p>
 </div>
 
-An unguarded debug write can bypass a lock that is enforced on the normal
-path. A FIFO count can drift when simultaneous push/pop or backpressure is
-handled incorrectly. Reviewing these failures requires **the RTL, a precise
-requirement, and explicit assumptions**.
+Every AI solution depends on the chips - processors, accelerators, and memory
+systems beneath it. SiliconShield brings AI investigation to the hardware that
+powers AI. It evaluates RTL against explicit requirements through a capability
+router that consults locally trained specialist decision models. Meta Muse
+interprets their results against the implementation, producing a finding with
+supporting evidence and open questions. The goal is to help hardware engineers
+focus their effort where it matters.
 
-**SiliconShield evaluates RTL against explicit requirements.** A capability
-router consults locally trained specialist decision models. Meta Muse
-interprets their results against the RTL and produces a finding with supporting
-evidence and open questions. The platform also provides the data, training,
-evaluation, and recovery infrastructure to improve an existing decision model
-or develop one for another design domain.
+The platform provides the data, training, evaluation, and recovery
+infrastructure to improve an existing specialist or develop one for another
+design domain. Model development and investigation share the same principle: an
+apparently convincing answer must remain distinguishable from an independently
+checked result.
 
 Model conclusions guide RTL review and investigation. Simulation and repair
 checks run through a separate application that records what was executed.
 The [research white paper](docs/whitepaper.md) traces the models, datasets,
 training decisions, and measured failure modes behind the system.
+
+## Three Ways to Use SiliconShield
+
+1. **Investigate RTL with Muse Glimmer and specialist decision models.** Assess
+   a design against its functional or security requirement. The router selects
+   relevant specialists, and Glimmer examines their predictions alongside the
+   RTL to explain suspected mismatches, disagreements, and missing context.
+
+2. **Use the decision models directly.** Integrate Contract-1 and Contract-2
+   into existing engineering tools through the CLI and Python interfaces.
+   Obtain structured verdicts, scores, and model identity without an agent in
+   the inference path.
+
+3. **Build and improve decision models.** Train a new domain specialist or
+   continue an existing model using qualified datasets, reproducible studies,
+   explicit evaluation criteria, and recoverable GPU jobs.
 
 ## Decision Models
 
@@ -97,7 +115,7 @@ relevant domain coverage.
 Muse interprets their assessments alongside the design and requirement,
 identifies relevant logic, and explains disagreements or missing information.
 The result is a structured finding that helps an engineer decide **where to
-look, what may be wrong, and what to check next**.
+look, which requirement is at risk, and what to check next**.
 
 [Explore the investigation workflow](docs/router.md)
 
@@ -117,7 +135,7 @@ develop a new specialist, or retain the existing model when the evidence does
 not support an improvement. This gives teams a controlled path from an
 observed model weakness to a measured capability gain.
 
-[Explore decision-model training](docs/decision-study.md)
+[Explore decision-model training](docs/study-walkthrough.md)
 
 ## Specialist Routing and Muse Analysis
 
@@ -185,8 +203,9 @@ Decision models build on the LAYA foundation and compatible LAYA Next runtime.
 SiliconShield supplies the RTL training task, data qualification, reproducible
 study infrastructure, and evaluation controls.
 
-[Explore the local Glimmer training case study](docs/case-study-glimmer-local-training.md) ·
-[Design a study](docs/decision-study.md) ·
+[Explore the Glimmer-operated decision-model training case study](docs/case-study-decision-model-training-with-glimmer.md) ·
+[Run training with local Glimmer](docs/decision-model-training-with-glimmer.md) ·
+[Design a study](docs/study-walkthrough.md) ·
 [Prepare training data](docs/data-pipeline.md) ·
 [Training recipes](docs/training-recipes.md)
 
@@ -199,7 +218,7 @@ the assessment to the relevant decision models, then Muse examines their
 predictions alongside the RTL to explain the conclusion and any disagreement.
 
 Follow the [setup guide](docs/setup.md) to download the models and configure
-the runtime, then [register measured capability profiles](docs/router.md).
+the runtime, then [register measured capability profiles](docs/expert-qualification.md#register-and-measure-the-published-models).
 The [FIFO walkthrough](docs/router.md#run-one-assessment) provides the complete
 input file for this example.
 
@@ -220,6 +239,22 @@ Arbitration requires the configured Muse CLI and login. To inspect
 decision-model evidence alone, omit `--arbitrate` and `--requirement`, keeping
 the requirement in the input file. Python integrations can retain model
 workers across requests.
+
+### Open the browser demo
+
+The optional browser app brings Contract-1, Contract-2, the expert router,
+and a bounded decision-model training example operated by Muse Glimmer into
+four views. It runs on the same model workers and operator infrastructure as
+the command-line tools.
+
+```bash
+python -m siliconshield.web_demo --config /path/to/web.local.json
+```
+
+Open `http://127.0.0.1:8765` in Chrome. The [browser demo guide](docs/web-demo.md)
+covers CPU/GPU model loading, local Glimmer, training configuration, and SSH
+access. Without `--config`, the interface opens with authored examples and no
+model or training work starts.
 
 ### Check a repair against the requirement
 
@@ -248,7 +283,7 @@ the acceptance criteria.
 This installation smoke test uses an authored repair and needs no model
 weights or Muse account. Without a configured checkpoint, the report marks
 the model assessment as unavailable. The
-[investigation guide](docs/investigation.md) explains how to connect a decision
+[release guide](docs/releases.md#real-muse-repair) explains how to connect a decision
 model and a live Muse proposer.
 
 A successful run establishes that the candidate passed the supplied
@@ -258,13 +293,14 @@ results remain separate throughout the report.
 ## Research Assets and Deployment Options
 
 **Inspect the data behind the research.** The public
-[training collection](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
+[training collection](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training)
 contains **19,050 rows**, and the
-[development benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark)
+[development benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark)
 provides **5,589 decisions across 11 RTL areas**. The
 [training recipes](docs/training-recipes.md) trace each released decision
 model to its datasets and training stages. The collection also includes
-follow-up experiments that did not produce the released weights. Benchmark
+follow-up study rows that trained candidates the selectors did not promote.
+They are published for further training, not as rows the releases saw. Benchmark
 results measure development performance, with independent evaluation reported
 separately.
 
@@ -279,14 +315,32 @@ RTL and requirements to that service.
 served Glimmer to the decision models through structured tool calls. Glimmer
 can inspect the available specialists, request assessments for a design
 domain, and reason over the returned evidence. The repository includes
-[adaptation, serving, and replay tooling](docs/glimmer.md) to develop and
-evaluate this capability.
+[serving, tool-use, and replay tooling](docs/inference.md) to operate and
+evaluate this capability. Glimmer supplies the agent reasoning. Training
+updates the decision models, not Glimmer's weights.
 
-Router-driven assessments have been demonstrated in two base-model sessions.
-Unattended router operation still requires qualification for that role,
+Router-driven assessments have been demonstrated in two base-model sessions
+([router evidence](docs/router.md#driving-assessments-from-glimmer)). Broader
+driver reliability is not established and session verdicts inherit the experts'
+documented domain limits. Unattended router operation still requires
+qualification for that role,
 separate from the demonstrated local training workflow. For research
 campaigns, optional Harness² integration supplies replay-qualified procedures
 within the study’s existing permissions and acceptance rules.
+
+## Hackathon contribution scope
+
+SiliconShield-specific work was developed during the Meta Global AI Developer
+Hackathon building period, October 27–November 4, 2026. This includes the RTL
+decision task and dataset curation, Contract-1 and Contract-2 training, the
+capability router, Muse integrations and agent skills, recoverable training
+studies, and the browser demonstration.
+
+The [demo contribution map](docs/web-demo.md#hackathon-contribution-scope)
+identifies the new work shown in each segment. LAYA/LAYA Next, Meta's Muse
+models, upstream RTL, verification tools, and optional Harness² are reused
+foundations, credited in [NOTICE](NOTICE.md). SiliconShield trains the decision
+models. Glimmer operates the workflows without changes to its weights.
 
 ## Engineering references
 
@@ -295,16 +349,17 @@ or go directly to a guide below.
 
 | Area | Documentation |
 |---|---|
-| Getting started | [Environment setup](docs/setup.md) · [Model downloads and releases](docs/releases.md) · [Demo walkthrough](docs/demo.md) · [Browser demo](docs/web-demo.md) · [Example formats](examples/README.md) |
-| RTL investigation | [Router and API](docs/router.md) · [Investigation and repair checks](docs/investigation.md) · [Expert qualification](docs/expert-qualification.md) · [Command and configuration reference](docs/reference.md) |
+| Getting started | [Environment setup](docs/setup.md) · [Model downloads and releases](docs/releases.md) · [Demo setup and walkthrough](docs/web-demo.md) · [Example formats](examples/README.md) |
+| RTL investigation | [Requirements and RTL examples](docs/rtl-requirements.md) · [Router and API](docs/router.md) · [Decision-model qualification](docs/expert-qualification.md) · [Command and configuration reference](docs/reference.md) |
 | Architecture | [System architecture](docs/architecture.md) · [Architecture diagrams](docs/diagrams/README.md) |
 | Decision models | [Contract-1 and Contract-2 capabilities](docs/siliconshield-rtl.md) · [Measured limitations](docs/LIMITATIONS.md) · [Release training recipes](docs/training-recipes.md) |
 | Data and evaluation | [Dataset construction and qualification](docs/data-pipeline.md) · [Evaluation protocol](docs/evaluation.md) · [Benchmarking models and routing](docs/benchmark.md) |
-| Model training | [Decision studies](docs/decision-study.md) · [Training methods and controls](docs/security-model-training.md) · [Trainer entry points](siliconshield/training/laya/README.md) |
-| Campaign operation | [Campaigns and controllers](docs/campaigns.md) · [Operations and recovery](docs/operations.md) · [Muse and Harness² procedures](docs/muse-procedures.md) |
-| Local Muse Glimmer | [Controller training and qualification](docs/glimmer.md) · [Inference and serving](docs/inference.md) · [Local training case study](docs/case-study-glimmer-local-training.md) |
+| Model training | [Study walkthrough](docs/study-walkthrough.md) · [Training methods and controls](docs/security-model-training.md) · [Trainer entry points](siliconshield/training/laya/README.md) |
+| Campaign operation | [Multi-round training campaigns](docs/campaigns.md) · [Training operations and recovery](docs/training-operations.md) |
+| Optional integrations | [Muse and Harness² procedure learning](docs/muse-procedures.md) |
+| Local Muse Glimmer | [Deployment and qualification](docs/inference.md) · [Train decision models with Glimmer](docs/decision-model-training-with-glimmer.md) · [Local training case study](docs/case-study-decision-model-training-with-glimmer.md) |
 | Research | [Scientific white paper](docs/whitepaper.md) · [Research graphs and figure sources](docs/whitepaper/figures/README.md) |
-| Development | [Development and tests](docs/development.md) · [Python style](docs/python_style.md) · [Contributing](CONTRIBUTING.md) · [Coding-agent guidance](AGENTS.md) |
+| Development | [Contributing](CONTRIBUTING.md) · [Coding-agent guidance](AGENTS.md) |
 | Agent skills: investigation | [RTL analysis](.agents/skills/rtl-analysis/SKILL.md) · [Glimmer routing](.agents/skills/glimmer-router/SKILL.md) |
 | Agent skills: training | [Study design](.agents/skills/study-design/SKILL.md) · [Glimmer studies](.agents/skills/glimmer-study/SKILL.md) · [Round diagnosis](.agents/skills/round-diagnosis/SKILL.md) · [Campaign operations](.agents/skills/campaign-ops/SKILL.md) |
 
@@ -318,3 +373,12 @@ separate terms. See [release terms](docs/releases.md#release-terms) and
 [Meta Muse models](https://dev.meta.ai/docs/models) ·
 [Muse Glimmer 30B](https://huggingface.co/meta-models/Muse-Glimmer-30B) ·
 [Google Research Harness²](https://github.com/google-research/harness2)
+
+## Built with Muse
+
+This repository was built with [Meta Muse](https://dev.meta.ai/docs/models).
+Muse Spark 1.3 and Muse Wonder models, working through Muse Code and
+OpenCode agentic coding sessions, were used to build the infrastructure:
+training, the expert router, agent skills, and evaluation tooling. They
+supported the Contract-1 and Contract-2 studies on local GPU hardware and
+helped draft the documentation.

@@ -16,7 +16,7 @@ max_len = 1536
 head_max_len = 256
 
 [models.contract-1]
-repo_id = "danieltombay/siliconshield-rtl-contract-1"
+repo_id = "debjyotikm/siliconshield-rtl-contract-1"
 revision = "2f63a4a87d0d6010fca033b1637ff4142ff7cc60"
 export_sha256 = "bd18becfd65f99b5e04f9150da460b158970d0fb5cf4c7a077c30635f6f6b9ef"
 [models.contract-1.files]
@@ -28,7 +28,7 @@ export_sha256 = "bd18becfd65f99b5e04f9150da460b158970d0fb5cf4c7a077c30635f6f6b9e
 "tokenizer/tokenizer_config.json" = "f62f705e0f10a59085049862458a3876b752fc331e9f205aeca92bf2f97209df"
 
 [models.contract-2]
-repo_id = "danieltombay/siliconshield-rtl-contract-2"
+repo_id = "debjyotikm/siliconshield-rtl-contract-2"
 revision = "b96211872d573ae48b6dabe128c0d96aad291156"
 export_sha256 = "9c3080509bba9b2973f384a342fb801a7b6861d05f07a8c937235ac45658c5eb"
 [models.contract-2.files]

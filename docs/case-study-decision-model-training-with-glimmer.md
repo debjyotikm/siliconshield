@@ -8,11 +8,12 @@ Scientific case study | 2 November 2026
 
 ### Abstract
 
-This report asks whether an untrained, locally served Muse Glimmer
+This report asks whether a locally served Muse Glimmer
 model can operate a complete decision-model training loop with no
 cloud dependency and no human turn inside the loop. Two exhibits
 answer two halves of the question. Exhibit A runs the smallest
-complete loop: 24 hand-written training rows, one workstation GPU,
+complete loop: 24 authored decisions (18 TRAIN rows and 6 development rows),
+one workstation GPU,
 nine fitting updates plus nine development updates, frozen
 selection, and independent reload verification. The loop completed
 and every artifact verified. Exhibit B runs the same operator at
@@ -35,8 +36,7 @@ stateful, so they are managed by a bounded operator loop: submit
 an owned job, observe its receipts, invite bounded model
 interventions, and finalize on completion. The operator was
 designed so that a model proposes actions but the state machine
-owns safety. This study tests that design with the weakest
-reasonable driver: the untrained base Glimmer model, served from
+owns safety. This study tests that design with the base Glimmer model, served from
 local weights, with no task-specific tuning for operations.
 
 The question has two parts. First, can the base model drive the
@@ -67,9 +67,10 @@ operator tools, and terminal completion never requires a model
 action.
 
 Data discipline held for both exhibits. Sealed evaluation
-populations stayed sealed. The public benchmark never entered
-any training loop. Development populations were registered
-before training and reused only with disclosure.
+populations stayed sealed. Benchmark rows were not used as optimization examples. The registered
+Contract-2 development view overlaps the public benchmark and was reused
+for selection. It is not independent evaluation. Reserved populations were
+not opened.
 
 ### 3 Exhibit A: the complete toy loop
 
@@ -77,8 +78,7 @@ Exhibit A asks whether the loop runs end to end under Glimmer
 with every artifact verifiable. The data was 24 hand-written
 rows forming 8 complete decision triplets: 18 TRAIN rows across
 6 mechanisms and 6 development rows across 2 fresh mechanisms,
-with disjoint split groups. No row came from any training or
-evaluation distribution. The parent was the released local-guard
+with disjoint split groups. No row was copied from the existing training or evaluation collections. The parent was the released local-guard
 export, used read-only. Training continued its adapters and
 decision head with the encoder frozen, one GPU, batches of 6
 rows, 9 fitting updates plus 9 development updates, seed 7.
@@ -160,9 +160,8 @@ commit and hold, arbiter-tree, empty-data-blanking, and
 stored-word-hold families. The intervention was one variable:
 weak-family emphasis pools (900 weak rows against 1791 base
 rows at equal mass) under plain continuation with the
-encoder frozen. The repo trainer has no triplet or margin
-flag, so the historical triplet objective was deliberately
-not part of this recipe. The frozen plan pinned parent,
+encoder frozen. The historical worst-member triplet objective was not part of this
+recipe. It is distinct from the trainer's pair-loss options. The frozen plan pinned parent,
 data, pools, recipe, views, seed 9001, and a 300-update
 budget with triplet-first selection floors set to the
 parent counts. Full triplet coverage landed at update 114.
@@ -174,7 +173,7 @@ identical fitting configuration under the previous campaign
 prefix had gained plus 0.008, so small fitting gains vary
 run to run at fixed seed and only the sign was used. The
 development round stopped by plateau at update 180 past the
-150-update minimum. Early evals sawed around the baseline,
+150-update minimum. Early scores fluctuated around the baseline,
 recovered to 203 correct with 15 false-safe errors at
 update 110 and 52 triplets at update 120, then drifted.
 No trained checkpoint passed all floors jointly. The
@@ -184,12 +183,13 @@ aggregate gain in the run traded one protected count for
 another. The selector kept the parent weights and the
 study closed as a null result with the parent preserved.
 
-![Correct decisions, false-safe errors, and whole triplets across 18 development evaluations with frozen floor lines.](diagrams/glimmer-improvement-trajectory.svg)
+![Development counts and the protected satisfies recall across 18 evaluations, with frozen thresholds.](diagrams/glimmer-improvement-trajectory.svg)
 
 **Figure 2.** Exhibit B trajectory. Dashed red lines mark the
-frozen parent floors. The run recovers to the correct-count
-floor near update 110, then drifts. No evaluation passes all
-floors jointly, so the selector keeps the parent. The dotted
+frozen parent floors. The run recovers to the correct-count floor near update 110.
+The additional satisfies-class panel explains why apparent aggregate gains
+still fail selection. No trained evaluation passes all floors jointly, so
+the selector keeps the parent. The dotted
 line marks full triplet coverage at update 114.
 [Open full-size SVG](diagrams/glimmer-improvement-trajectory.svg)
 
@@ -206,8 +206,8 @@ follow-up short-horizon round under a newly frozen plan.
 ![Step-20 minus parent deltas under the trainer path and the SDK path.](diagrams/glimmer-deviated-deltas.svg)
 
 **Figure 3.** The deviated observation beats the parent on
-every count under both eval paths. It stays a hypothesis
-because its schedule differs from the frozen recipe.
+every count under both eval paths. It is exploratory evidence because its schedule differs from the frozen
+recipe. It does not qualify the checkpoint for promotion.
 [Open full-size SVG](diagrams/glimmer-deviated-deltas.svg)
 
 #### 4.2 Operator behavior at scale
@@ -224,15 +224,12 @@ and no gate was relaxed after seeing results.
 ### 5 Analysis
 
 The two exhibits jointly establish that the training loop
-is locally operable under an untrained Glimmer driver.
-Exhibit A proves completeness: submit, observe, select,
-verify, and close, with every artifact independently
-reproduced. Exhibit B proves honesty at scale: frozen
-objectives held for 180 updates, floor enforcement
-rejected attractive trade-offs, and the null verdict is
-fully evidenced. The operator design held in both: the
-model proposes, the state machine disposes, and receipts
-decide arguments.
+is locally operable under a Muse Glimmer operator.
+Exhibit A exercised submission, observation, selection, reload
+verification, and closeout. Exhibit B exercised frozen selection constraints
+over 180 updates and preserved the parent when no candidate qualified.
+Together they demonstrate these execution paths under the tested conditions.
+They do not establish reliable autonomous judgment across all operator actions.
 
 Three findings qualify the claim. First, the base model
 was only exercised on conservative actions: continue,
@@ -242,7 +239,7 @@ were never needed and remain untested. Second, the
 SDK-versus-trainer eval gap means verification must pin
 the full inference path. Directional agreement across
 paths carried this study, but parity claims need tighter
-controls. Third, the toy loop proves operability only.
+controls. Third, the toy loop demonstrates operability under its tested conditions.
 Its 24 rows say nothing about whether continued training
 improves any real capability.
 
@@ -251,12 +248,12 @@ improves any real capability.
 This study makes no model-quality claim for either run.
 The toy exports are loop-validation artifacts and are not
 releasable. The improvement round produced no qualifying
-checkpoint and the parent stands unchanged. The deviated
-step-20 observation is a hypothesis, not a result. The
+checkpoint and the parent stands unchanged. The deviated step-20 measurement is a real exploratory result,
+not a qualifying improvement under the registered protocol. It motivates a
+prospective short-horizon hypothesis. The
 development populations here were repeatedly used and
-cannot support independence claims. Benchmark and sealed
-populations were correctly excluded and remain the venue
-for any future quality statement.
+cannot support independence claims. The public benchmark remains development evidence. A future generalization
+claim needs a separately reserved, group-disjoint evaluation population.
 
 ### 7 Reproducibility
 
@@ -271,26 +268,14 @@ verification script, and the written verdict. Both records
 live outside Git with the research artifacts. Model
 weights from the toy runs were pruned after verification
 to reclaim disk, with all predictions and receipts kept.
-The commands below rerun the CPU gates from a checkout.
-GPU steps need the pinned runtime, one RTX PRO 4000, and
-a reachable Glimmer endpoint.
-
-```bash
-python -m siliconshield.training.laya.validate_study_inputs \
-  --data <dataset> --pools <pools> --recipe <recipe> \
-  --seed 9001 --global-batch 48 --world 1 --max-updates 300
-```
-
-```bash
-python -m siliconshield.research_loop.execution.strategy \
-  --config <campaign>
-```
+The [local training guide](decision-model-training-with-glimmer.md) maintains
+the CPU validation and owned GPU launch procedures. Its configuration and
+closeout instructions distinguish input validation from job submission.
 
 ### 8 Conclusion
 
-A Muse Glimmer model with no operations tuning, served
-from local weights, operated a complete decision-model
-training loop on local hardware twice: once to a fully
+A locally served Muse Glimmer model operated a complete
+decision-model training loop on local hardware twice: once to a fully
 verified toy closeout and once to an honestly reported
 null result at real scale with a preserved deviated
 observation. The loop contributed the safety: frozen

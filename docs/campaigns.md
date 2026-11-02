@@ -1,59 +1,33 @@
-# Campaigns and controllers
+# Multi-round training campaigns
 
-[Documentation index](README.md)
+[Documentation index](README.md) · [Study walkthrough](study-walkthrough.md) ·
+[Training operations and recovery](training-operations.md)
 
-SiliconShield separates experiment planning, job execution, and checkpoint
-promotion. An agent recommends changes. The job runner records what executed,
-and the campaign applies the checkpoint acceptance rules.
+A training campaign connects completed experiments to the next research
+proposal. Muse diagnoses the recorded results and proposes further work within
+the authorized study. SiliconShield owns round state, GPU job execution,
+evaluation bindings, and checkpoint promotion. A failed hypothesis can preserve
+the incumbent and end the campaign without launching another round.
 
-## Choose a controller
+This guide covers the repeated-round integration through
+`campaign_supervisor.supervise_once()` and `laya_campaign.run_round()`. It is
+intended for the developer wiring the supervisor into a deployment. A bounded
+Glimmer-operated job does not start this supervisor automatically, and the
+coding-agent supervisor does not require a local Glimmer endpoint.
 
-| Path | Scope | Entry point |
-|---|---|---|
-| Muse coding-agent supervisor | Analyze completed rounds, prepare a proposal, recover, investigate, or plan the next round. | `campaign_supervisor.supervise_once()` Python API. |
-| Bounded Glimmer operator | Operate one preauthorized experiment within an intervention budget. | `python -m siliconshield.research_loop.execution.glimmer_operator --config ...` |
-| Glimmer training watcher | Follow a training container with evaluation and optional Harness² work. | `python -m siliconshield.research_loop.execution.campaign --help` |
-| Fitting/development strategy | Sequence configured fitting and development arms. | `python -m siliconshield.research_loop.execution.strategy --config ...` |
+## Prerequisites and related guides
 
-These are separate paths. The campaign supervisor does not require a locally
-served Glimmer adapter. The Glimmer operator does not create an unrestricted
-follow-on research campaign.
+| Prepare or operate | Owning guide |
+|---|---|
+| Controller, model runtime, and devices | [Setup](setup.md) |
+| Accepted data, frozen settings, measured receipts, and a bound job profile | [Study walkthrough](study-walkthrough.md#study-requirements) |
+| One Glimmer-operated job or a fitting/development sequence | [Decision-model training with Glimmer](decision-model-training-with-glimmer.md) |
+| Resource ownership, status, stop, reattachment, and recovery | [Training operations](training-operations.md) |
 
-## Prepare an owned security-model job
-
-Copy [the job profile](../configs/glimmer-security.example.json) outside Git.
-Set its interpreter, frozen source, runtime checkout, model, dataset, run root,
-GPU indices, and defaults. Profiles sharing GPUs must use the same
-`resource_root`. Optional `recipe`, `reporting_contract`, `review_ledger`,
-and `review_packets` keys name reviewed local files. `defaults` may pin
-`question_contract` using the full id `siliconshield-requirement-context-v0`
-or `siliconshield-requirement-context-v1`. Training validates every row against it
-and records it on export. `defaults` may also set
-`plateau_requires_full_exposure` to block plateau interventions until
-delivered draws cover a full first pass.
-
-Inspect the prepared command and hashes without launching:
-
-```bash
-python -m siliconshield.research_loop.execution.security_jobs \
-  --profile /path/to/security.local.json --experiment-id experiment-a
-```
-
-This preparation writes local receipts. Add `--launch` only when ready to
-submit through the owned-job launcher. Campaigns use the Operator API for their
-state and intervention contract. Active GPU processes can cause preflight to refuse.
-Resource contention at submission can return a waiting result. Inspect the
-returned state before retrying the same experiment.
-
-The service explicitly receives `CUDA_VISIBLE_DEVICES`, `LAYA_ROOT`, and
-`SILICONSHIELD_SECURITY_RECIPE` when the profile supplies `recipe`. It does not
-inherit arbitrary shell variables. Passing a recipe only in your interactive
-shell is not equivalent to registering it in the profile.
-
-For new owned work, freeze the plan as a [decision study](decision-study.md)
-before preparing the profile. The sections below cover repeated-round
-integration. For status, stop, and recovery, use [operations](operations.md).
-Never launch a second driver merely because the first client's connection ended.
+Begin with a verified study and an immutable source snapshot. Keep campaign
+configuration, profiles, data, and receipts outside Git. Each proposed round
+must satisfy its study binding. Changes to a bound recipe, dataset, policy, or
+command require a reviewed amendment before submission.
 
 ## Register a campaign
 
@@ -70,39 +44,17 @@ recorded hypothesis, and supported training overrides (including
 identical specification is idempotent. Changing the specification under the
 same round ID is refused. The round freezes the incumbent, dataset, recipe,
 policy, question contract, review ledger and packets, and report bindings.
-A fresh single-view study freezes an exact-id selection view with no
-retention population. Its generated
-recipe contains the incumbent-derived selection reference and must be the
-recipe used by the training profile. This single-view flow is a
-different mechanism from decision-study manifests. New owned work
-should use a [decision study](decision-study.md).
+The campaign-generated round recipe includes the incumbent-derived selection
+reference. The job profile must point to that recipe. This round binding is
+separate from the decision-study manifest and does not replace its exact
+launch binding.
 
-Campaign configuration and dataset registration use Python APIs. New work
-freezes its plan as a decision study (see below). The study manifest and
-enforcement checks in the submission gate show the binding contract using
-synthetic fixtures. Do not substitute dummy evidence to initialize a real
-campaign.
-
-## Decision studies
-
-New owned work freezes its full plan as a [decision
-study](decision-study.md) before training: parent export, accepted
-dataset version, code and runtime identity, sampling pools, recipe,
-evaluation views, frozen selection objective, budget, and the exact
-launch command. The job profile names the manifest and its digest.
-Supervisor commit, operator prepare and submit, and the owned worker
-all verify the binding. An agent proposal cannot silently change settings
-already frozen in that study. A changed recipe or policy needs a reviewed
-amendment and new identity before a bound launch. Each submission reserves its timeout plus
-stop grace in a locked budget beside the study.
-
-Budget limits block further launches. A new-model recommendation additionally
-requires every terminal round to be analyzed and at least one qualified
-attempt with full exposure, demonstrated TRAIN fit, SDK parity, and a
-poor-generalization or retention-trade-off diagnosis. Execution defects or
-incomplete training do not justify a new model. A valid recommendation parks
-with a domain, dataset plan, and evaluation plan while preserving the incumbent.
-A fresh study requires owner authorization.
+Campaign configuration and dataset registration use Python APIs. Bind the
+reviewed recipe in the profile itself. The owned service explicitly receives
+`CUDA_VISIBLE_DEVICES`, `LAYA_ROOT`, and the registered
+`SILICONSHIELD_SECURITY_RECIPE`. It does not inherit arbitrary interactive-shell
+settings. Synthetic fixture evidence is not a substitute for measured baseline
+and launch receipts.
 
 ## Round lifecycle
 
@@ -132,9 +84,7 @@ Some validation failures raise before a transition, preserving the last phase
 for diagnosis. A refused operation therefore does not necessarily produce a
 terminal round receipt.
 
-
-A restart rereads the receipt. It does not
-unconditionally submit a new job. Promotion uses a transaction intent and
+A restart rereads the receipt. It does not unconditionally submit a new job. Promotion uses a transaction intent and
 revalidates the candidate export, evaluation receipt, frozen policy, and
 incumbent before completing the change.
 
@@ -178,26 +128,6 @@ itself is unchanged, so untrusted work still belongs on an isolated host.
 Deterministic campaign checks protect launch and promotion. They do not turn
 the coding agent itself into a sandbox.
 
-## Operate one job with Glimmer
-
-Copy [the operator example](../configs/glimmer-operator.example.json) outside
-Git and configure a verified endpoint/adapter, profile, experiment ID, output,
-polling budget, and intervention limits. Then use:
-
-```bash
-python -m siliconshield.research_loop.execution.glimmer_operator \
-  --config /path/to/operator.local.json
-```
-
-The six actions are `continue`, `leave_unchanged`, `stop`, `adjust_lr`,
-`resume`, and `finalize_retry`. The execution state machine validates authority,
-parameters, resume identity, and budget before acting. Inspect the returned
-execution state to confirm whether an intervention ran.
-
-Reaching the polling limit does not mean the training job has stopped. The
-systemd-owned job can outlive the client. Reconnect to its recorded identity. Do
-not resubmit it under a new experiment ID to obtain status.
-
 ## Preserve incumbents and policies
 
 Promotion and deployment acceptance are separate outputs. A candidate may
@@ -211,5 +141,21 @@ correct pairs, retention NLL, and transfer NLL. Changes to ranking semantics are
 policy changes. Explicit relaxation requires the update API's authorization and
 a recorded reason. The supervisor does not silently loosen gates.
 
-Stopping after failed hypotheses is a supported outcome. See
-[operations](operations.md) before resuming a stopped or parked campaign.
+## Stop, park, or propose a new specialist
+
+The supervisor checks the registered budget before another launch. A completed
+round needs recorded diagnosis before its result can justify further work.
+Execution defects, inadequate exposure, and label problems call for correction,
+not a claim that the model has reached its capacity.
+
+A new-specialist recommendation requires an exhausted budget, recorded
+diagnosis for every terminal round, and at least one completed attempt with
+full exposure, verified SDK parity, and demonstrated TRAIN fit. Only poor
+generalization or a retention trade-off supports that recommendation. A
+successful promotion blocks an exhausted-model claim.
+It records the proposed domain, dataset plan, and evaluation plan, preserves
+the incumbent, and parks for owner authorization. It does not start a new study.
+
+Keep the terminal or parked reason with the campaign handoff. Follow
+[training operations](training-operations.md) before resuming, and reconcile any existing owned
+job before submitting another one.

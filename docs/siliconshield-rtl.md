@@ -18,10 +18,10 @@ through training studies on local GPU hardware.
 
 | Artifact | Purpose |
 |---|---|
-| [Contract-1 decision model](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1) | Local guard, register-write, clear-enable, and exact-address triage |
-| [Contract-2 decision model](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2) | Focused temporal triage for FIFO, counter, and arbitration contracts |
-| [RTL training collection](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training) | 19,050 rows, with direct-training and follow-up-study provenance |
-| [RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark) | 5,589 development decisions across 11 design areas |
+| [Contract-1 decision model](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1) | Local guard, register-write, clear-enable, and exact-address triage |
+| [Contract-2 decision model](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2) | Focused temporal triage for FIFO, counter, and arbitration contracts |
+| [RTL training collection](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training) | 19,050 rows, with direct-training and follow-up-study provenance |
+| [RTL benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark) | 5,589 development decisions across 11 design areas |
 
 The models run on the compatible LAYA runtime. SiliconShield supplies the
 specialized training, input contracts, worker integration, capability routing,
@@ -52,36 +52,47 @@ Training labels use registered solver-backed contracts. A satisfies label
 requires an established proof over the extracted local model. A violates label
 requires a reachable counterexample. A missing-context label requires compatible
 completions with opposing established outcomes. Inference does not rerun
-those solvers. Use the [investigation workflow](investigation.md)
+those solvers. Use the [investigation workflow](releases.md#real-muse-repair)
 when independent executable checks are available.
 
 ## Contract-1: local guard analysis
 
-Contract-1 is strongest when the target state and update condition are visible
-in a small RTL region. Its domain is the combinational guard logic that
-verification engineers review first: privilege conjuncts on register writes,
-lock-bit checks, clear request paired with clear enable, exact-address decode
-windows, sticky bits with declared clear conditions, owner-width comparisons,
-and default-deny branches. Six curated local-guard examples cover missing and
-enforced privilege guards, clear authorization, and exact-address qualification.
-The examples demonstrate measured behavior, not a population accuracy estimate.
+Contract-1 is a decision model for local register protection. It assesses
+whether a visible state update respects the supplied requirement, with a focus
+on privilege checks, lock guards, clear enables, and exact-address qualification.
+Its practical role in an agentic workflow is to give Muse a requirement-specific
+assessment of a supplied RTL region, including all three label scores, for
+review of the update path and its enabling conditions.
+
+The strongest evidence is for small regions where the relevant state and guard
+logic are explicit. The evaluated contracts also include sticky bits with
+specified clear conditions, owner-width comparisons, and default-deny branches.
+Six curated examples demonstrate missing and enforced privilege guards, clear
+authorization, and exact-address qualification. These examples illustrate
+measured behavior rather than estimate population accuracy.
 
 | Evaluation | Correct decisions | Violation recall | False-safes | Whole triplets |
 |---|---:|---:|---:|---:|
 | Counterbalanced development | 257/288 (89.24%) | 95/96 (98.96%) | 0/96 | 66/96 |
 | Four-family counterbalanced qualification | 249/288 (86.46%) | 92/96 (95.83%) | 0/96 | 59/96 |
-| Shifted requirement/context evaluation | 330/756 (43.65%) | 225/252 (89.29%) | 25/252 | 12/252 |
 
-The development result includes 191/192 correct fully specified decisions:
-96 satisfying and 95 violating cases. The full three-class result also includes
-insufficient-context cases. Report both when quoting that strength.
+On fully specified development cases, Contract-1 classified 191/192 correctly
+(99.48%): 96 satisfying and 95 violating cases. Including the 96
+insufficient-context cases gives the full three-class result of 257/288
+(89.24%). The qualification population tests unseen implementations of familiar
+local contracts across four authored families, with 249/288 correct decisions
+and no false-safes observed among its 96 violations.
 
-The qualification result supports transfer to unseen implementations of familiar
-local contracts across four authored families. Broader wording and storage
-representations expose a substantial gap. Multi-writer authorization, hidden
-policy, helper logic, and unfamiliar encodings remain unreliable. Some correct
-lock guards also produce false alarms. See the concrete examples and confusion
-matrices in [LIMITATIONS.md](LIMITATIONS.md).
+These results establish a focused operating scope, not uniform reliability
+across RTL or requirement formulations. Changed wording, hidden policy, helper
+logic, multiple writers, and unfamiliar storage representations remain measured
+failure areas. Even a correct local lock guard can produce a false alarm.
+
+The full [requirement and representation shift evaluation](LIMITATIONS.md#requirement-and-representation-shifts)
+retains the accuracy, false-safe counts, class recalls, and confusion matrix
+for those conditions. See [capabilities and limitations](LIMITATIONS.md) for
+concrete examples and the [research white paper](whitepaper.md#9-contract-1-useful-local-reasoning-with-a-measured-shift-boundary)
+for the experimental analysis.
 
 ## Contract-2: focused temporal analysis
 
@@ -140,7 +151,7 @@ export generation from the model's Hub repository. Record the Hub revision and
 verify the export manifest before registering it. Follow the [pinned release setup](releases.md).
 
 Create model entries and attach measured capability profiles using
-[expert qualification](expert-qualification.md), then follow the
+[decision-model qualification](expert-qualification.md), then follow the
 [router assessment walkthrough](router.md#run-one-assessment). Each release has
 its own export, profile, and execution identity. The router consults relevant
 specialists and optionally requests Muse arbitration over their evidence.
@@ -192,18 +203,16 @@ inference settings before comparing counts.
 
 | Field | Contract-1 | Contract-2 |
 |---|---|---|
-| Weights identity | `f4130223ed19be5cc7e21b3da70cb7aebf944ad6ed4a8a80f11d8f59bcd05ee7` | `f916444ff45cfc67bc5a67c81a36a770a20709fcd7a85fbfc0258fb411144ed8` |
 | Question contract | `siliconshield-requirement-context-v1` | `siliconshield-requirement-context-v1` |
 | Model computation | BF16 in the reported evaluations | BF16 in the reported evaluations |
 | Input budgets | `max_len=1536`, `head_max_len=256` | `max_len=1536`, `head_max_len=256` |
 
 See [training recipes](training-recipes.md) for training lineage.
 
-Contract-1's question-record SHA-256 is
-`dd1f38ee223abac1f75b19d9086fd26d90865c9aa43097674fffdd61dbbf8bd3`.
-Its export records 28 residual-adapter layers, rank 256, and scale 8.
-A shortened fingerprint is a documentation aid, never a substitute for a full
-hash check. The worker binds weights, export contents, question bytes, runtime,
+The [release manifest](../configs/model-releases.toml) records model-file and
+question-contract identities. Contract-1's export records 28 residual-adapter
+layers, rank 256, and scale 8.
+The worker binds weights, export contents, question bytes, runtime,
 precision, label order, and input coverage into the executed assessment.
 
 ## Intended use and release terms
@@ -216,11 +225,12 @@ are not established capabilities.
 
 Repository code is [Apache-2.0](../LICENSE). Model weights and datasets have
 separate release terms on their Hub pages, with upstream terms retained.
-The owner has selected Apache-2.0 for Contract-1, consistent with Contract-2.
-The pinned older Contract-1 Hub card still contains pending-license text. Its
-correction is prepared separately and must be published before treating Hub
-metadata as synchronized. See [release terms](releases.md#release-terms) and
-[NOTICE.md](../NOTICE.md).
+Both public model cards declare Apache-2.0, verified on 3 November 2026.
+The earlier Contract-1 metadata discrepancy is resolved. The declaration is
+recorded in each Hub card, rather than a standalone LICENSE file in the model
+repository. See [release terms](releases.md#release-terms) for publication
+status and the distinction between current Hub metadata and pinned inference
+revisions, and [NOTICE.md](../NOTICE.md) for attribution.
 
 The [limitations](LIMITATIONS.md) record contains examples of both strengths
 and failures. [Evaluation](evaluation.md) distinguishes development selection,

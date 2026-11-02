@@ -20,8 +20,7 @@ about experiments and findings.
 The research produced two specialist RTL decision models. Contract-1 addresses
 visible local guards and register-update conditions. It scores 257/288 on
 counterbalanced development, including 191/192 fully specified cases, and 249/288
-on a
-four-family reserved qualification population, with no false-safe prediction
+on a four-family reserved qualification population, with no false-safe prediction
 among 96 violations. A separate wording and representation shift lowers accuracy
 to 330/756. Contract-2 addresses bounded FIFO, counter, and arbitration
 contracts. It scores 203/234 and completes 51/78 linked triplets on its
@@ -48,6 +47,31 @@ prepare it. Development, reserved evaluation, authored diagnostics, and
 execution qualification are identified separately throughout. Figures show
 reported measurements without invented learning-curve points or statistical
 error bars.
+
+## Reading map
+
+| Question | Sections |
+|---|---|
+| What is assessed, and what does Muse do? | [Decision task and RTL example](#1-research-question-and-decision-task), [agent/model responsibilities](#2-muse-and-the-decision-models-have-different-responsibilities) |
+| How are labels and models constructed? | [Label construction](#3-constructing-labels-that-depend-on-the-requirement), [data scale](#4-dataset-scale-coverage-and-experimental-units), [architecture and compute](#5-architecture-numerical-method-and-compute), [recipes](#6-model-ancestry-and-reproducible-recipes) |
+| What was measured? | [Evaluation method](#7-measuring-learning-without-rewarding-the-wrong-error), [OpenTitan expansion](#8-broad-security-learning-and-opentitan-expansion), [Contract-1](#9-contract-1-useful-local-reasoning-with-a-measured-shift-boundary), [Contract-2 and FIFO example](#11-contract-2-narrowing-temporal-reasoning-to-learnable-local-contracts) |
+| What failed, and why? | [Fitting and transfer](#10-why-more-training-was-not-enough), [preservation](#12-preservation-strength-must-be-measured-behaviorally), [numerics](#13-numerical-execution-and-inference-reproducibility), [execution defects](#14-execution-defects-that-changed-the-scientific-interpretation) |
+| How should the results be used? | [Research loop](#15-a-bounded-negative-feedback-research-loop), [routing](#16-specialist-routing-and-the-next-research-boundary), [validity and reproduction](#17-validity-reproducibility-and-conclusions) |
+
+### Experiment index
+
+| Experiment | Main observation | Evidence role |
+|---|---|---|
+| Broad security learning and local OpenTitan expansion | Wider source coverage improved local-contract development performance | Development selection and separately identified reserved evaluations |
+| Contract-1 specialization | Strong visible-guard behavior, with a large wording/representation shift gap | Development, four-family qualification and shifted evaluation |
+| Broad temporal continuation | Training fit and delivered exposure did not establish transfer | Diagnostic negative results |
+| Full encoder fine-tuning and preservation arms | More plasticity and aggregate accuracy could reduce violation recall | Controlled development comparisons |
+| Focused temporal specialization | Narrowing to FIFO/counter/arbitration improved the task, but final promotion gates still failed | Reused development evidence and an owner-selected research release |
+| Preservation-weight probes | Weighted loss share differed from behavioral constraint strength | TRAIN-only calibration, not model-quality evaluation |
+| Distributed-gradient investigation | Incoherent rank states invalidated affected gathered evaluations | Execution diagnosis, with coherent exported-model diagnostics kept separate |
+
+The experiments are not interchangeable benchmarks. Their populations, selection
+rules and inference paths are specified in the corresponding sections.
 
 ## 1. Research question and decision task
 
@@ -1059,18 +1083,29 @@ Release and population descriptions in this paper were checked against local
 documentation and retained records. Public Hub access was not independently
 revalidated for this paper.
 
-[3] HardSecBench contributors. *HardSecBench.* Source use and extraction scope
-are described in the [data pipeline](data-pipeline.md#sources-and-builders).
+[3] Qirui Chen et al. *HardSecBench: Benchmarking the Security Awareness of
+LLMs for Hardware Code Generation.* 2026.
+[Paper](https://arxiv.org/abs/2601.13864) ·
+[Source repository](https://github.com/chenqirui2002/HardSecBench).
+SiliconShield extracts scoped contracts from source material. Its decision task
+and reported scores are not the upstream code-generation benchmark.
 
-[4] lowRISC contributors. *OpenTitan.* https://github.com/lowRISC/opentitan
+[4] lowRISC contributors. *OpenTitan.*
+[Source repository](https://github.com/lowRISC/opentitan).
+The [data pipeline](data-pipeline.md#sources-and-builders) describes the extraction
+scope and provenance retained by SiliconShield.
 
-[5] LAYA contributors. *LAYA: local non-autoregressive decision engine.*
-Project attribution and compatible-runtime details are collected in the
-[dependency notices](../NOTICE.md) and [release guide](releases.md).
+[5] LAYA contributors. *LAYA: local decision engine.*
+[Original implementation](https://github.com/NandhaKishorM/laya) ·
+[Foundation model card](https://huggingface.co/convaiinnovations/laya) ·
+[Compatible LAYA Next runtime](https://github.com/debjyotikm/laya-next).
+Exact tested runtime identities belong in the [release guide](releases.md).
 
-[6] Answer.AI and collaborators. *ModernBERT-large.*
-https://huggingface.co/answerdotai/ModernBERT-large. Architecture dimensions in
-this paper come from the inspected model configuration.
+[6] Benjamin Warner et al. *Smarter, Better, Faster, Longer: A Modern
+Bidirectional Encoder for Fast, Memory Efficient, and Long Context Finetuning
+and Inference.* 2024. [Paper](https://arxiv.org/abs/2412.13663) ·
+[ModernBERT-large model](https://huggingface.co/answerdotai/ModernBERT-large).
+Architecture dimensions in this paper come from the inspected model configuration.
 
 [7] Harness² contributors. *Harness²: Recursive Agent Harnessing for an Open
 World.* 2026. https://arxiv.org/abs/2610.14224
@@ -1083,8 +1118,8 @@ https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx
 
 [10] YosysHQ contributors. *Yosys Open SYnthesis Suite.*
 https://yosyshq.net/yosys/. Icarus Verilog contributors. *Icarus Verilog.*
-The [data pipeline](data-pipeline.md) describes how these tools support label
-admission.
+[Icarus implementation](https://github.com/steveicarus/iverilog). The
+[data pipeline](data-pipeline.md) describes how these tools support label admission.
 
 **Source note.** Numerical study results are original SiliconShield experimental
 records synthesized from the research manuscript, saved metric reports, dataset

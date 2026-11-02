@@ -1,8 +1,9 @@
 # Procedure learning with Muse and Harness²
 
-[Documentation index](README.md)
+[Documentation index](README.md#advanced-integrations)
 
-This integration lets the Muse coding agent refine how it reads training
+This optional integration is not required for decision-model inference, router
+assessment, or basic local training. It lets the Muse coding agent refine how it reads training
 evidence. Harness² proposes and tests prompt advice. The campaign supervisor
 can use qualified advice in later sessions. It does not train Muse weights or
 change the security model directly.
@@ -28,7 +29,7 @@ binary, settings, and local code, not an independently verified weight revision.
    tools. Muse uses an empty native-tool preset with shell and writes disabled.
    Replay cannot submit training jobs. Targets stay inside the external grader.
    The coding agent receives the replay's policy and assessment definitions
-   explicitly. It does not need to have learned them through Glimmer training.
+   explicitly.
    The provider adapter converts nullable optional arguments and comparison
    entries to the existing tool format without changing their values. JSON
    final answers and procedure edits are serialized once by the adapter.
@@ -137,7 +138,7 @@ and model settings. That pin is stricter than ordinary session-boundary reload.
 Replacing the bundle at the pinned path changes a study input and blocks further
 bound launches until the study is amended. Keep the pinned generation immutable
 and publish new trial results elsewhere when an ongoing study must continue
-unchanged. See [decision studies](decision-study.md).
+unchanged. See [study walkthrough](study-walkthrough.md).
 
 ## Inspect and test
 

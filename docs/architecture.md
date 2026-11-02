@@ -4,17 +4,32 @@
 
 | Scope | Baseline | Related specifications |
 |---|---|---|
-| Implemented application, inference, and training boundaries | Current repository interfaces and serialized contracts | [Assessment](router.md) · [Studies](decision-study.md) · [Wire and artifact contracts](reference.md) |
+| Implemented application, inference, and training boundaries | Current repository interfaces and serialized contracts | [Assessment](router.md) · [Studies](study-walkthrough.md) · [Wire and artifact contracts](reference.md) |
 
 SiliconShield combines requirement-conditioned RTL assessment with a controlled
 model-improvement system. Contract-1 and Contract-2 are independently trained
-RTL decision models. The application routes a declared design scope to suitable
-models, preserves their evidence, and can request a Muse interpretation. A
+RTL decision models. Applications can invoke either model directly or route a declared design scope
+to specialists with measured support. Muse Glimmer can request those assessments
+and interpret the returned evidence alongside the RTL. A
 separate investigation path executes requirement checks and tests proposed repairs.
 
 The training system uses accepted datasets, frozen study inputs, owned jobs,
 and explicit selection constraints. Model quality, execution completion, and
 campaign promotion have separate records and acceptance conditions.
+
+## Three execution paths
+
+| Path | Entry point | Result |
+|---|---|---|
+| Investigate RTL with Glimmer and specialists | `glimmer_router` calls `router.roster` and `router.assess` against an operator-selected registry. | Specialist evidence and an agent explanation, with disagreements and coverage gaps retained. |
+| Use decision models directly | Python `WorkerPool.load()` / `analyze()`, or the experts CLI without arbitration. | Structured predictions, scores, coverage, and execution identity. No agent call. |
+| Build or improve decision models | A bound job through `glimmer_operator`, or a separately configured campaign supervisor. | Checkpoints, development results, and an explicit promotion or preservation decision. |
+
+The [setup guide](setup.md) gives runnable entry points for each path. Direct
+Python inference does not require a capability profile. The experts CLI still
+uses routing, so it requires profiles even when arbitration is disabled.
+Worker devices are explicitly `cpu` or `cuda:N`. Moving between device types
+requires matching capability measurements before inheriting routing support.
 
 ## Functional correctness and security scope
 
@@ -32,9 +47,13 @@ does not establish a counterexample or exploitability.
 
 ## 1. Runtime decomposition
 
-![Runtime component map showing application processes, owned model workers, read-only configuration, assessment records, and the optional Muse backend.](diagrams/system-overview.svg)
+![Three execution paths: Glimmer-driven specialist assessment, direct model inference, and controlled decision-model training.](diagrams/system-overview.svg)
 
-**Figure 01.** Application and inference boundaries. I01–I04 are defined below.
+**Figure 01.** Agent-assisted assessment, direct inference, and training.
+Interface IDs refer to the schedule below. Each lane has its own entry point
+and output contract. The lanes do not form one automatic pipeline. Training
+closeout includes separately invoked SDK and promotion checks, rather than
+implying that the one-job operator performs every stage automatically.
 [Open full-size SVG](diagrams/system-overview.svg) ·
 [Editable draw.io source](diagrams/siliconshield-architecture.drawio)
 
@@ -46,15 +65,20 @@ benchmark code share contracts while retaining different application behavior.
 | Runtime element | Responsibility | Lifetime and ownership |
 |---|---|---|
 | Experts integrator | Supply scope and state, instantiate `InferenceService`, provide worker transport, and optionally request arbitration. | CLI owns workers for one invocation. Python integrations can retain a `WorkerPool`. |
+| Direct Python client | Select an explicit model entry and call `WorkerPool` without routing or an agent. | Caller owns and can retain the worker context. |
 | Model worker | Verify the export, resolve question bytes, load the model, score complete inputs, and return execution identity. | One subprocess per loaded expert. Calls to that worker are serialized. |
 | Muse integration | Interpret expert evidence or propose a repair through the applicable interface. | Explicit agent call. The configured backend can be outside the local host. |
 | Investigation engine | Execute registered checks, prepare a candidate copy, rerun checks, and write the engineering report. | One invocation with a caller-selected output directory. |
+| Local Glimmer client | Call the configured chat endpoint and dispatch permitted router or operator tools. | Bounded session, optionally using SSH to a separate serving host. |
 | Training deployment | Supply the service driver, profiles, evaluator callback, and immutable source snapshot. | Supervisor and systemd-owned jobs can outlive a client session. |
 
 The experts API performs multi-model consultation. Lexical inspection is a
 helper for the caller. It neither infers the CLI scope automatically nor
 elaborates SystemVerilog. A client remains responsible for choosing a complete
-region and declaring the property scope.
+region and declaring the property scope. In a Glimmer router session, Glimmer
+chooses scope tags from the roster. The deterministic router then selects
+experts from the matching profiles. Direct Python callers choose the model
+themselves and bypass that scope selection.
 
 ## 2. Interface schedule
 
@@ -64,6 +88,8 @@ region and declaring the property scope.
 | **I02** | Benchmark → model worker | The shared load/analyze protocol invokes one selected model on a pinned population. | Failed rows remain in support, and execution coverage is reported separately from accuracy. |
 | **I03** | Worker evidence → assessment | `Assessment` preserves planned routing, successful responses, errors, and recomputed effective routing. | A failed expert loses its contribution to effective coverage. Thin evidence remains visible. |
 | **I04** | Assessment → optional Muse arbitration | Same state, full requirement, assumptions, request/scope identity, and validated expert evidence. | Incompatible evidence refuses arbitration. CLI reports `arbitration_error` alongside the preserved assessment. |
+| **I05** | Glimmer session ↔ router tools | `router.roster` exposes registered capabilities. `router.assess` supplies scope, requirement, assumptions, and RTL to the normal expert path. | Tool errors and coverage gaps stay in the trace. Final conversational prose is not a validated I04 arbitration result. |
+| **I06** | Glimmer operator ↔ owned job | Run/resource inspection and a bounded decision for one registered experiment. Deterministic code validates and executes permitted actions. | State, identity, budget, or study mismatches block the action. Existing job state is reconciled before submission or recovery. |
 
 The exact fields, score tolerances, deadline defaults, and schema owners are in
 [the interface reference](reference.md#decision-and-worker-contracts).
@@ -90,13 +116,41 @@ Datasets, checkpoints, profiles, transcripts, and run evidence live outside the
 source checkout. Public model and dataset releases are separate Hub artifacts.
 The repository contains implementation, illustrative configurations, and tests.
 
-Two identity levels are relevant. The export manifest identifies artifact bytes.
-The observed execution identity also names question construction, runtime Python
-code, backend/precision, Torch version, device type, batch behavior, token budgets,
-and option order. A matching weights hash alone is insufficient for a matched
-model comparison.
+The export manifest identifies artifact bytes. Observed execution identity
+also binds the inference protocol. The [interface reference](reference.md#decision-and-worker-contracts)
+owns those fields, and [decision-model qualification](expert-qualification.md) describes
+how to measure them. Identical weights alone do not establish a matched comparison.
 
 ## 4. Training control and recovery
+
+Training has three orchestration entry points. They share execution components
+but have different responsibilities:
+
+| Entry point | Scope | Study boundary |
+|---|---|---|
+| `glimmer_operator.run_operator()` | Submit or reattach to one authorized job, expose evidence to Glimmer, and validate interventions. | A bound profile fixes the experiment and effective settings. Reaching the client cycle budget does not necessarily stop the owned job. |
+| `strategy.run_campaign()` | Compare TRAIN-only fitting recipes, then run development from the profile's original parent using the selected settings. | Carries settings rather than fitting weights. It does not generate a manifest for every differently configured job. |
+| Campaign supervisor and `laya_campaign` | Coordinate diagnosis, round preparation, evaluation, promotion, and bounded further proposals. | Each study-bound round must satisfy its frozen inputs, command, receipts, and remaining budget. |
+
+In the local-operator path, Glimmer serves from a separate inference environment.
+It can run on another machine from the training GPU. Its weights remain
+unchanged. The decision-model trainer performs optimization, writes durable
+checkpoints, and evaluates development views. `Operator` and the owned worker
+retain execution authority. The [local training guide](decision-model-training-with-glimmer.md)
+specifies configuration and reattachment.
+
+The study mode also fixes the starting model:
+
+- `improve_existing` continues an immutable decision-model export and protects
+  registered retention views while targeting an improvement.
+- `create_new` starts from a verified untouched, adapter-free foundation and
+  defines a new domain's evaluation plan. Removing adapters from a trained
+  export is insufficient evidence of an untouched foundation.
+
+Encoder, partial-block, adapter, and head trainability are explicit recipe
+choices. Dataset acceptance and measured fitting/resource receipts precede a
+bound production launch. Installing the runtime or completing a toy fitting
+job does not establish those qualifications.
 
 The [round lifecycle](campaigns.md#round-lifecycle) is persisted by
 `laya_campaign.py`. The supervisor coordinates analysis and proposals. `Operator`
@@ -127,7 +181,7 @@ the reference for that transaction.
 | Prepared data, policy, or command changes | Refuse the bound launch or assessment until a reviewed specification is registered. | `execution/study_contract.py` · [study enforcement tests](../tests/test_study_enforcement.py) |
 | Crash during promotion or report closeout | Resume from transaction/phase evidence and revalidate the export before completing. | `execution/laya_campaign.py` |
 
-Full operational procedures are in [operations and recovery](operations.md).
+Full operational procedures are in [training operations and recovery](training-operations.md).
 Locks and identity checks coordinate trusted processes. Host/container isolation
 remains a deployment responsibility.
 
@@ -145,7 +199,13 @@ launch authority nor a single model-quality claim.
 | Glimmer operator | Six bounded job actions | One authorized experiment and its intervention budget |
 | Harness² | Replay-qualified procedural advice | Guidance does not modify policy, execute plugins, or train decision weights |
 
-The coding-agent supervisor is independent of a served Glimmer adapter. The
+The experts CLI's `--arbitrate` path uses the configured Muse CLI and login.
+The Glimmer router bridge uses an explicit chat endpoint, optionally reached
+through SSH. Python arbitration supports an injected client, including the
+local Glimmer transport used by the browser integration. These transports do
+not make the free-form router summary subject to I04 validation.
+
+The coding-agent supervisor is independent of a local Glimmer endpoint. The
 implemented [Glimmer router bridge](router.md#driving-assessments-from-glimmer)
 lets a local model request specialist assessments. It calls the experts path
 without CLI arbitration and returns a conversation trace. Evidence validation
@@ -188,5 +248,5 @@ fixtures, not model quality on arbitrary RTL.
 | Add a new training objective | Versioned objective, trainer/study gate parity, resume signature, refusal tests, and runtime qualification |
 | Change a serialized interface | New schema/protocol version with explicit compatibility behavior and consumer tests |
 
-Use [expert qualification](expert-qualification.md), [decision studies](decision-study.md),
-and [development](development.md) as the corresponding integration procedures.
+Use [decision-model qualification](expert-qualification.md), [study walkthrough](study-walkthrough.md),
+and [contributor checks](../CONTRIBUTING.md#local-gate) as the corresponding integration procedures.

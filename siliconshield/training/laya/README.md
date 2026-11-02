@@ -9,7 +9,7 @@ runtime, supplied through `LAYA_ROOT` or a compatible installed package.
 | Build and verify data | `build_*`, `source_contracts`, `checker_adapter`, `proposer_ingest` | [Data pipeline](../../../docs/data-pipeline.md) |
 | Admit datasets and qualify exposure | `dataset_versions`, `review_ledger`, `coverage_audit`, `inventory` | [Data admission](../../../docs/data-pipeline.md#dataset-versions-and-acceptance) |
 | Train and select checkpoints | `security_train`, `development_views`, `checkpoint_selection`, `replay_preservation`, `ddp_guard` | [Trainer](../../../docs/security-model-training.md) |
-| Register a reproducible experiment | `decision_study`, `new_study` | [Decision studies](../../../docs/decision-study.md) |
+| Register a reproducible experiment | `decision_study`, `new_study` | [Study walkthrough](../../../docs/study-walkthrough.md) |
 | Report and finalize | `security_reporting`, `security_campaign`, `security_continuation` | [Evaluation](../../../docs/evaluation.md) |
 
 Use [campaigns](../../../docs/campaigns.md) for owned jobs and supervision.

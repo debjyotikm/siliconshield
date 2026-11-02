@@ -68,9 +68,9 @@ Consult decision models through their capability profiles, never by
 name alone. Current releases:
 
 Public artifacts:
-[Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1),
-[Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2),
-[RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark).
+[Contract-1](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1),
+[Contract-2](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2),
+[RTL benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark).
 
 - Contract-1 (registry id `contract-1`, checkpoint f4130223):
   strongest measured on local guard and direct-write requirements
@@ -155,7 +155,7 @@ and never claim a proof the tools did not run.
 ## Historical routing measurements
 
 The reference figures below came from the public [RTL
-benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark). Current tiers come from profile `routing_evidence` only when
+benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark). Current tiers come from profile `routing_evidence` only when
 its execution identity matches the successful worker response. Historical
 figures do not establish current tiers. The rule is strong (>=80%),
 partial (>=60%), weak (>=40%), none (below), with a one-tier

@@ -16,8 +16,7 @@ Preserve pinned versions in `requirements/` and
 `siliconshield/training/`; the research loop calls them only through
 `siliconshield/research_loop/adapters/`.
 
-Follow the repository standard in `CONTRIBUTING.md` and
-`docs/python_style.md` (Google-derived: imports, documentation, typing,
+Follow the repository standard in `CONTRIBUTING.md` (Google-derived: imports, documentation, typing,
 exceptions, function structure; 80-column target with documented
 exceptions). Development tools are pinned in `requirements/style.txt`.
 

@@ -1,4 +1,4 @@
-# Qualifying experts and releases
+# Register and qualify decision models
 
 [Documentation index](README.md) · [Router](router.md) · [Benchmark](benchmark.md)
 
@@ -7,6 +7,45 @@ a registry entry, capability profile, question contract, and qualification
 reference. A different output task or runtime protocol needs an integration
 change. Registration, measured capability, and end-to-end router qualification
 are separate stages. Loading an entry does not establish all three.
+
+**Prerequisites:** a working CPU or CUDA decision-model worker, immutable
+exports, and an unprofiled registry from
+[setup](setup.md#register-both-decision-models). CUDA requires a compatible
+GPU driver. Network access is needed for public downloads, not inference on
+existing local artifacts.
+
+## Register and measure the published models
+
+Complete [model registration](setup.md#register-both-decision-models) first,
+then install `requirements/benchmark.txt` in the controller environment.
+The example below uses that setup's workspace and `models-unprofiled.json`.
+Measurements run on each entry's registered CPU or CUDA device. A CPU run
+cannot inherit CUDA capability measurements.
+
+Use the [reviewed benchmark procedure](benchmark.md#reproduce-the-reviewed-population)
+to prepare `reviewed-benchmark/benchmark-reviewed.jsonl` and its provenance
+record. Then measure both decision models on FIFO. This command
+**loads models and runs inference** on the selected device, one model
+at a time. It makes no Muse calls and does not train:
+
+```bash
+python examples/qualify_experts.py \
+  --registry "$SILICONSHIELD_WORKSPACE/models-unprofiled.json" \
+  --dataset "$SILICONSHIELD_WORKSPACE/reviewed-benchmark/benchmark-reviewed.jsonl" \
+  --areas fifo --output "$SILICONSHIELD_WORKSPACE/fifo-measurement"
+```
+
+The new output directory contains each worker's ready receipt, its measurement
+report, its validated capability profile, and `models.local.json`. The example
+refuses an existing output directory and refuses to publish a profile when
+inference errors occur. Keep partial receipts, fix the cause, and retry into a
+new directory. Use the resulting registry in the [router example](router.md#run-one-assessment).
+
+This measures **99 FIFO development decisions per model**. It establishes
+coverage only for `fifo`, not every capability of either release. Add reviewed
+areas deliberately and remeasure to extend coverage. The router computes tiers
+from measured counts and observed execution identity. The example assigns none
+by hand and does not claim independent qualification.
 
 ## Admitting a new expert
 
@@ -86,35 +125,11 @@ Use the complete file hashes in the [release manifest](../configs/model-releases
 when registering the published exports. Replace local paths with those from
 your [release setup](releases.md), then attach the measured profile.
 
-For an identity-bound measurement, capture the ready receipt from the same
-worker used to score the population:
-
-```python
-from siliconshield.benchmark.dataset import load_benchmark
-from siliconshield.benchmark.runner import BenchmarkRunner
-from siliconshield.experts.registry import load_registry
-from siliconshield.experts.worker import WorkerPool
-
-entry = load_registry("/path/to/models.local.json")[0]
-data = load_benchmark("/path/to/reviewed-benchmark.jsonl")
-with WorkerPool() as pool:
-    pool.load(entry)
-    ready = pool.ready(entry["id"])
-    report = BenchmarkRunner(data).run_model(
-        entry["id"],
-        entry["expected_files"]["model.safetensors"],
-        lambda state: pool.analyze(entry["id"], state),
-    )
-```
-
-Persist `ready` and `report` together outside Git. Convert each `by_area` record
-to `correct`, `total` (from `rows`), `violations` (violation class support),
-`false_safe`, and `errors`. Use `ready["execution_identity"]`, the measured
-`benchmark_source`, and `benchmark_sha256` for `routing_evidence`. The command-line
-benchmark report does not currently retain this full ready receipt.
-Validate the resulting profile with `validate_capability_profile()` before
-referencing it from a registry. Initial measurement can use an unprofiled model
-entry. Benchmarking one model does not require a routing profile.
+The [executable example](../examples/qualify_experts.py) captures the ready
+receipt and report from the same worker session, converts per-area counts,
+validates the profile, and writes a separate registry. Use it as the reference
+for custom integrations. The benchmark CLI alone does not retain the full ready
+receipt needed for this binding.
 
 ## Capability evidence shape
 

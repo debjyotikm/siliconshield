@@ -15,16 +15,12 @@ docs/LIMITATIONS.md
 docs/architecture.md
 docs/campaigns.md
 docs/data-pipeline.md
-docs/demo.md
-docs/development.md
 docs/evaluation.md
-docs/glimmer.md
 docs/inference.md
-docs/investigation.md
 docs/muse-procedures.md
-docs/operations.md
-docs/python_style.md
+docs/training-operations.md
 docs/reference.md
+docs/rtl-requirements.md
 docs/security-model-training.md
 docs/setup.md
 docs/siliconshield-rtl.md
@@ -163,7 +159,6 @@ siliconshield/training/laya/decision_study.py
 
 tests/test_decision_study.py
 
-docs/decision-study.md
 
 .agents/skills/study-design/SKILL.md
 
@@ -214,12 +209,18 @@ docs/diagrams/product-workflows.svg
 docs/diagrams/product-workflows.drawio
 siliconshield/training/laya/validate_study_inputs.py
 .agents/skills/glimmer-study/SKILL.md
-docs/case-study-glimmer-local-training.md
+docs/case-study-decision-model-training-with-glimmer.md
 docs/diagrams/glimmer-toy-parity.svg
 docs/diagrams/glimmer-improvement-trajectory.svg
 docs/diagrams/glimmer-deviated-deltas.svg
+examples/qualify_experts.py
+docs/decision-model-training-with-glimmer.md
+docs/study-walkthrough.md
+docs/diagrams/plot_glimmer.py
+docs/whitepaper/figures/plot_results.py
 configs/models.example.json
 configs/web-demo.example.json
+docs/web-demo.md
 siliconshield/web_demo/__init__.py
 siliconshield/web_demo/__main__.py
 siliconshield/web_demo/backend.py
@@ -234,3 +235,5 @@ siliconshield/web_demo/static/style.css
 siliconshield/web_demo/toy_data.py
 siliconshield/web_demo/toy_runner.py
 tests/test_web_demo.py
+tools/prepare_benchmark.py
+tests/test_prepare_benchmark.py

@@ -26,9 +26,9 @@ steps belong in the architecture specifications linked below.
 
 | Figure | View | Preview | Owning specification |
 |---|---|---|---|
-| 01 | Runtime components and interfaces I01–I04 | [SVG](system-overview.svg) | [System architecture](../architecture.md) |
+| 01 | Three execution paths and interfaces I01–I06 | [SVG](system-overview.svg) | [System architecture](../architecture.md) |
 | 02 | Expert assessment request/reply sequence | [SVG](expert-assessment.svg) | [Router](../router.md#assessment-transaction) |
-| 03 | Persisted training-round lifecycle and promotion | [SVG](decision-study.svg) | [Campaigns](../campaigns.md#round-lifecycle) |
+| 03 | Persisted training-round lifecycle and promotion | [SVG](decision-study.svg) | [Multi-round campaigns](../campaigns.md#round-lifecycle) |
 
 **Editable source:** [siliconshield-architecture.drawio](siliconshield-architecture.drawio)
 contains all three pages as native editable shapes and connectors. Open it in
@@ -37,13 +37,16 @@ records are embedded in either format.
 
 ## Notation
 
-All figures use black and gray on white. Light gray fills separate containers
+The architecture figures use black and gray on white. Light gray fills separate containers
 from the page without assigning meaning through color. Labels, interface IDs,
 arrow direction, and line patterns carry the technical meaning.
 
-Figure 01 uses enclosing frames for execution/configuration boundaries. Solid
-connectors show local execution and result flow. Dashed connectors show
-configuration or optional integration, as named in the interface schedule.
+Figure 01 uses three lanes for agent-assisted assessment, direct Python
+inference, and decision-model training. Solid connectors show request, result,
+or stage progression. Interface IDs map to the architecture specification.
+Benchmarking and structured arbitration are noted separately because neither
+is an automatic step in every lane. Each lane can span multiple processes
+and, for the Glimmer endpoint, multiple machines.
 
 Figure 02 uses vertical participant lifelines. Solid arrows are calls, dashed
 arrows are replies, and the loop frame represents sequential expert consultation.
@@ -59,7 +62,9 @@ semantics and explains refusals that leave a nonterminal phase intact.
 1. Edit the relevant page in the draw.io source and verify its semantics against
    the owning code and tests. Keep interface IDs and phase names consistent with
    the specification.
-2. Keep the grayscale palette and export to SVG with a white background.
+2. Export only the selected page, so repeated cell IDs on other pages cannot
+   interfere with rendering. Keep the grayscale palette and export to SVG with
+   a white background.
    Preserve text as text. Use Inter with Arial or a sans-serif fallback, and
    keep detailed labels readable at normal documentation width. Avoid external
    images, embedded scripts, and HTML-only labels in the exported SVG.
@@ -73,3 +78,25 @@ semantics and explains refusals that leave a nonterminal phase intact.
 These are design views of implemented interfaces, not measured performance
 charts. Add a separate qualified figure for a new result rather than placing
 live training metrics into the architecture diagrams.
+
+## Local Glimmer case-study charts
+
+These measured charts use a restrained color palette to distinguish quantities
+and evaluation paths. They are separate from the architecture notation above.
+
+| Figure | Preview | Source |
+|---|---|---|
+| Trainer and SDK parity | [SVG](glimmer-toy-parity.svg) | [Python](plot_glimmer.py) |
+| Development trajectory and failed recall floor | [SVG](glimmer-improvement-trajectory.svg) | [Python](plot_glimmer.py) |
+| Exploratory step-20 deltas | [SVG](glimmer-deviated-deltas.svg) | [Python](plot_glimmer.py) |
+
+Run `python3 docs/diagrams/plot_glimmer.py` from the repository root. It uses the
+standard library and embeds only the case study's aggregate observations. The
+trajectory includes the initial baseline and 18 development evaluations. Its
+satisfies-class panel shows the constraint missed by every trained checkpoint.
+No curve is inferred between missing measurements. The line segments connect
+recorded evaluations for readability.
+
+The [case study](../case-study-decision-model-training-with-glimmer.md) owns the protocol and
+interpretation. Inspect at normal document width after regeneration, including
+axis labels and threshold annotations.

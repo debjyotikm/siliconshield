@@ -18,11 +18,12 @@ Upstream attribution and dependency terms are in [NOTICE](../NOTICE.md).
 
 | Reader | Start | Continue |
 |---|---|---|
-| Hardware engineer | [Router and Muse assessment](router.md) | [Model capabilities](siliconshield-rtl.md) → [Investigation](investigation.md) |
-| Application integrator | [System architecture](architecture.md) | [Assessment protocol](router.md) → [Interface reference](reference.md) → [Expert qualification](expert-qualification.md) |
-| Model researcher | [Release recipes](training-recipes.md) | [Data qualification](data-pipeline.md) → [Decision studies](decision-study.md) → [Evaluation](evaluation.md) |
-| Platform operator | [Environment setup](setup.md) | [Campaign lifecycle](campaigns.md) → [Operations and recovery](operations.md) |
-| Contributor or reviewer | [Architecture](architecture.md) | [Development and tests](development.md) → [Python standard](python_style.md) |
+| Hardware engineer | [Writing RTL requirements](rtl-requirements.md) | [Router and Muse assessment](router.md) → [Model capabilities](siliconshield-rtl.md) |
+| Application integrator | [System architecture](architecture.md) | [Assessment protocol](router.md) → [Interface reference](reference.md) → [Decision-model qualification](expert-qualification.md) |
+| Model researcher | [Study walkthrough](study-walkthrough.md) | [Data qualification](data-pipeline.md) → [Evaluation](evaluation.md) → [Research white paper](whitepaper.md) |
+| Local Glimmer operator | [Local decision-model training](decision-model-training-with-glimmer.md) | [Setup](setup.md) → [Training operations](training-operations.md) → [Measured case study](case-study-decision-model-training-with-glimmer.md) |
+| Platform operator | [Environment setup](setup.md) | [Multi-round campaigns](campaigns.md) → [Training operations and recovery](training-operations.md) |
+| Contributor or reviewer | [Architecture](architecture.md) | [Contributing and tests](../CONTRIBUTING.md) |
 
 ## Architecture and interfaces
 
@@ -31,35 +32,43 @@ Upstream attribution and dependency terms are in [NOTICE](../NOTICE.md).
 | [System architecture](architecture.md) | Process boundaries, interfaces I01–I04, artifact ownership, failure model, design trade-offs, extension points |
 | [Expert routing and assessment](router.md) | Scope selection, reliability tiers, transaction sequence, validated responses, Muse arbitration |
 | [Interface reference](reference.md) | Commands, wire fields, identity, score/coverage validation, timeouts, configuration and artifact names |
-| [Expert qualification](expert-qualification.md) | Registration, observed execution identity, benchmark-to-profile binding, upgrades |
+| [Register and qualify decision models](expert-qualification.md) | Registration, observed execution identity, benchmark-to-profile binding, upgrades |
 | [Architecture source](diagrams/README.md) | Editable draw.io diagrams and SVG previews for component, sequence, and lifecycle views |
 
 ## Applications and operation
 
 | Document | Owns |
 |---|---|
+| [Writing requirements for RTL analysis](rtl-requirements.md) | English requirements, satisfying and violating RTL, reset and transfer semantics, and missing context |
 | [Setup](setup.md) | Separate controller, model-worker, and training environments |
-| [Investigation](investigation.md) | Requirement-bound simulation, proposed repairs, candidate rechecks, report interpretation |
-| [Campaigns](campaigns.md) | Persisted round transitions, agent callbacks, controller selection, promotion authority |
-| [Operations](operations.md) | Resource ownership, inspection, stop/recovery procedures, and deployment updates |
-| [Browser demo](web-demo.md) | Four views for decision-model inference, routing, and bounded local training |
-| [Demo](demo.md) | Runnable presentation with explicit expected outputs and evidence boundaries |
+| [Multi-round training campaigns](campaigns.md) | Round lifecycle, supervisor callbacks, promotion, and campaign stop boundaries |
+| [Training operations](training-operations.md) | Resource ownership, inspection, stop/recovery procedures, and deployment updates |
+| [Browser demo](web-demo.md) | Browser setup, demonstration sequence, and recorded integration evidence |
 
 ## Models, data, and research
 
 | Document | Owns |
 |---|---|
 | [Research white paper](whitepaper.md) | Scientific account of Muse-guided research, Contract-1 and Contract-2, training methods, hardware, results, and bottlenecks |
-| [Glimmer local-training case study](case-study-glimmer-local-training.md) | Two Glimmer-operated training runs on local hardware: a verified toy loop and a real-scale null result |
+| [Glimmer-operated decision-model training case study](case-study-decision-model-training-with-glimmer.md) | Two Glimmer-operated training runs on local hardware: a verified toy loop and a real-scale null result |
 | [Contract-1 and Contract-2 decision models](siliconshield-rtl.md) | Released artifacts, task definitions, domain strengths, headline evidence, lineage |
 | [Capabilities and limitations](LIMITATIONS.md) | Confusion matrices, failure examples, scope limits, and confidence behavior |
 | [Release recipes](training-recipes.md) | Historical optimization settings, population lineage, research lessons, reproduction limits |
-| [Data pipeline](data-pipeline.md) | Solver evidence, English-to-assertion reviews, lineage isolation, immutable acceptance, sampling coverage |
+| [Decision-model dataset construction and qualification](data-pipeline.md) | Solver evidence, English-to-assertion reviews, lineage isolation, immutable acceptance, sampling coverage |
 | [Training](security-model-training.md) | Trainable parameters, optimization objective, DDP, selection versions, resume and export |
-| [Decision studies](decision-study.md) | Frozen manifests, launch qualification, budget enforcement, diagnosis, new-model recommendations |
+| [Study walkthrough](study-walkthrough.md) | Complete row construction, input artifacts, manifest assembly and job binding |
+| [Decision-model training with Glimmer](decision-model-training-with-glimmer.md) | CPU validation, owned-job launch, fitting versus development, and closeout |
 | [Evaluation](evaluation.md) | Metric definitions, uncertainty, matched comparisons, held-out roles, release protocol |
 | [Benchmark](benchmark.md) | Public area benchmark, population pin, CLI, metrics, and router sampling |
-| [Glimmer](glimmer.md) / [Inference](inference.md) | Local Muse backend: supported Glimmer-driven router sessions, with operator and serving qualification as research groundwork |
+| [Local Muse Glimmer deployment and qualification](inference.md) | Local Glimmer operation, serving, and replay qualification. The local training guide covers decision-model jobs |
+
+## Advanced integrations
+
+These integrations are optional. Decision-model inference, router assessment,
+and basic local training do not require Harness².
+
+| Document | Owns |
+|---|---|
 | [Muse and Harness²](muse-procedures.md) | Replay-qualified procedure learning and guidance adoption |
 
 ## Conventions and evidence
@@ -69,10 +78,10 @@ Run examples from the repository root unless specified otherwise. Replace
 checkout. A command's prerequisites and side effects are part of its guide.
 A `--help` check validates the interface, not a GPU or model-quality result.
 
-Decision-model releases: [Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1)
-and [Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2).
-Published data: [training collection](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
-and [development benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark).
+Decision-model releases: [Contract-1](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1)
+and [Contract-2](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2).
+Published data: [training collection](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training)
+and [development benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark).
 The [recipes](training-recipes.md) identify which populations contributed to
 which release. Downloading a previously used development set does not make it
 an independent final evaluation.
@@ -101,3 +110,22 @@ is the canonical reference for scientific claims.
 - **Receipt:** structured evidence about inputs, execution, identity, or a decision.
 - **Replay:** a declared controller task executed through controlled tools.
   Fixture replay and live generation answer different questions.
+
+### Training control hierarchy
+
+| Term | Responsibility |
+|---|---|
+| Study | Immutable experimental contract: parent, data, settings, evaluation rules and budget |
+| Campaign | Persistent series of proposed and assessed rounds, with an incumbent |
+| Round | One registered hypothesis and candidate, assessed against frozen rules |
+| Supervisor | Reconciles round boundaries and invokes an agent for diagnosis or a proposal |
+| Strategy driver | Bounded fitting-arm comparison followed by one development job |
+| Operator | Owns one job's prepare, submit, observe, intervention and finalization state |
+| Recipe | Training and reporting settings. It does not itself authorize a job |
+| Scope | Caller-declared design behavior for routing, such as `fifo` |
+| Mechanism / family | Dataset-specific behavioral category / related design lineage. They are not interchangeable with independent statistical samples |
+
+A supervisor may call an operator for each round. The strategy driver is a
+separate bounded entry point, not a synonym for that supervisor. The detailed
+[configuration reference](reference.md#configuration-boundaries) names the
+artifacts connecting these layers.

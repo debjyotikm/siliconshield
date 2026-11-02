@@ -21,7 +21,7 @@ complete input encoding, not only raw RTL token length. Use a new output
 directory for a new experiment. Training refuses rows whose question bytes
 differ from `--question-contract` and refuses unreviewed templates when
 `--review-ledger` is set. For new owned work, record this plan as a
-[decision study](decision-study.md) instead of assembling it by hand.
+[decision study](study-walkthrough.md) instead of assembling it by hand.
 The campaign then enforces the frozen bytes at every launch.
 
 The training and development files are normally `train.jsonl` and `dev.jsonl`.
@@ -113,29 +113,25 @@ exact-id selection view (`single_view_study`) with no retention population.
 This predates decision-study manifests and is a different mechanism.
 Use views to keep new capability and retained capability visible separately.
 
-There are six selection paths:
+### Choose a selection path
 
-1. Legacy transfer ranking with a retention-accuracy tolerance. The trainer
-   warns when a campaign selection reference is absent.
-2. A frozen campaign reference sharing improvement, false-safe, missing-context,
-   pair, and family-cap gates with the campaign. `v1-transfer` and `v2-retention`
-   select different post-feasibility orderings.
-3. A `protected-views-v1` objective declaring protection for every view, a target
-   view, and explicit count-based quality targets. This path distinguishes
-   protecting prior capabilities from achieving the new task's target.
-4. A `protected-views-v2-triplets` objective ranking safety first, then whole
-   triplets, correct decisions, false violations, unnecessary abstention, and
-   NLL. Views carry `triplets`/`triplets_correct`. Gates support
-   `max_false_violation`, `max_unnecessary_abstention`, and
-   `whole_triplets_min` alongside false-safe floors.
-5. A `protected-views-v3-balanced` objective ranking whole triplets first with
-   false-safe safeguards in feasibility and ranking: capability first, safety
-   constrained.
+For new work, freeze a decision-study manifest and use a protected-view objective.
+The choice depends on the scientific priority declared before training:
 
-6. A `protected-views-v4-sourced` objective retaining the v3 ordering while
-   applying exact per-source floors to the protected views. Declared sources
-   must match the reported source breakdown, so a strong aggregate cannot hide
-   a missing or regressing source.
+| Need | Objective |
+|---|---|
+| Count-based protection with a target view | `protected-views-v1` |
+| Safety-first ordering with whole-triplet scoring | `protected-views-v2-triplets` |
+| Triplet-first ordering with false-safe safeguards | `protected-views-v3-balanced` |
+| The balanced ordering plus exact source-specific floors | `protected-views-v4-sourced` |
+
+The version is a policy choice, not a model-quality upgrade. Keep it frozen for
+matched comparisons. Legacy transfer and incumbent-reference paths remain for
+reproducing existing campaigns. They are not the recommended assembly path for
+new decision studies. See the [walkthrough](study-walkthrough.md).
+
+The [selection compatibility reference](reference.md#selection-compatibility-reference)
+describes legacy campaign ranking and the implemented protected-view variants.
 
 For protected-view objectives, `protected_passed` and
 `quality_targets_passed` are separate fields. The sorting key prioritizes

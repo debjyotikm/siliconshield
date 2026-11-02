@@ -8,10 +8,10 @@ rows contributed to their weights, and the limits of reproducing those studies.
 Current launch procedures belong in the [trainer guide](security-model-training.md).
 
 Public data: the [combined training
-set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
+set](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training)
 (19,050 rows, one v1 prompt). Public weights:
-[Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1)
-and [Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2).
+[Contract-1](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1)
+and [Contract-2](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2).
 
 Both studies were directed with the help of Muse Wonder and Muse Spark 1.3
 on local GPU hardware.
@@ -107,21 +107,10 @@ The released Contract-2 (203/234, classes 64/61/78, 17 false-safes,
 the violates, false-safe, and NLL gates. Fresh SDK scoring
 reproduces its development predictions exactly.
 
-## Research findings carried into the platform
-
-| Observation | What it supports | Implementation response |
-|---|---|---|
-| A selected export can equal the parent even after many optimizer updates. | A completed run does not establish an improved released model. | Distinct initial, selected, terminal, and incumbent identities, with retained evaluation tensors. |
-| Strong TRAIN fit can coexist with weak whole-triplet development results. | Fitting and transfer are separate problems. Low loss alone cannot distinguish them. | Delivered-exposure audit, TRAIN fitting qualification, class and triplet diagnostics. |
-| Better total accuracy can accompany worse violation recall or more false-safes. | Aggregate ranking can reward the wrong trade-off. | Frozen class, source, family, and retention constraints before promotion. |
-| The temporal study improved its focused triplet count but failed other frozen gates. | A useful research artifact need not be an automatic campaign promotion. | Explicit owner selection in the Contract-2 release record, with failed gates disclosed. |
-| Teacher agreement and weighted KL share can move differently. | The coefficient or loss fraction alone cannot rank preservation strength. | Masked teacher-correct preservation and behavioral diagnostics. |
-
-These are engineering lessons from the studies, not causal estimates of the
-benefit of each mechanism. Causal comparisons need matched initial weights,
-data, delivered exposure, optimization settings, and independent repetitions.
-The [evaluation protocol](evaluation.md) defines what can be claimed from each
-kind of comparison.
+The [research white paper](whitepaper.md) analyzes fitting versus transfer,
+violation-recall trade-offs, preservation, and execution defects. The
+[evaluation protocol](evaluation.md) defines the evidence required for matched
+comparisons and generalization claims.
 
 ## Reproducing with this repository
 
@@ -141,7 +130,7 @@ collections exclude the reserved qualification and test populations.
 For a new study, follow these maintained procedures:
 
 1. [Qualify the dataset and sampling pools](data-pipeline.md#dataset-versions-and-acceptance).
-2. [Freeze the study](decision-study.md#freezing-the-plan), including the complete
+2. [Freeze the study](study-walkthrough.md#freeze-and-bind-the-study), including the complete
    recipe, evaluation views, fitting qualification, and resource budget.
 3. Use the [trainer guide](security-model-training.md) for current objectives,
    launch arguments, continuation, and export. Use [campaigns](campaigns.md)

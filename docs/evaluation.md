@@ -214,38 +214,6 @@ results on development/calibration/final populations, and known limits
 where measured). No checkpoint is described as generally validated without
 this evidence. Development gates alone are not a release.
 
-## Controller evaluation
-
-The controller has different targets from the RTL model. It must read evidence,
-choose an allowed action, calculate changes, and report consistently.
-
-| Field or dimension | What it establishes |
-|---|---|
-| `action_correct` | Agreement with the episode's declared action policy. |
-| `evidence_correct` | Structured numbers and evidence references satisfy the contract. |
-| `explanation_correct` | Deterministic explanation checks did not identify unsupported claims. |
-| `final_consistent` | Final structured response agrees with the recorded action/evidence. |
-| Execution completion | Tool protocol completed without errors. |
-| `verified` | The replay's combined checks passed. |
-
-A deterministic grader is not an independent assessment of arbitrary scientific
-reasoning. Report each component, per-action support, and lineage distribution.
-Synthetic fixture replay tests interfaces. Live generation measures the model
-under the chosen prompt, parser, runtime, and decoding settings.
-
-`select_replay_candidate()` requires matched population, evaluator, source,
-manifest, and decoding identities, coverage of all six operator actions, and
-per-action/cohort non-regression against every supplied reference. It requires a
-net verified gain. Selection does not deploy the adapter.
-
-## Sealed controller evaluation
-
-The evaluator's `--final` mode requires authenticated split membership and
-cannot be combined with `--harness2-output`. The dataset identity machinery
-records final use and blocks its reuse for training. Keep final evaluation
-separate from any proposer or lesson-retention loop. Review both the selected
-adapter and serving configuration before spending the reserved population.
-
-Repeated development replay is useful for selection but should not be presented
-as a fresh final benchmark. Neither correct arithmetic nor a completed job proves
-that an intervention caused a better security model.
+Agent tool-use and action-policy checks are documented under
+[Glimmer replay qualification](inference.md#controller-evaluation). They measure
+the agent configuration, separately from decision-model accuracy.

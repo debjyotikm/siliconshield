@@ -1,6 +1,6 @@
 # Router architecture
 
-[Documentation index](README.md) · [Expert qualification](expert-qualification.md) ·
+[Documentation index](README.md) · [Decision-model qualification](expert-qualification.md) ·
 [Benchmark](benchmark.md)
 
 The router connects an explicit assessment scope to specialists with relevant
@@ -9,7 +9,7 @@ and makes coverage gaps explicit before optional Muse arbitration. No single
 model covers the whole design space. Scope tags identify the property class,
 and measured profiles determine which specialist evidence is available. The
 Contract-1 decision model handles local guard requirements. The Contract-2
-decision model handles FIFO and counter requirements. Anything outside measured
+decision model handles FIFO, counter, and arbitration requirements. Anything outside measured
 support stays visible instead of receiving an unqualified verdict. This is application-level expert routing,
 not a jointly trained neural mixture of experts. Improvement over the best
 single model requires a matched evaluation.
@@ -26,14 +26,16 @@ calls and dashed arrows are replies. The loop consults experts sequentially.
 The experts CLI and Python API expose this path. Modules live in
 `siliconshield/experts/`, with evaluation in
 `siliconshield/benchmark/`. The two current decision models are
-[Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1)
+[Contract-1](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1)
 (local guards) and
-[Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2)
-(FIFO/counter specialist), routed by tiers measured on the
-[public RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark).
+[Contract-2](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2)
+(FIFO, counter, and arbitration specialist), routed by tiers measured on the
+[public RTL benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark).
 
 ## Run one assessment
 
+For worked English-to-RTL examples, see
+[Writing requirements for RTL analysis](rtl-requirements.md).
 Prepare the input as a small verification problem:
 
 1. Name the protected state and one required behavior. Distinguish a request
@@ -44,7 +46,7 @@ Prepare the input as a small verification problem:
 4. Choose mechanism tags supported by the registered capability profiles.
 
 First register immutable exports and measured capability profiles as described
-in [expert qualification](expert-qualification.md). A registry without
+in [decision-model qualification](expert-qualification.md). A registry without
 capability profiles provides no routable experts.
 
 The state file uses literal section headers, without colons:
@@ -97,6 +99,47 @@ The JSON contains `assessment`, and optionally `arbitration` and `finding`.
 Inspect `assessment.errors`, effective `routing`, and `thin_evidence` before
 using it. An `arbitration_error` preserves the expert assessment but supplies no
 Muse verdict. A zero CLI exit alone is not a successful assessment.
+
+### Reading a real assessment
+
+A recorded rehearsal of the FIFO example above produced these outcomes under
+one matched worker protocol. These are integration observations on an authored
+case, not a fresh benchmark or promised output on every runtime:
+
+| Evidence | Recorded result | Interpretation |
+|---|---|---|
+| Contract-2 | `satisfies_requirement`, score 0.9061 | Agrees with the visible `push && !full` guard |
+| Contract-1 | `violates_requirement`, score 1.0000 | Incorrect on this case despite the higher score |
+| Matched FIFO development measurements | Contract-2: 88/99 correct, 7/33 false-safes. Contract-1: 34/99 correct, 0/33 false-safes | Relevant scope support differs. Zero false-safes alone is not competence |
+| Muse arbitration | `satisfies_requirement` | Cites the guard and the specialists' differing FIFO support |
+
+The 88/99 Contract-2 figure reconciles with the original 97/108 population:
+all 9 excluded rows were correct there. The C1 34/99 figure reproduces only by
+running the pinned benchmark, since C1 publishes no results file.
+
+The response used `assessment.responses` for individual votes,
+`assessment.routing.area_tiers` for domain support, and `arbitration.evidence`
+for cited experts. No solver ran in this assessment. Arbitration resolved this
+particular disagreement, which does not establish an aggregate router advantage.
+
+A compact view of the returned fields is shown below. Ellipses indicate omitted
+fields, so this is an annotated excerpt rather than a complete response schema:
+
+```text
+assessment.errors = []
+assessment.routing.unsupported = []
+assessment.routing.area_tiers.contract-2.fifo = "partial"
+assessment.routing.area_tiers.contract-1.fifo = "none"
+arbitration.conclusion = "satisfies_requirement"
+arbitration.evidence = [references to contract-2 and contract-1]
+```
+
+| Response condition | Application behavior |
+|---|---|
+| No routable profile or unsupported scope | Show the coverage gap and request another qualified expert or engineering review |
+| One worker fails | Display its execution error and use only the recomputed effective coverage of surviving responses |
+| `arbitration_error` is present | Preserve specialist evidence and report that no Muse conclusion was produced |
+| Valid expert disagreement | Show both votes and the arbitration rationale. Do not turn the highest score into a vote weight |
 
 Workers live for this command's duration. A persistent Python application can
 reuse `InferenceService` and `WorkerPool` across calls. This is a local-pipe
@@ -197,7 +240,7 @@ Never edit tiers by hand.
 
 ## Provisioning future models
 
-Use [expert qualification](expert-qualification.md) to register an immutable
+Use [decision-model qualification](expert-qualification.md) to register an immutable
 export, measure its capability profile, qualify routing, and retain a rollback
 release. That guide also covers upgrades and removal. A different output task
 or worker protocol needs an explicit integration change.
@@ -215,24 +258,15 @@ or worker protocol needs an explicit integration change.
 
 ## Runtime evidence contract
 
-A validated ready receipt names the model, device, question contract,
-checkpoint hash, full export digest, runtime Python tree digest, question
-bytes and numerical settings. Settings include precision, Torch version,
-batch size, option order, token budgets and length sorting. Every result
-must come from that worker session and name the exact input hash.
-Coverage must explicitly report zero dropped tokens and no truncated
-questions. Missing or contradictory runtime coverage is an error.
+The [interface reference](reference.md#decision-and-worker-contracts) owns the
+required ready/result fields, coverage checks and numerical tolerances. Routing
+uses only evidence tied to the observed worker session and exact input. Changed
+execution requires new measurements before it inherits a reliability tier.
 
-Load and analysis timeouts are total request deadlines. Progress or stale
-messages cannot extend them. A failed worker generation is invalidated and
-reaped. Calls to one worker are serialized so simultaneous requests cannot
-consume each other’s replies.
-
-An injected capability profile is subject to the same validation as a
-profile loaded from disk. A registry name alone never establishes identity.
-Profiles without matching measured evidence can still be consulted, but
-their results remain unrated and thin.
-
+Worker load and analysis deadlines are total deadlines. A failed generation is
+invalidated, and calls to one worker are serialized. An unmeasured profile can
+still be consulted within its declared scope, but its results remain unrated
+and thin. These properties are enforced for both file-loaded and injected profiles.
 Inspection is a lexical aid, not a SystemVerilog parser. Comments are
 excluded, declaration initializers do not declare their operands, and
 balanced guards and indexed targets are handled. The result always states

@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any, TypedDict
 
-DEFAULT_DATASET = "danieltombay/siliconshield-rtl-benchmark"
+DEFAULT_DATASET = "debjyotikm/siliconshield-rtl-benchmark"
 DEFAULT_PATH = "data/benchmark.jsonl"
 DEFAULT_REVISION = "ab2b7dbee3158a292edc4f7a0127379aab996636"
 

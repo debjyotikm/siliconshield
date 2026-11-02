@@ -1,7 +1,7 @@
 # Benchmark models and routing
 
 [Documentation index](README.md) · [Evaluation](evaluation.md) ·
-[Expert qualification](expert-qualification.md)
+[Decision-model qualification](expert-qualification.md)
 
 The benchmark package scores compatible registry models through the production
 worker protocol. It reports aggregate, per-area, and per-mechanism decisions,
@@ -10,8 +10,8 @@ whole-triplet consistency. Model execution is separate from metric computation.
 
 ## Population and intended use
 
-The default [RTL benchmark](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-benchmark)
-is pinned to revision `ab2b7dbee3158a292edc4f7a0127379aab996636`:
+The default [RTL benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark)
+uses the dataset revision pinned by the benchmark loader:
 5,589 decisions in 1,863 triplets across 11 areas. The pin is owned by
 [`dataset.py`](../siliconshield/benchmark/dataset.py).
 
@@ -75,7 +75,7 @@ This package does not produce the trainer's weighted metrics, Brier/ECE,
 source-stratified bootstrap intervals, or an automatic release decision.
 Its reports also do not retain all probabilities or the complete worker-ready
 receipt. For a capability profile, retain the observed execution identity
-alongside the scoring run, as described in [expert qualification](expert-qualification.md).
+alongside the scoring run, as described in [decision-model qualification](expert-qualification.md).
 
 ## Evaluate the router
 
@@ -111,4 +111,43 @@ A separately reviewed 5,580-row measurement excludes those nine rows. The defaul
 pin remains the original 5,589-row file and does not apply that exclusion
 silently. Preserve original results, identify any corrected or quarantined
 population by its own hash, and use `--dataset` to select it explicitly.
-See [expert qualification](expert-qualification.md#capability-evidence-shape).
+See [decision-model qualification](expert-qualification.md#capability-evidence-shape).
+
+## Reproduce the reviewed population
+
+From the repository root, use the
+[controller environment and workspace](setup.md#controller-and-workspace),
+then install the benchmark download dependency:
+
+```bash
+python -m pip install -r requirements/benchmark.txt
+python tools/prepare_benchmark.py \
+  --output-dir "$SILICONSHIELD_WORKSPACE/reviewed-benchmark"
+```
+
+This downloads the pinned public population, verifies its exact contents,
+and removes the three previously reviewed FIFO triplets whose checked storage
+obligation is absent from the English requirement. It validates the resulting
+population before publishing a new directory containing:
+
+- `benchmark-reviewed.jsonl`: the reviewed routing population.
+- `provenance.json`: source identity, excluded triplets and reason, row counts,
+  and the resulting file identity.
+
+The command performs no model inference or training, leaves the original
+population unchanged, and refuses an existing output directory. For an offline
+copy of the pinned source, add `--source /path/to/original-benchmark.jsonl`.
+An unknown source or a result that differs from the recorded review is refused.
+
+Use the prepared file explicitly:
+
+```bash
+python -m siliconshield.benchmark areas \
+  --dataset "$SILICONSHIELD_WORKSPACE/reviewed-benchmark/benchmark-reviewed.jsonl"
+```
+
+The result has 5,580 decisions, including 99 FIFO decisions. It remains reused
+development material. Newly worded versions of the excluded cases are new inputs
+and need semantic review and fresh predictions before admission. Historical
+5,589-row results, including the published 234-row temporal subset, keep their
+original denominators. Do not silently replace those results with this subset.

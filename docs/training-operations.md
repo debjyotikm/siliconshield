@@ -1,4 +1,4 @@
-# Operations and recovery
+# Operate and recover training jobs
 
 [Documentation index](README.md)
 
@@ -18,12 +18,13 @@ Idle GPUs are the default preflight requirement. An explicitly configured
 `gpu_coexistence` exception can permit named resident processes, bound to PID,
 start time, and command hash, with a system-memory floor. The training launcher
 must enforce its memory cap. This does not authorize sharing with unknown work.
-See [decision studies](decision-study.md).
+See [study walkthrough](study-walkthrough.md).
 
-Glimmer training, serving, and evaluation use the host-mounted file named by
+Glimmer serving and in-process evaluation use the host-mounted file named by
 `SILICONSHIELD_GPU_LOCK`. All containers and host processes sharing a device
 must point at the same underlying file. A busy lease refuses acquisition.
-Schedule serving and fine-tuning in separate resource windows.
+Schedule competing serving and evaluation processes in separate resource
+windows. Replay through an existing endpoint uses that server's lease.
 
 Do not delete a lock file to clear contention: a running process may retain the
 old inode while a second process locks a newly created file. Determine ownership
@@ -67,6 +68,35 @@ Stopping a polling client alone does not stop its systemd-owned training job.
 Conversely, stopping a job without stopping its supervisor can leave a live
 controller free to schedule follow-up work.
 
+### Request and confirm a stop
+
+First pause the deployment's actual supervisor through its configured service
+or driver. This repository does not ship a universal supervisor unit name.
+Then load the existing manifest and request a stop through the same job profile.
+The following Python runs on the operator host and **changes the owned job's
+control state**:
+
+```python
+import json
+from pathlib import Path
+
+from siliconshield.research_loop.execution.operator import Operator
+
+operator = Operator("/path/to/bound-job-profile.json")
+manifest_path = operator.manifest_path("registered-experiment-id")
+manifest = json.loads(manifest_path.read_text())
+manifest = operator.observe(manifest)
+manifest = operator.intervene(manifest, "stop")
+print(Path(manifest["output"]) / "operator-control.json")
+```
+
+Use a manifest in `observe`, `diagnose`, or `intervene` phase. A manifest already
+in `report` is terminal-report reconciliation, not a new stop request. The API
+refuses to stop a foreign or non-running job. The returned request is not proof
+that training has exited. Poll the recorded unit, inspect the final checkpoint
+and `execution.json`, then finalize/report as below. Preserve a failure receipt
+if the trainer exits without producing a valid report.
+
 ## Recover the same experiment
 
 Reattach with the same profile, experiment ID, and recipe. The Operator
@@ -80,10 +110,32 @@ completion needs retrying. It invokes the trainer's development-only finalizatio
 path and must not take extra optimizer steps. Latest resume state and the selected
 export serve different purposes.
 
-The Glimmer trainer validates current and previous checkpoint generations and
-refuses explicit resume when neither is usable. It restores optimizer/progress/RNG
-state and checks development-loss parity before continuing. Do not work around
-an identity failure by editing its signature.
+### Reattach, retry, and close out
+
+Load the existing manifest as above instead of creating a second experiment.
+These calls have different effects:
+
+```python
+# Read current owned-job state and persist an observation.
+manifest = operator.observe(manifest)
+
+# Choose at most one action after inspecting the state and checkpoint.
+# Both calls can submit an owned job. They are not status queries.
+# manifest = operator.intervene(manifest, "resume", checkpoint_dir=manifest["output"])
+# manifest = operator.intervene(manifest, "finalize_retry", checkpoint_dir=manifest["output"])
+
+# Once the job has stopped and its report is present:
+manifest = operator.finalize(manifest)
+manifest = operator.report(manifest)
+print(manifest["terminal"])
+```
+
+`resume` restores training state and can perform optimizer updates.
+`finalize_retry` executes the development-only finalization path. Both validate
+that `latest.pt` belongs to the registered run. For a manifest already in
+`report`, call `operator.report(manifest)` directly. A `complete` terminal value
+establishes report validity under the job contract, not promotion. An
+`incomplete` value requires diagnosis before another attempt.
 
 ## Troubleshooting
 
@@ -111,8 +163,15 @@ controller.
 
 ## Deploy a code update
 
-Validate the new tree independently, freeze a new snapshot, and switch the
-driver at a deliberate boundary. Do not overwrite files underneath a live frozen
+1. Record the active driver, source snapshot, owned job and current phase.
+2. Validate a separate source snapshot and preserve the previous snapshot.
+3. Pause follow-on scheduling and reconcile the current job to a recorded boundary.
+4. Point the deployment's driver at the new snapshot, then run its read-only
+   reconciliation check before enabling scheduling.
+5. Verify the running source identity and that the existing job was reattached,
+   not submitted again. Retain the previous deployment for rollback.
+
+The deployment owns the exact service commands. Do not overwrite files underneath a live frozen
 process. The Harness² worker runs as a separate service. Updating its code does
 not implicitly update the campaign supervisor or vice versa.
 
