@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff;" version="1.1" width="760px" height="432px" viewBox="0 0 760 432" role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">Exhibit A trainer and SDK correctness</title>
+  <desc id="figure-description">Trainer and SDK correct counts for the parent, the fitting export, and the development export on TRAIN and dev rows. The children match across paths. The parent does not.</desc>
+  <text x="380" y="30" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#111827" font-weight="bold">Exhibit A: trainer and SDK correctness</text>
+  <line x1="60" y1="60" x2="60" y2="340" stroke="#111827"/>
+  <line x1="60" y1="340.0" x2="720" y2="340.0" stroke="#e5e7eb"/>
+  <text x="50" y="344.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">0</text>
+  <line x1="60" y1="246.66666666666669" x2="720" y2="246.66666666666669" stroke="#e5e7eb"/>
+  <text x="50" y="250.66666666666669" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">6</text>
+  <line x1="60" y1="153.33333333333334" x2="720" y2="153.33333333333334" stroke="#e5e7eb"/>
+  <text x="50" y="157.33333333333334" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">12</text>
+  <line x1="60" y1="60.0" x2="720" y2="60.0" stroke="#e5e7eb"/>
+  <text x="50" y="64.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">18</text>
+  <text x="34" y="200.0" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">Correct rows</text>
+  <text x="225.0" y="390" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#111827" font-weight="bold">TRAIN (n = 18)</text>
+  <text x="115.0" y="362" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827">Parent</text>
+  <rect x="89.0" y="137.77777777777777" width="24" height="202.22222222222223" fill="#1f4e79"/>
+  <text x="101.0" y="131.77777777777777" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">13</text>
+  <text x="101.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">T</text>
+  <rect x="117.0" y="168.88888888888889" width="24" height="171.11111111111111" fill="#2e7d6f"/>
+  <text x="129.0" y="162.88888888888889" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">11</text>
+  <text x="129.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">S</text>
+  <text x="225.0" y="362" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827">Fitting</text>
+  <rect x="199.0" y="60.0" width="24" height="280.0" fill="#1f4e79"/>
+  <text x="211.0" y="54.0" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">18</text>
+  <text x="211.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">T</text>
+  <rect x="227.0" y="60.0" width="24" height="280.0" fill="#2e7d6f"/>
+  <text x="239.0" y="54.0" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">18</text>
+  <text x="239.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">S</text>
+  <text x="335.0" y="362" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827">Selected</text>
+  <rect x="309.0" y="137.77777777777777" width="24" height="202.22222222222223" fill="#1f4e79"/>
+  <text x="321.0" y="131.77777777777777" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">13</text>
+  <text x="321.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">T</text>
+  <rect x="337.0" y="137.77777777777777" width="24" height="202.22222222222223" fill="#2e7d6f"/>
+  <text x="349.0" y="131.77777777777777" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">13</text>
+  <text x="349.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">S</text>
+  <text x="555.0" y="390" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#111827" font-weight="bold">Dev (n = 6)</text>
+  <text x="445.0" y="362" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827">Parent</text>
+  <rect x="419.0" y="293.3333333333333" width="24" height="46.666666666666664" fill="#1f4e79"/>
+  <text x="431.0" y="287.3333333333333" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">3</text>
+  <text x="431.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">T</text>
+  <rect x="447.0" y="277.77777777777777" width="24" height="62.22222222222222" fill="#2e7d6f"/>
+  <text x="459.0" y="271.77777777777777" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">4</text>
+  <text x="459.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">S</text>
+  <text x="555.0" y="362" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827">Fitting</text>
+  <text x="569.0" y="334" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">n/a</text>
+  <text x="541.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">T</text>
+  <rect x="557.0" y="246.66666666666669" width="24" height="93.33333333333333" fill="#2e7d6f"/>
+  <text x="569.0" y="240.66666666666669" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">6</text>
+  <text x="569.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">S</text>
+  <text x="665.0" y="362" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827">Selected</text>
+  <rect x="639.0" y="246.66666666666669" width="24" height="93.33333333333333" fill="#1f4e79"/>
+  <text x="651.0" y="240.66666666666669" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">6</text>
+  <text x="651.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">T</text>
+  <rect x="667.0" y="246.66666666666669" width="24" height="93.33333333333333" fill="#2e7d6f"/>
+  <text x="679.0" y="240.66666666666669" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#111827" font-weight="bold">6</text>
+  <text x="679.0" y="378" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">S</text>
+  <text x="380" y="420" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#6b7280">T is the trainer path. S is the SDK replay. Fitting has no trainer dev score.</text>
+</svg>

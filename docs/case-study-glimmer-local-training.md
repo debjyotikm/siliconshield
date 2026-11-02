@@ -141,6 +141,14 @@ scored TRAIN 13/18 against its sibling 18/18, including one
 TRAIN false-safe its sibling avoids. Development-optimal is
 not TRAIN-optimal, row by row.
 
+![Trainer and SDK correct counts for the parent, fitting, and selected exports on TRAIN and dev rows.](diagrams/glimmer-toy-parity.svg)
+
+**Figure 1.** Exhibit A eval parity. Both children reproduce
+exactly across paths. The parent disagrees with itself, so
+reload parity needs pinned inference settings. Counts come
+from the preserved SDK replay and trainer events.
+[Open full-size SVG](diagrams/glimmer-toy-parity.svg)
+
 ### 4 Exhibit B: a real-scale improvement round
 
 Exhibit B asks whether the loop stays honest at real scale.
@@ -176,6 +184,15 @@ aggregate gain in the run traded one protected count for
 another. The selector kept the parent weights and the
 study closed as a null result with the parent preserved.
 
+![Correct decisions, false-safe errors, and whole triplets across 18 development evaluations with frozen floor lines.](diagrams/glimmer-improvement-trajectory.svg)
+
+**Figure 2.** Exhibit B trajectory. Dashed red lines mark the
+frozen parent floors. The run recovers to the correct-count
+floor near update 110, then drifts. No evaluation passes all
+floors jointly, so the selector keeps the parent. The dotted
+line marks full triplet coverage at update 114.
+[Open full-size SVG](diagrams/glimmer-improvement-trajectory.svg)
+
 A deviated observation from a misconfigured 30-update
 attempt deserves exact reporting. Its selected step-20
 weights beat the parent on every count under both eval
@@ -185,6 +202,13 @@ and 51 against 201 with 20 and 50. The observation is real
 but not promotable because its schedule differs from the
 frozen recipe. It is preserved as the hypothesis for a
 follow-up short-horizon round under a newly frozen plan.
+
+![Step-20 minus parent deltas under the trainer path and the SDK path.](diagrams/glimmer-deviated-deltas.svg)
+
+**Figure 3.** The deviated observation beats the parent on
+every count under both eval paths. It stays a hypothesis
+because its schedule differs from the frozen recipe.
+[Open full-size SVG](diagrams/glimmer-deviated-deltas.svg)
 
 #### 4.2 Operator behavior at scale
 

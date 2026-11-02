@@ -255,3 +255,6 @@ siliconshield/training/laya/validate_study_inputs.py
 tests/test_validate_study_inputs.py
 .agents/skills/glimmer-study/SKILL.md
 docs/case-study-glimmer-local-training.md
+docs/diagrams/glimmer-toy-parity.svg
+docs/diagrams/glimmer-improvement-trajectory.svg
+docs/diagrams/glimmer-deviated-deltas.svg

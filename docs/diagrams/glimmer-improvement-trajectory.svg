@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff;" version="1.1" width="760px" height="634px" viewBox="0 0 760 634" role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">Exhibit B development trajectory</title>
+  <desc id="figure-description">Correct decisions, false-safe errors, and whole triplets across 18 development evaluations. Floor lines mark the frozen parent counts. No evaluation passes all floors.</desc>
+  <text x="380" y="30" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#111827" font-weight="bold">Exhibit B: development trajectory</text>
+  <text x="370.0" y="46" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#111827" font-weight="bold">Correct decisions (n = 234)</text>
+  <line x1="60" y1="56" x2="60" y2="206" stroke="#111827"/>
+  <line x1="60" y1="206" x2="680" y2="206" stroke="#111827"/>
+  <line x1="60" y1="206.0" x2="680" y2="206.0" stroke="#e5e7eb"/>
+  <text x="52" y="210.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">196</text>
+  <line x1="60" y1="168.5" x2="680" y2="168.5" stroke="#e5e7eb"/>
+  <text x="52" y="172.5" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">198</text>
+  <line x1="60" y1="131.0" x2="680" y2="131.0" stroke="#e5e7eb"/>
+  <text x="52" y="135.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">200</text>
+  <line x1="60" y1="93.5" x2="680" y2="93.5" stroke="#e5e7eb"/>
+  <text x="52" y="97.5" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">202</text>
+  <line x1="60" y1="56.0" x2="680" y2="56.0" stroke="#e5e7eb"/>
+  <text x="52" y="60.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">204</text>
+  <line x1="60" y1="74.75" x2="680" y2="74.75" stroke="#b85450" stroke-dasharray="6,4" stroke-width="1.5"/>
+  <text x="688" y="78.75" text-anchor="start" font-family="sans-serif" font-size="12" fill="#b85450">floor 203</text>
+  <line x1="452.66666666666663" y1="56" x2="452.66666666666663" y2="206" stroke="#6b7280" stroke-dasharray="3,3"/>
+  <text x="452.66666666666663" y="198" text-anchor="middle" font-family="sans-serif" font-size="11" fill="#6b7280">full coverage at 114</text>
+  <polyline points="60.0,74.8 94.4,131.0 128.9,112.2 163.3,149.8 197.8,112.2 232.2,112.2 266.7,149.8 301.1,149.8 335.6,149.8 370.0,187.2 404.4,149.8 438.9,74.8 473.3,74.8 507.8,93.5 542.2,93.5 576.7,93.5 611.1,93.5 645.6,74.8 680.0,131.0" fill="none" stroke="#1f4e79" stroke-width="2"/>
+  <circle cx="60.0" cy="74.8" r="3" fill="#1f4e79"/>
+  <circle cx="94.4" cy="131.0" r="3" fill="#1f4e79"/>
+  <circle cx="128.9" cy="112.2" r="3" fill="#1f4e79"/>
+  <circle cx="163.3" cy="149.8" r="3" fill="#1f4e79"/>
+  <circle cx="197.8" cy="112.2" r="3" fill="#1f4e79"/>
+  <circle cx="232.2" cy="112.2" r="3" fill="#1f4e79"/>
+  <circle cx="266.7" cy="149.8" r="3" fill="#1f4e79"/>
+  <circle cx="301.1" cy="149.8" r="3" fill="#1f4e79"/>
+  <circle cx="335.6" cy="149.8" r="3" fill="#1f4e79"/>
+  <circle cx="370.0" cy="187.2" r="3" fill="#1f4e79"/>
+  <circle cx="404.4" cy="149.8" r="3" fill="#1f4e79"/>
+  <circle cx="438.9" cy="74.8" r="3" fill="#1f4e79"/>
+  <circle cx="473.3" cy="74.8" r="3" fill="#1f4e79"/>
+  <circle cx="507.8" cy="93.5" r="3" fill="#1f4e79"/>
+  <circle cx="542.2" cy="93.5" r="3" fill="#1f4e79"/>
+  <circle cx="576.7" cy="93.5" r="3" fill="#1f4e79"/>
+  <circle cx="611.1" cy="93.5" r="3" fill="#1f4e79"/>
+  <circle cx="645.6" cy="74.8" r="3" fill="#1f4e79"/>
+  <circle cx="680.0" cy="131.0" r="3" fill="#1f4e79"/>
+  <text x="370.0" y="240" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#111827" font-weight="bold">False-safe errors (lower is better)</text>
+  <line x1="60" y1="250" x2="60" y2="400" stroke="#111827"/>
+  <line x1="60" y1="400" x2="680" y2="400" stroke="#111827"/>
+  <line x1="60" y1="400.0" x2="680" y2="400.0" stroke="#e5e7eb"/>
+  <text x="52" y="404.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">14</text>
+  <line x1="60" y1="350.0" x2="680" y2="350.0" stroke="#e5e7eb"/>
+  <text x="52" y="354.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">16</text>
+  <line x1="60" y1="300.0" x2="680" y2="300.0" stroke="#e5e7eb"/>
+  <text x="52" y="304.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">18</text>
+  <line x1="60" y1="250.0" x2="680" y2="250.0" stroke="#e5e7eb"/>
+  <text x="52" y="254.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">20</text>
+  <line x1="60" y1="325.0" x2="680" y2="325.0" stroke="#b85450" stroke-dasharray="6,4" stroke-width="1.5"/>
+  <text x="688" y="329.0" text-anchor="start" font-family="sans-serif" font-size="12" fill="#b85450">ceiling 17</text>
+  <line x1="452.66666666666663" y1="250" x2="452.66666666666663" y2="400" stroke="#6b7280" stroke-dasharray="3,3"/>
+  <polyline points="60.0,325.0 94.4,300.0 128.9,325.0 163.3,275.0 197.8,375.0 232.2,325.0 266.7,350.0 301.1,300.0 335.6,325.0 370.0,325.0 404.4,300.0 438.9,375.0 473.3,350.0 507.8,350.0 542.2,325.0 576.7,350.0 611.1,350.0 645.6,350.0 680.0,300.0" fill="none" stroke="#1f4e79" stroke-width="2"/>
+  <circle cx="60.0" cy="325.0" r="3" fill="#1f4e79"/>
+  <circle cx="94.4" cy="300.0" r="3" fill="#1f4e79"/>
+  <circle cx="128.9" cy="325.0" r="3" fill="#1f4e79"/>
+  <circle cx="163.3" cy="275.0" r="3" fill="#1f4e79"/>
+  <circle cx="197.8" cy="375.0" r="3" fill="#1f4e79"/>
+  <circle cx="232.2" cy="325.0" r="3" fill="#1f4e79"/>
+  <circle cx="266.7" cy="350.0" r="3" fill="#1f4e79"/>
+  <circle cx="301.1" cy="300.0" r="3" fill="#1f4e79"/>
+  <circle cx="335.6" cy="325.0" r="3" fill="#1f4e79"/>
+  <circle cx="370.0" cy="325.0" r="3" fill="#1f4e79"/>
+  <circle cx="404.4" cy="300.0" r="3" fill="#1f4e79"/>
+  <circle cx="438.9" cy="375.0" r="3" fill="#1f4e79"/>
+  <circle cx="473.3" cy="350.0" r="3" fill="#1f4e79"/>
+  <circle cx="507.8" cy="350.0" r="3" fill="#1f4e79"/>
+  <circle cx="542.2" cy="325.0" r="3" fill="#1f4e79"/>
+  <circle cx="576.7" cy="350.0" r="3" fill="#1f4e79"/>
+  <circle cx="611.1" cy="350.0" r="3" fill="#1f4e79"/>
+  <circle cx="645.6" cy="350.0" r="3" fill="#1f4e79"/>
+  <circle cx="680.0" cy="300.0" r="3" fill="#1f4e79"/>
+  <text x="370.0" y="434" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#111827" font-weight="bold">Whole triplets (n = 78)</text>
+  <line x1="60" y1="444" x2="60" y2="594" stroke="#111827"/>
+  <line x1="60" y1="594" x2="680" y2="594" stroke="#111827"/>
+  <line x1="60" y1="594.0" x2="680" y2="594.0" stroke="#e5e7eb"/>
+  <text x="52" y="598.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">45</text>
+  <line x1="60" y1="556.5" x2="680" y2="556.5" stroke="#e5e7eb"/>
+  <text x="52" y="560.5" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">47</text>
+  <line x1="60" y1="519.0" x2="680" y2="519.0" stroke="#e5e7eb"/>
+  <text x="52" y="523.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">49</text>
+  <line x1="60" y1="481.5" x2="680" y2="481.5" stroke="#e5e7eb"/>
+  <text x="52" y="485.5" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">51</text>
+  <line x1="60" y1="444.0" x2="680" y2="444.0" stroke="#e5e7eb"/>
+  <text x="52" y="448.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#6b7280">53</text>
+  <line x1="60" y1="481.5" x2="680" y2="481.5" stroke="#b85450" stroke-dasharray="6,4" stroke-width="1.5"/>
+  <text x="688" y="485.5" text-anchor="start" font-family="sans-serif" font-size="12" fill="#b85450">floor 51</text>
+  <line x1="452.66666666666663" y1="444" x2="452.66666666666663" y2="594" stroke="#6b7280" stroke-dasharray="3,3"/>
+  <polyline points="60.0,481.5 94.4,519.0 128.9,500.2 163.3,537.8 197.8,519.0 232.2,481.5 266.7,537.8 301.1,519.0 335.6,556.5 370.0,575.2 404.4,537.8 438.9,481.5 473.3,462.8 507.8,462.8 542.2,462.8 576.7,481.5 611.1,481.5 645.6,481.5 680.0,519.0" fill="none" stroke="#1f4e79" stroke-width="2"/>
+  <circle cx="60.0" cy="481.5" r="3" fill="#1f4e79"/>
+  <circle cx="94.4" cy="519.0" r="3" fill="#1f4e79"/>
+  <circle cx="128.9" cy="500.2" r="3" fill="#1f4e79"/>
+  <circle cx="163.3" cy="537.8" r="3" fill="#1f4e79"/>
+  <circle cx="197.8" cy="519.0" r="3" fill="#1f4e79"/>
+  <circle cx="232.2" cy="481.5" r="3" fill="#1f4e79"/>
+  <circle cx="266.7" cy="537.8" r="3" fill="#1f4e79"/>
+  <circle cx="301.1" cy="519.0" r="3" fill="#1f4e79"/>
+  <circle cx="335.6" cy="556.5" r="3" fill="#1f4e79"/>
+  <circle cx="370.0" cy="575.2" r="3" fill="#1f4e79"/>
+  <circle cx="404.4" cy="537.8" r="3" fill="#1f4e79"/>
+  <circle cx="438.9" cy="481.5" r="3" fill="#1f4e79"/>
+  <circle cx="473.3" cy="462.8" r="3" fill="#1f4e79"/>
+  <circle cx="507.8" cy="462.8" r="3" fill="#1f4e79"/>
+  <circle cx="542.2" cy="462.8" r="3" fill="#1f4e79"/>
+  <circle cx="576.7" cy="481.5" r="3" fill="#1f4e79"/>
+  <circle cx="611.1" cy="481.5" r="3" fill="#1f4e79"/>
+  <circle cx="645.6" cy="481.5" r="3" fill="#1f4e79"/>
+  <circle cx="680.0" cy="519.0" r="3" fill="#1f4e79"/>
+  <text x="60.0" y="614" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">0</text>
+  <text x="163.33333333333331" y="614" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">30</text>
+  <text x="266.66666666666663" y="614" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">60</text>
+  <text x="370.0" y="614" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">90</text>
+  <text x="473.3333333333333" y="614" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">120</text>
+  <text x="576.6666666666667" y="614" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">150</text>
+  <text x="680.0" y="614" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">180</text>
+  <text x="370.0" y="632" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#6b7280">Update</text>
+</svg>
