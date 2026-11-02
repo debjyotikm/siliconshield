@@ -1264,6 +1264,8 @@ def runner_infra(tmp_path):
     infra = tmp_path / "infra"
     folders = (
         "source/siliconshield/training/laya",
+        "source/siliconshield/research_loop/episodes",
+        "source/siliconshield/research_loop/execution",
         "model",
         "data",
         "runs",
@@ -1273,6 +1275,24 @@ def runner_infra(tmp_path):
         (infra / folder).mkdir(parents=True, exist_ok=True)
     trainer = infra / "source/siliconshield/training/laya/security_train.py"
     trainer.write_text("")
+    base = infra / "source/siliconshield/research_loop"
+    for package in (
+        infra / "source/siliconshield/__init__.py",
+        base / "__init__.py",
+        base / "episodes/__init__.py",
+        base / "execution/__init__.py",
+    ):
+        package.write_text("")
+    (base / "episodes/contracts.py").write_text(
+        "def atomic_json(*args):\n    return None\n\n\n"
+        "def read_json(*args):\n    return {}\n"
+    )
+    (base / "execution/owned_job.py").write_text(
+        "from siliconshield.research_loop.episodes.contracts import (\n"
+        "    atomic_json,\n"
+        "    read_json,\n"
+        ")\n"
+    )
     for split in ("train", "dev"):
         (infra / "data" / (split + ".jsonl")).write_text("{}\n")
     (infra / "model" / "config.json").write_text("{}")

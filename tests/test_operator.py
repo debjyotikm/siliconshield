@@ -180,11 +180,38 @@ class FakeJobs:
             "defaults": {"max_updates": 10, "encoder_lr": 1e-5},
         }
         self.units, self.launches = {}, []
-        for folder in ("source/siliconshield/training/laya", "model", "data"):
+        for folder in (
+            "source/siliconshield/training/laya",
+            "source/siliconshield/research_loop/episodes",
+            "source/siliconshield/research_loop/execution",
+            "model",
+            "data",
+        ):
             (root / folder).mkdir(parents=True, exist_ok=True)
         (
             root / "source/siliconshield/training/laya/security_train.py"
         ).write_text("")
+        for package in (
+            "source/siliconshield/__init__.py",
+            "source/siliconshield/research_loop/__init__.py",
+            "source/siliconshield/research_loop/episodes/__init__.py",
+            "source/siliconshield/research_loop/execution/__init__.py",
+        ):
+            (root / package).write_text("")
+        (
+            root / "source/siliconshield/research_loop/episodes/contracts.py"
+        ).write_text(
+            "def atomic_json(*args):\n    return None\n\n\n"
+            "def read_json(*args):\n    return {}\n"
+        )
+        (
+            root / "source/siliconshield/research_loop/execution/owned_job.py"
+        ).write_text(
+            "from siliconshield.research_loop.episodes.contracts import (\n"
+            "    atomic_json,\n"
+            "    read_json,\n"
+            ")\n"
+        )
         for split in ("train", "dev"):
             (root / "data" / (split + ".jsonl")).write_text("{}\n")
 
@@ -414,7 +441,7 @@ def test_owned_process_writes_actual_exit_and_timeout(tmp_path):
 
     for name, script, timeout, expected in (
         ("success", 'print("executed")', 5, 0),
-        ("failure", "raise SystemExit(7)", 5, 1),
+        ("failure", "raise ValueError('boom-7')", 5, 1),
         ("timeout", "import time; time.sleep(30)", 0.05, 1),
     ):
         output = tmp_path / name
@@ -435,7 +462,8 @@ def test_owned_process_writes_actual_exit_and_timeout(tmp_path):
         if name == "timeout":
             assert receipt["failure"] == "timeout"
         elif name == "failure":
-            assert receipt["exit_code"] == 7
+            assert receipt["exit_code"] == 1
+            assert receipt["failure"] == "ValueError: boom-7"
 
 
 def test_glimmer_training_and_serving_cannot_share_gpu(tmp_path, monkeypatch):
@@ -1141,3 +1169,149 @@ def test_dev_disjoint_from_baseline_and_training_states():
             dev_steps.add(entry["step"])
     assert dev_steps.isdisjoint({40, 60, 200, 300})
     assert 57 in dev_steps and 63 in dev_steps
+
+
+def test_preflight_rejects_snapshot_without_worker_entrypoint(operator):
+    worker = (
+        Path(operator.profile["source"])
+        / "siliconshield/research_loop/execution/owned_job.py"
+    )
+    worker.unlink()
+    manifest = operator.prepare("experiment")
+    with pytest.raises(ValueError, match="not importable"):
+        operator.preflight(manifest)
+
+
+def test_explicit_empty_budget_disables_interventions(operator):
+    manifest = operator.prepare("experiment", {}, {})
+    assert manifest["intervention_budget"] == {}
+    operator.preflight(manifest)
+    operator.submit(manifest)
+    operator.observe(manifest)
+    operator.diagnose(manifest)
+    with pytest.raises(ValueError, match="exhausted"):
+        operator.intervene(manifest, "adjust_lr", lr=1e-4)
+
+
+def test_missing_budget_takes_default(operator):
+    manifest = operator.prepare("experiment")
+    assert manifest["intervention_budget"]["max_lr_adjustments"] == 1
+
+
+def _failed_unit(operator, manifest):
+    operator.jobs.units[manifest["unit"]] = {
+        "LoadState": "loaded",
+        "ActiveState": "failed",
+        "Result": "failure",
+        "Description": "siliconshield:" + manifest["idempotency_key"],
+    }
+
+
+def test_abandon_terminalizes_dead_attempt_and_releases_owner(operator):
+    manifest = prepared(operator, "first")
+    operator.submit(manifest)
+    _failed_unit(operator, manifest)
+    result = operator.abandon(manifest)
+    assert result["terminal"] == "failed"
+    receipt = json.loads(
+        (Path(manifest["output"]) / "execution.json").read_text()
+    )
+    assert receipt["phase"] == "failed"
+    assert receipt["identity"] == manifest["idempotency_key"]
+    second = prepared(operator, "second")
+    operator.submit(second)
+    assert len(operator.jobs.launches) == 2
+
+
+def test_abandon_refuses_live_and_resumable_attempts(operator):
+    manifest = prepared(operator)
+    operator.submit(manifest)
+    with pytest.raises(ValueError, match="running"):
+        operator.abandon(manifest)
+    _failed_unit(operator, manifest)
+    output = Path(manifest["output"])
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "latest.pt").write_text("checkpoint")
+    with pytest.raises(ValueError, match="resumable"):
+        operator.abandon(manifest)
+
+
+def test_owned_receipt_records_last_traceback_summary(tmp_path):
+    from siliconshield.research_loop.execution.owned_job import root_cause
+
+    log = tmp_path / "child.log"
+    log.write_text(
+        "Traceback (most recent call last):\n"
+        '  File "t.py", line 1, in <module>\n'
+        "ValueError: no declared source mass for toy\n"
+        "Traceback (most recent call last):\n"
+        '  File "launcher.py", line 9, in launch\n'
+        "torch.distributed.elastic.multiprocessing.errors.ChildFailedError:\n"
+        "============================================================\n"
+    )
+    assert root_cause(log) == "ValueError: no declared source mass for toy"
+    assert root_cause(tmp_path / "missing.log") is None
+
+
+def test_preflight_names_one_line_worker_cause(operator):
+    worker = (
+        Path(operator.profile["source"])
+        / "siliconshield/research_loop/execution/owned_job.py"
+    )
+    worker.unlink()
+    manifest = operator.prepare("experiment")
+    with pytest.raises(ValueError) as caught:
+        operator.preflight(manifest)
+    assert str(caught.value).count("\n") == 0
+    assert "ModuleNotFoundError" in str(caught.value)
+
+
+def test_preflight_refuses_when_disk_cannot_hold_run(
+    operator, tmp_path, monkeypatch
+):
+    import collections
+    import shutil
+
+    model_file = Path(operator.profile["model"]) / "weights.bin"
+    model_file.write_bytes(b"x" * 100)
+    usage = collections.namedtuple("usage", ("total", "used", "free"))
+    monkeypatch.setattr(
+        shutil, "disk_usage", lambda path: usage(1000, 900, 100)
+    )
+    manifest = operator.prepare("experiment")
+    with pytest.raises(ValueError, match="below twice"):
+        operator.preflight(manifest)
+
+
+def test_owned_receipt_prefers_cli_error_over_empty_wrapper(tmp_path):
+    from siliconshield.research_loop.execution.owned_job import root_cause
+
+    log = tmp_path / "child.log"
+    log.write_text(
+        "usage: security_train.py [-h] [--model MODEL]\n"
+        "security_train.py: error: Hold-decay scheduling requires "
+        "max_updates greater than warmup plus hold\n"
+        "Traceback (most recent call last):\n"
+        '  File "launcher.py", line 9, in launch\n'
+        "torch.distributed.elastic.multiprocessing.errors.ChildFailedError:\n"
+    )
+    assert root_cause(log) == (
+        "security_train.py: error: Hold-decay scheduling requires "
+        "max_updates greater than warmup plus hold"
+    )
+
+
+def test_preflight_rejects_trainer_settings_combination(operator):
+    trainer = (
+        Path(operator.profile["source"])
+        / "siliconshield/training/laya/security_train.py"
+    )
+    trainer.write_text(
+        "import sys\n"
+        "print('security_train.py: error: Hold-decay scheduling requires '\n"
+        "'max_updates greater than warmup plus hold', file=sys.stderr)\n"
+        "sys.exit(2)\n"
+    )
+    manifest = operator.prepare("experiment")
+    with pytest.raises(ValueError, match="Trainer settings rejected"):
+        operator.preflight(manifest)

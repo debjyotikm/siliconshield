@@ -1301,3 +1301,106 @@ def test_inspect_observation_carries_history_and_contract_version(tmp_path):
     assert observed["contract_version"] == 4
     assert observed["development_history"]["total"] == 1
     assert observed["development_history"]["entries"][0]["step"] == 60
+
+
+def test_dead_attempt_terminalizes_without_model_turn(tmp_path):
+    from siliconshield.research_loop.episodes.contracts import atomic_json
+    from siliconshield.research_loop.execution.glimmer_operator import (
+        run_operator,
+    )
+
+    op = make_operator(tmp_path)
+    manifest = op.prepare("exp-a")
+    manifest.update(phase="submit", attempts=1, max_retries=0)
+    atomic_json(op.manifest_path("exp-a"), manifest)
+    client = ScriptedGlimmer("continue")
+    result = run_operator(
+        {
+            "profile": "unused",
+            "experiment_id": "exp-a",
+            "output": str(tmp_path / "out"),
+            "model": "fixture",
+        },
+        client=client,
+        operator=op,
+    )
+    assert result["manifest"]["terminal"] == "failed"
+    assert client.calls == 0
+
+
+def _schedule_campaign(
+    tmp_path, fitting_common, development_overrides, **extra
+):
+    from siliconshield.research_loop.execution.strategy import run_campaign
+
+    def execute(config):
+        folder = tmp_path / config["experiment_id"]
+        folder.mkdir(exist_ok=True)
+        if config["overrides"].get("limit_train_rows"):
+            report = {
+                "evaluation_role": "train_fitting",
+                "train_accuracy": 0.8,
+                "initial_train_accuracy": 0.3,
+                "train": {"nll": 0.4},
+                "selected_checkpoint": {"step": 6},
+            }
+        else:
+            report = {
+                "development": {"accuracy": 0.7},
+                "development_acceptance": {"accepted": False},
+            }
+        (folder / "report.json").write_text(json.dumps(report))
+        return {"manifest": {"terminal": "complete", "output": str(folder)}}
+
+    config = {
+        "experiment_prefix": "fixture",
+        "output": str(tmp_path / "operator"),
+        "profile": "unused",
+        "timeout_seconds": 30,
+        "operator": {"model": "fixture"},
+        "fitting_common": fitting_common,
+        "arms": ARMS,
+        "development_overrides": development_overrides,
+    }
+    config.update(extra)
+    return run_campaign(config, run=execute)
+
+
+def test_development_schedule_restatement_refused(tmp_path):
+    with pytest.raises(ValueError, match="max_updates, warmup"):
+        _schedule_campaign(
+            tmp_path,
+            {"limit_train_rows": 36, "max_updates": 6, "warmup": 2},
+            {},
+        )
+
+
+def test_development_schedule_lineage_recorded(tmp_path):
+    _schedule_campaign(
+        tmp_path,
+        {"limit_train_rows": 36, "max_updates": 6},
+        {"max_updates": 20},
+    )
+    status = json.loads(
+        (tmp_path / "operator" / "campaign-status.json").read_text()
+    )
+    assert status["phase"] == "complete"
+    assert status["schedule_lineage"] == {
+        "inherited_from_fitting": [],
+        "explicit": ["max_updates"],
+    }
+
+
+def test_development_schedule_inheritance_opt_out(tmp_path):
+    _schedule_campaign(
+        tmp_path,
+        {"limit_train_rows": 36, "max_updates": 6},
+        {},
+        allow_fitting_schedule_inheritance=True,
+    )
+    status = json.loads(
+        (tmp_path / "operator" / "campaign-status.json").read_text()
+    )
+    assert status["schedule_lineage"]["inherited_from_fitting"] == [
+        "max_updates"
+    ]

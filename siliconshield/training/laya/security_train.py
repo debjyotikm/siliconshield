@@ -2012,6 +2012,11 @@ def main():
         help="Development evaluations without improvement before early stopping",
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Validate settings and exit before loading data",
+    )
+    parser.add_argument(
         "--plateau-requires-full-exposure",
         action="store_true",
         help="Refuse plateau intervention until delivered draws cover "
@@ -2195,6 +2200,13 @@ def main():
         parser.error("adapter scale must be finite and positive")
     if args.report_bootstrap < 0:
         parser.error("bootstrap draw count must be nonnegative")
+    if args.development_views and args.limit_train_rows:
+        parser.error(
+            "Development views are not available in TRAIN-only fitting"
+        )
+    if args.dry_run:
+        print("settings valid")
+        return
     reporting_contract = None
     if args.reporting_contract:
         contract = json.loads(Path(args.reporting_contract).read_text())
@@ -2336,6 +2348,8 @@ def main():
         if args.development_views
         else None
     )
+    # The settings block rejects this combination first. This guards
+    # direct main() callers that bypass argument parsing.
     if development_views and fitting:
         raise ValueError(
             "Development views are not available in TRAIN-only fitting"

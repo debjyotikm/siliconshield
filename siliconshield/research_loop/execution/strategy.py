@@ -14,6 +14,17 @@ from pathlib import Path
 
 from siliconshield.research_loop.episodes.contracts import atomic_json
 
+FITTING_SCHEDULE_KEYS = (
+    "max_updates",
+    "min_updates",
+    "warmup",
+    "hold_updates",
+    "patience",
+    "eval_every_updates",
+    "lr_schedule",
+    "lr_endpoint",
+)
+
 
 def fitting_plan(experiment_prefix, base_overrides=None, *, arms):
     plan = []
@@ -143,19 +154,38 @@ def run_campaign(config, run=None):
         )
         return assessment
     chosen = min(eligible, key=lambda r: (-r["train_accuracy"], r["nll"]))
-    overrides = {
+    base = {
         k: v
         for k, v in chosen["overrides"].items()
         if k not in ("limit_train_rows", "no_development_in_fitting")
     }
-    overrides.update(config["development_overrides"])
+    restated = config["development_overrides"]
+    inherited = sorted(
+        k for k in base if k in FITTING_SCHEDULE_KEYS and k not in restated
+    )
+    if inherited and not config.get("allow_fitting_schedule_inheritance"):
+        raise ValueError(
+            "Development schedule inherits fitting keys %s. Restate "
+            "them in development_overrides or set "
+            "allow_fitting_schedule_inheritance" % (", ".join(inherited))
+        )
+    overrides = {**base, **restated}
     development_spec = {
         "experiment_id": config["experiment_prefix"] + "-development",
         "overrides": overrides,
     }
+    schedule_lineage = {
+        "inherited_from_fitting": inherited,
+        "explicit": sorted(restated),
+    }
     atomic_json(
         root / "campaign-status.json",
-        {"phase": "development", "chosen": chosen, "assessment": assessment},
+        {
+            "phase": "development",
+            "chosen": chosen,
+            "assessment": assessment,
+            "schedule_lineage": schedule_lineage,
+        },
     )
     report = execute(development_spec)
     atomic_json(
@@ -164,6 +194,7 @@ def run_campaign(config, run=None):
             "phase": "complete",
             "chosen": chosen,
             "assessment": assessment,
+            "schedule_lineage": schedule_lineage,
             "development": report["development"],
             "acceptance": report["development_acceptance"],
             "test_evaluated": False,

@@ -1625,3 +1625,75 @@ def test_trainer_recipe_reference_validates_at_import(tmp_path):
         assert (run.returncode == 0) == valid, run.stderr[-2000:]
         if not valid:
             assert "Selection reference" in run.stderr
+
+
+def test_trainer_dry_run_validates_settings_without_data(
+    tmp_path, monkeypatch, capsys
+):
+    argv = [
+        "security_train.py",
+        "--model",
+        str(tmp_path / "missing-model"),
+        "--data",
+        str(tmp_path / "missing-data"),
+        "--output",
+        str(tmp_path / "out"),
+        "--run-id",
+        "dry",
+        "--dry-run",
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    assert train.main() is None
+    assert "settings valid" in capsys.readouterr().out
+
+
+def test_trainer_dry_run_rejects_hold_beyond_budget(tmp_path, monkeypatch):
+    argv = [
+        "security_train.py",
+        "--model",
+        "m",
+        "--data",
+        "d",
+        "--output",
+        "o",
+        "--run-id",
+        "r",
+        "--dry-run",
+        "--lr-schedule",
+        "hold-decay",
+        "--max-updates",
+        "30",
+        "--warmup",
+        "5",
+        "--hold-updates",
+        "50",
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    with pytest.raises(SystemExit) as caught:
+        train.main()
+    assert caught.value.code == 2
+
+
+def test_trainer_dry_run_rejects_views_in_fitting(tmp_path, monkeypatch):
+    views = tmp_path / "views.json"
+    views.write_text("{}")
+    argv = [
+        "security_train.py",
+        "--model",
+        "m",
+        "--data",
+        "d",
+        "--output",
+        "o",
+        "--run-id",
+        "r",
+        "--dry-run",
+        "--limit-train-rows",
+        "18",
+        "--development-views",
+        str(views),
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    with pytest.raises(SystemExit) as caught:
+        train.main()
+    assert caught.value.code == 2

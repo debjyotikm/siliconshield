@@ -268,8 +268,13 @@ class Operator:
             "gpus": self.profile.get("gpus", [0, 1, 2]),
             "laya_root": laya_root_for(self.profile),
             "unit": "laya-glimmer-job-" + experiment_id,
-            "intervention_budget": intervention_budget
-            or {"max_lr_adjustments": 1, "lr_bounds": [1e-6, 1e-3]},
+            # None takes the default budget. An explicit {} disables
+            # interventions rather than silently re-enabling them.
+            "intervention_budget": (
+                {"max_lr_adjustments": 1, "lr_bounds": [1e-6, 1e-3]}
+                if intervention_budget is None
+                else intervention_budget
+            ),
             "interventions": [],
             "test_touched": False,
             "terminal": None,
@@ -309,6 +314,9 @@ class Operator:
     def preflight(self, manifest):
         self._require(manifest, ("prepare", "preflight"))
         verify_laya(self.profile, manifest.get("laya_root"))
+        self._probe_worker_entrypoint()
+        self._probe_disk_space()
+        self._probe_settings(manifest)
         if (
             hasattr(self.jobs, "gpu_available")
             and not self.jobs.gpu_available()
@@ -338,6 +346,121 @@ class Operator:
         if manifest["input_hashes"] != manifest["execution_inputs"]:
             raise ValueError("Execution inputs changed after preparation")
         return self._save(manifest, "preflight")
+
+    def _probe_worker_entrypoint(self):
+        """Ensure the job python can import the unit entrypoint.
+
+        Units launch ``owned_job`` with the snapshot as their working
+        directory, so a snapshot holding only the trainer fails after
+        submission. Probe that import here instead.
+        """
+        import subprocess
+
+        from siliconshield.research_loop.execution.owned_job import (
+            root_cause_from_text,
+        )
+
+        probe = subprocess.run(
+            [
+                self.profile["python"],
+                "-c",
+                "import siliconshield.research_loop.execution.owned_job",
+            ],
+            cwd=self.profile["source"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        if probe.returncode != 0:
+            cause = (
+                root_cause_from_text(probe.stderr or "")
+                or "exit_code=%d" % probe.returncode
+            )
+            raise ValueError(
+                "Job entrypoint not importable from source snapshot: " + cause
+            )
+
+    def _probe_disk_space(self):
+        """Refuse submission when the runs disk cannot hold the run.
+
+        Resumable optimizer state, the selected export, and eval
+        snapshots each approach parent-export size, so twice that
+        size must be free. A run that dies serializing weights
+        wastes its GPU allocation and leaves a partial export.
+        """
+        import shutil
+
+        runs = Path(self.profile["runs"])
+        if not runs.is_dir():
+            raise ValueError("Runs directory is missing: " + str(runs))
+        parent = sum(
+            path.stat().st_size
+            for path in Path(self.profile["model"]).rglob("*")
+            if path.is_file()
+        )
+        free = shutil.disk_usage(runs).free
+        if free < 2 * parent:
+            raise ValueError(
+                "Runs disk holds %.1f GiB free, below twice the "
+                "parent export size (%.1f GiB)"
+                % (free / 1024**3, 2 * parent / 1024**3)
+            )
+
+    def _probe_settings(self, manifest):
+        """Dry-run the frozen trainer command on CPU before submit.
+
+        Flag combinations such as a hold schedule longer than the
+        update budget fail during training startup. The trainer
+        validates its settings and exits before loading data, so
+        this probe catches those defects with no GPU cost. It
+        invokes the trainer directly: settings validation needs
+        neither the distributed launcher nor a GPU.
+        """
+        import os
+        import subprocess
+
+        from siliconshield.research_loop.execution.owned_job import (
+            root_cause_from_text,
+        )
+
+        command, _ = command_for(
+            self.profile,
+            manifest["experiment_id"],
+            manifest["overrides"],
+        )
+        trainer = str(
+            Path(self.profile["source"])
+            / "siliconshield/training/laya/security_train.py"
+        )
+        argv = [
+            self.profile["python"],
+            trainer,
+            *command[command.index(trainer) + 1 :],
+            "--dry-run",
+        ]
+        env = dict(os.environ)
+        root = manifest.get("laya_root") or self.profile.get("laya_root")
+        if root:
+            env["LAYA_ROOT"] = str(root)
+            env["PYTHONPATH"] = (
+                str(root) + os.pathsep + env.get("PYTHONPATH", "")
+            )
+        probe = subprocess.run(
+            argv,
+            cwd=self.profile["source"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+            env=env,
+            check=False,
+        )
+        if probe.returncode != 0:
+            cause = (
+                root_cause_from_text(probe.stderr or "")
+                or "exit_code=%d" % probe.returncode
+            )
+            raise ValueError("Trainer settings rejected: " + cause)
 
     def submit(self, manifest, action="train"):
         self._require(
@@ -668,5 +791,55 @@ class Operator:
         )
         manifest = self._save(manifest, "report", terminal=terminal)
         manifest["terminal"] = terminal
+        atomic_json(self.manifest_path(manifest["experiment_id"]), manifest)
+        return manifest
+
+    def abandon(self, manifest):
+        """Terminalize a dead attempt that left no usable receipt.
+
+        A unit that dies before its worker writes anything leaves no
+        execution receipt, so failure detection and reservation
+        release cannot proceed. Abandon records the terminal failure
+        under the attempt identity and marks the experiment failed.
+        Refuses live jobs, valid reports, and attempts that could
+        still resume from checkpoint state.
+        """
+        self._require(
+            manifest,
+            ("submit", "observe", "diagnose", "intervene", "finalize"),
+        )
+        state = self._owned_state(manifest)
+        if state["state"] == "running":
+            raise ValueError("Cannot abandon a running job")
+        status = self.jobs.status(manifest["experiment_id"])
+        if self._report_valid(manifest, status):
+            raise ValueError("Cannot abandon a run with a valid report")
+        if (
+            manifest["attempts"] < 1 + manifest["max_retries"]
+            and (Path(manifest["output"]) / "latest.pt").exists()
+        ):
+            raise ValueError("Retry budget remains with resumable state")
+        output = Path(manifest["output"])
+        output.mkdir(parents=True, exist_ok=True)
+        receipt = status.get("execution.json", {})
+        if receipt.get("identity") != manifest[
+            "idempotency_key"
+        ] or receipt.get("phase") not in ("failed", "completed"):
+            atomic_json(
+                output / "execution.json",
+                {
+                    "identity": manifest["idempotency_key"],
+                    "unit": manifest["unit"],
+                    "action": receipt.get("action", "train"),
+                    "phase": "failed",
+                    "failure": "abandoned: unit %s with no usable receipt"
+                    % state["state"],
+                    "finished": time.time(),
+                },
+            )
+        manifest = self._save(
+            manifest, "report", terminal="failed", unit_state=state["state"]
+        )
+        manifest["terminal"] = "failed"
         atomic_json(self.manifest_path(manifest["experiment_id"]), manifest)
         return manifest

@@ -15,6 +15,58 @@ from siliconshield.research_loop.episodes.contracts import (
 )
 
 
+def root_cause_from_text(text):
+    """Return the most informative traceback summary in text, if any.
+
+    Launchers wrap the real error (torch elastic prints its own
+    summary after the child traceback), so callers get the
+    exception line itself: the first non-indented line after a
+    traceback marker. Traceback frames are always indented.
+    Summaries without a message lose to earlier ones with one.
+    """
+    marker = "Traceback (most recent call last):"
+    blocks = text.split(marker)
+    if len(blocks) < 2:
+        return _cli_error(text)
+    summaries = []
+    for block in blocks[1:]:
+        for line in block.splitlines():
+            if line and not line[0].isspace():
+                summaries.append(line.strip()[:300])
+                break
+    for summary in reversed(summaries):
+        _, colon, tail = summary.partition(":")
+        if not colon or tail.strip():
+            return summary
+    if summaries:
+        return _cli_error(text) or summaries[-1]
+    return None
+
+
+def _cli_error(text):
+    """Return the last command-line error line, if any.
+
+    Usage errors (argparse rejects a flag combination) exit
+    without a traceback. The `prog.py: error: ...` line is the
+    actionable summary.
+    """
+    matches = [
+        line.strip()[:300]
+        for line in text.splitlines()
+        if ": error: " in line and not line[0].isspace()
+    ]
+    return matches[-1] if matches else None
+
+
+def root_cause(log):
+    """Return the most informative traceback summary from a log file."""
+    try:
+        text = Path(log).read_bytes().decode("utf-8", errors="replace")
+    except OSError:
+        return None
+    return root_cause_from_text(text)
+
+
 def run(manifest_path, resource_root, action):
     manifest = read_json(manifest_path)
     output = Path(manifest["output"])
@@ -122,6 +174,8 @@ def run(manifest_path, resource_root, action):
                 if child.poll() is None:
                     os.killpg(child.pid, signal.SIGKILL)
                     child.wait()
+        if failure is None and code != 0:
+            failure = root_cause(log) or "exit_code=%d" % code
         receipt.update(
             phase="completed" if code == 0 and not failure else "failed",
             exit_code=code,

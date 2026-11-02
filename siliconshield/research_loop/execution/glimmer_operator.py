@@ -610,6 +610,14 @@ def _run_operator(config, client=None, operator=None, sleep=None):
             manifest = operator.report(operator.finalize(manifest))
             persist(manifest, False)
             return {"manifest": manifest, "cycles": cycles}
+        if not job_running and hasattr(operator, "abandon"):
+            try:
+                manifest = operator.abandon(manifest)
+            except ValueError:
+                pass
+            else:
+                persist(manifest, False)
+                return {"manifest": manifest, "cycles": cycles}
         try:
             manifest, executed = run_cycle(operator, manifest, client, output)
         except Exception as exc:  # endpoint/tunnel failure: job stays owned by systemd; keep observing
