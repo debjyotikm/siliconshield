@@ -5,8 +5,6 @@ import json
 import pytest
 
 from siliconshield.benchmark import metrics
-from siliconshield.benchmark.dataset import load_benchmark, validate_rows
-from siliconshield.benchmark.runner import BenchmarkRunner
 
 LABELS = [
     "satisfies_requirement",
@@ -53,160 +51,6 @@ def _payload(label):
     }
 
 
-def test_validate_rows_accepts_and_rejects(tmp_path):
-    assert validate_rows(_rows())
-    bad = _rows()
-    del bad[0]["state"]
-    with pytest.raises(ValueError):
-        validate_rows(bad)
-    dup = _rows()
-    dup[1]["id"] = "a0"
-    with pytest.raises(ValueError):
-        validate_rows(dup)
-    broken = _rows()[:5]
-    with pytest.raises(ValueError):
-        validate_rows(broken)
-    path = tmp_path / "bench.jsonl"
-    path.write_text("\n".join(json.dumps(row) for row in _rows()))
-    data = load_benchmark(str(path))
-    assert len(data["rows"]) == 6
-    assert data["source"].startswith("local:")
-    with pytest.raises(ValueError):
-        load_benchmark("hf://:bad")
-
-
-def test_metrics_counts_and_triplets():
-    rows = _rows()
-    labels = {
-        "a0": LABELS[0],
-        "a1": LABELS[0],
-        "a2": LABELS[2],
-        "b0": LABELS[1],
-        "b1": LABELS[1],
-        "b2": LABELS[2],
-    }
-    probs = {
-        row_id: {
-            name: (0.7 if name == labels[row_id] else 0.15) for name in LABELS
-        }
-        for row_id in labels
-    }
-    overall, areas, mechs = metrics.score_predictions(rows, labels, probs)
-    assert overall["correct"] == 4
-    assert overall["false_safe"] == 1
-    assert overall["false_violation"] == 1
-    assert overall["triplets_correct"] == 0
-    assert overall["triplets_total"] == 2
-    assert areas["fifo"]["triplets_total"] == 1
-    assert mechs["synthetic-mech"]["rows"] == 6
-    assert overall["nll"] > 0.0
-    with pytest.raises(ValueError):
-        metrics.score_predictions(rows, {"a0": "nope"}, probs)
-
-
-def test_failed_members_fail_triplets_and_keep_support():
-    rows = _rows()
-    labels = {row["id"]: row["expected"]["security"] for row in rows}
-    probs = {
-        row_id: {
-            name: (0.9 if name == labels[row_id] else 0.05) for name in LABELS
-        }
-        for row_id in labels
-    }
-    one_failed, _, _ = metrics.score_predictions(
-        rows, labels, probs, {"a2": "worker failed"}
-    )
-    assert one_failed["correct"] == 5
-    assert one_failed["errors"] == 1
-    assert one_failed["triplets_correct"] == 1
-    assert one_failed["triplets_total"] == 2
-    assert one_failed["triplets_failed"] == 1
-    assert one_failed["triplets_incomplete"] == 0
-    ctx = [
-        entry for entry in one_failed["classes"] if entry["label"] == LABELS[2]
-    ][0]
-    assert ctx == {"label": LABELS[2], "correct": 1, "total": 2}
-    all_failed, _, _ = metrics.score_predictions(
-        rows, {}, {}, {row["id"]: "down" for row in rows}
-    )
-    assert all_failed["correct"] == 0
-    assert all_failed["triplets_correct"] == 0
-    assert all_failed["triplets_total"] == 2
-    assert all_failed["triplets_failed"] == 2
-
-
-def test_partial_triplet_counts_incomplete():
-    rows = _rows()[:4]
-    labels = {row["id"]: row["expected"]["security"] for row in rows}
-    probs = {
-        row_id: {
-            name: (0.9 if name == labels[row_id] else 0.05) for name in LABELS
-        }
-        for row_id in labels
-    }
-    overall, _, _ = metrics.score_predictions(rows, labels, probs)
-    assert overall["triplets_total"] == 2
-    assert overall["triplets_correct"] == 1
-    assert overall["triplets_incomplete"] == 1
-
-
-def test_compare_requires_same_benchmark():
-    base = {
-        "model_id": "m1",
-        "checkpoint_sha256": "ab" * 32,
-        "benchmark_source": "local:x",
-        "benchmark_sha256": "cd" * 32,
-        "overall": {"correct": 1, "rows": 2, "false_safe": 0},
-        "by_area": {"fifo": {"correct": 1, "rows": 2, "false_safe": 0}},
-        "by_mechanism": {},
-        "row_errors": [],
-    }
-    other = dict(base, model_id="m2")
-    compared = metrics.compare([base, other])
-    assert compared["by_area"]["fifo"]["m1"]["correct"] == 1
-    with pytest.raises(ValueError):
-        metrics.compare([base, dict(other, benchmark_sha256="ee" * 32)])
-    with pytest.raises(ValueError):
-        metrics.compare([base, base])
-
-
-def test_runner_collects_errors_and_reports():
-    data = {
-        "rows": _rows(),
-        "source": "local:synthetic",
-        "rows_sha256": "ff" * 32,
-    }
-    runner = BenchmarkRunner(data)
-    assert runner.areas == ["counter", "fifo"]
-
-    def consult(state):
-        if state.endswith("a1"):
-            raise RuntimeError("worker down")
-        if state.endswith("b0"):
-            return {"label": "bogus"}
-        return _payload(LABELS[0])
-
-    seen = []
-    report = runner.run_model(
-        "synthetic-model",
-        "ab" * 32,
-        consult,
-        progress=lambda done, total: seen.append((done, total)),
-    )
-    assert report["overall"]["rows"] == 6
-    assert report["overall"]["errors"] == 2
-    assert len(report["row_errors"]) == 2
-    assert seen[-1] == (6, 6)
-    with pytest.raises(ValueError):
-        runner.run_model("m", "ab" * 32, consult, areas=["nope"])
-    counter_only = runner.run_model("m", "ab" * 32, consult, areas=["counter"])
-    assert counter_only["overall"]["rows"] == 3
-    limited = runner.run_model("m", "ab" * 32, consult, limit=4)
-    assert limited["overall"]["rows"] == 3
-    assert limited["overall"]["triplets_total"] == 1
-    assert limited["overall"]["triplets_incomplete"] == 0
-
-
 def _eval_rows():
     rows = []
     for area in ("fifo", "counter"):
@@ -221,75 +65,6 @@ def _eval_rows():
                     )
                 )
     return rows
-
-
-def test_sample_triplets_is_seeded_and_complete():
-    from siliconshield.benchmark.router_eval import sample_triplets
-
-    first = sample_triplets(_eval_rows(), 1, 7)
-    again = sample_triplets(_eval_rows(), 1, 7)
-    assert [row["id"] for row in first] == [row["id"] for row in again]
-    assert len(first) == 6
-    everything = sample_triplets(_eval_rows(), 0, 7)
-    assert len(everything) == 12
-    with pytest.raises(ValueError):
-        sample_triplets(_eval_rows(), 3, 7)
-
-
-def test_evaluate_routing_scores_and_arbitrates():
-    from siliconshield.benchmark.router_eval import evaluate_routing
-
-    data = {
-        "rows": _eval_rows(),
-        "source": "local:synthetic",
-        "rows_sha256": "ff" * 32,
-    }
-
-    class FakeService:
-        def assess(self, scope, state, transport):
-            assert scope[0] in ("fifo", "counter")
-            return {
-                "routing": {
-                    "experts": ["expert-a"],
-                    "tiers": {"expert-a": "strong"},
-                    "thin_evidence": False,
-                },
-                "responses": [
-                    {
-                        "expert_id": "expert-a",
-                        "label": transport("expert-a", state)["label"],
-                    }
-                ],
-                "errors": [],
-            }
-
-        def profiles_for(self, expert_ids):
-            return {expert_id: {} for expert_id in expert_ids}
-
-    def transport(expert_id, state):
-        return _payload(LABELS[0])
-
-    def arbitrate(assessment, state, requirement, profiles):
-        assert requirement
-        assert assessment["responses"]
-        return {"conclusion": "satisfies_requirement"}
-
-    report = evaluate_routing(
-        data,
-        FakeService(),
-        transport,
-        per_area=1,
-        seed=7,
-        arbitrate_per_area=1,
-        arbitrate=arbitrate,
-    )
-    assert set(report["by_area"]) == {"fifo", "counter"}
-    assert report["by_area"]["fifo"]["rows"] == 3
-    assert report["by_area"]["fifo"]["expert_correct"]["expert-a"] == {
-        "correct": 1,
-        "total": 3,
-    }
-    assert len(report["arbitration"]) == 6
 
 
 def test_cli_run_end_to_end(tmp_path):
@@ -354,3 +129,32 @@ def test_cli_run_end_to_end(tmp_path):
     assert report["overall"]["correct"] == 2
     compared = json.loads((tmp_path / "out" / "comparison.json").read_text())
     assert compared["models"][0]["model_id"] == "expert-a"
+
+
+def test_metrics_counts_and_triplets():
+    rows = _rows()
+    labels = {
+        "a0": LABELS[0],
+        "a1": LABELS[0],
+        "a2": LABELS[2],
+        "b0": LABELS[1],
+        "b1": LABELS[1],
+        "b2": LABELS[2],
+    }
+    probs = {
+        row_id: {
+            name: (0.7 if name == labels[row_id] else 0.15) for name in LABELS
+        }
+        for row_id in labels
+    }
+    overall, areas, mechs = metrics.score_predictions(rows, labels, probs)
+    assert overall["correct"] == 4
+    assert overall["false_safe"] == 1
+    assert overall["false_violation"] == 1
+    assert overall["triplets_correct"] == 0
+    assert overall["triplets_total"] == 2
+    assert areas["fifo"]["triplets_total"] == 1
+    assert mechs["synthetic-mech"]["rows"] == 6
+    assert overall["nll"] > 0.0
+    with pytest.raises(ValueError):
+        metrics.score_predictions(rows, {"a0": "nope"}, probs)

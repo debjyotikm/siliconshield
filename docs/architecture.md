@@ -125,7 +125,7 @@ the reference for that transaction.
 | Strongest planned expert fails | Return its error and rerank only surviving evidence. | `experts/service.py` · [expert safety tests](../tests/test_expert_safety.py) |
 | Submission client disappears | Reconcile the recorded systemd unit and receipts before any further submission. | `execution/operator.py` · [operator tests](../tests/test_operator.py) |
 | Prepared data, policy, or command changes | Refuse the bound launch or assessment until a reviewed specification is registered. | `execution/study_contract.py` · [study enforcement tests](../tests/test_study_enforcement.py) |
-| Crash during promotion or report closeout | Resume from transaction/phase evidence and revalidate the export before completing. | `execution/laya_campaign.py` · [campaign tests](../tests/test_laya_campaign.py) |
+| Crash during promotion or report closeout | Resume from transaction/phase evidence and revalidate the export before completing. | `execution/laya_campaign.py` |
 
 Full operational procedures are in [operations and recovery](operations.md).
 Locks and identity checks coordinate trusted processes. Host/container isolation

@@ -150,11 +150,9 @@ unchanged. See [decision studies](decision-study.md).
   or the reason optional guidance was unavailable.
 
 ```bash
-python -m pytest -q tests/test_muse_procedures.py tests/test_campaign_supervisor.py
-python -m pytest -q tests/test_muse_harness2.py tests/test_glimmer_harness2.py
 bash tools/check.sh
 ```
 
-The Harness² tests use its real pinned engine with fixture completions. They
-skip if the optional dependency is absent. They test the implementation, not
-live Muse quality. The existing Glimmer integration remains separate.
+Procedure and optional-dependency fixtures are local-only and outside the
+submission tree. They test the implementation, not live Muse quality. The
+existing Glimmer integration remains separate.

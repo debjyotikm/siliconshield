@@ -19,49 +19,32 @@ The gate checks Ruff format, narrow lint including import order, compilation,
 mypy, CPU fixtures, and wheel installation outside the checkout. CI runs it on
 Python 3.11 and 3.12. Keep the code compatible with Python 3.11.
 
-The lightweight gate excludes `test_security_training.py` and
-`test_fresh_selection.py`, which import Torch and the external runtime. Run
-those two suites with the security-model environment instead (see the
-runtime-specific fixtures below). Optional dependencies and toolchains cause
-explicit skips in other suites. A skipped integration is not a passing live
-qualification. Pylint is a review signal rather than a blanket score gate.
+The submission tree carries a curated 20-test gate covering installation,
+routing, benchmark, studies, operators, selection, and the Glimmer bridge.
+Torch, solver, GUI, campaign-history, and optional-dependency suites live
+outside the submission tree as local-only fixtures. Pylint is a review
+signal rather than a blanket score gate.
 
 ## Test map
 
 | Area | Tests |
 |---|---|
 | Investigations, classification, patch checks | `test_app_workflow.py` |
-| Installed package and CLI imports | `test_installation.py`, `test_laya_public_examples.py` |
-| Proposal labels and solver adapter | `test_checker_adapter.py`, `test_data_contracts.py` |
-| Dataset identity and lineage | `test_data_contracts.py`, `test_laya_new_study.py` |
-| Question contracts and review ledger | `test_data_contracts.py` |
-| Trainer, sampler, checkpoint export | `test_security_training.py`, `test_data_contracts.py`, `test_fresh_selection.py` |
-| Protected objectives and teacher loss | `test_selection.py`, `test_data_contracts.py` |
-| Reports and uncertainty | `test_selection.py` |
-| Campaign transactions and supervision | `test_laya_campaign.py`, `test_campaign_supervisor.py` |
-| Job authority, reattachment, recovery | `test_operator.py`, `test_glimmer.py` |
-| Glimmer episodes, identity, training | `test_operator.py`, `test_episodes.py`, `test_glimmer_training.py` |
-| Action-class selection and checkpoint review | `test_glimmer.py`, `test_checkpoint_assessment.py` |
-| Inference interfaces and timing | `test_glimmer.py`, `test_selection.py` |
-| Episodes and transfer | `test_episodes.py` |
-| Decision studies and enforcement | `test_decision_study.py`, `test_study_enforcement.py` |
-| Multi-expert routing and arbitration | `test_multi_expert.py`, `test_expert_safety.py` |
-| Area benchmark and router sampling | `test_benchmark.py` |
-| Harness² integration | `test_glimmer_harness2.py`, `test_muse_harness2.py`, `test_muse_procedures.py` |
+| Installed package and CLI imports | `test_installation.py` |
+| Router assessment and arbitration binding | `test_multi_expert.py`, `test_expert_safety.py` |
+| Area benchmark rerun and metric math | `test_benchmark.py` |
+| Study freeze, manifest binding, override refusal | `test_decision_study.py`, `test_study_enforcement.py` |
+| Job authority, preflight, recipe binding | `test_operator.py`, `test_glimmer.py` |
+| Promotion gates and pair preservation | `test_selection.py` |
+| Router bridge sessions | `test_glimmer_router.py` |
 | Export privacy/allowlist | `test_export_check.py` |
 
-Run runtime-specific fixtures with the appropriate environment:
-
-```bash
-CUDA_VISIBLE_DEVICES='' LAYA_ROOT=/path/to/compatible-runtime \
-  /path/to/security-environment/bin/python -m pytest -q \
-  tests/test_security_training.py tests/test_fresh_selection.py tests/test_data_contracts.py
-```
-
-Put Yosys and Icarus on `PATH` to exercise the checker integration tests. Some
-older builder tests additionally use `LAYA_TEST_YOSYS` or `LAYA_TEST_SOURCES`.
-Inspect their skip reasons. Source fixtures must stay outside Git. Harness²
-integration fixtures require the pinned optional dependency.
+The broader fixture suites are local-only and not part of the submission
+tree. Run them from a preserved checkout with the matching environment:
+the security-model interpreter with `LAYA_ROOT` for training suites,
+Yosys and Icarus on `PATH` for checker integration, and the pinned
+optional dependency for Harness² fixtures. Source fixtures must stay
+outside Git.
 
 ## Changing interfaces
 

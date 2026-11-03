@@ -77,9 +77,10 @@ recipe used by the training profile. This single-view flow is a
 different mechanism from decision-study manifests. New owned work
 should use a [decision study](decision-study.md).
 
-Campaign configuration and dataset registration use Python APIs. The regression fixtures in
-[test_laya_campaign.py](../tests/test_laya_campaign.py) show the complete contract
-using synthetic artifacts. Do not substitute dummy evidence to initialize a real
+Campaign configuration and dataset registration use Python APIs. New work
+freezes its plan as a decision study (see below). The study manifest and
+enforcement checks in the submission gate show the binding contract using
+synthetic fixtures. Do not substitute dummy evidence to initialize a real
 campaign.
 
 ## Decision studies

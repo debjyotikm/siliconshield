@@ -53,8 +53,7 @@ integration, serving, GPU execution, or model-quality result.
 - Verify CPU-only import behavior still works after import changes.
 - New CLI entry points must work as `python -m ...` from the repository
   root and from an installed wheel outside the checkout; extend the
-  entry-point tests in `tests/test_laya_public_examples.py` and
-  `tests/test_installation.py`.
+  entry-point tests in `tests/test_installation.py`.
 - Before any commit: stage the intended files and run
   `python tools/export_check.py`; keep `tools/release_files.txt`
   accurate for new source/configuration files.

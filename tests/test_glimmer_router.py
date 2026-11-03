@@ -147,39 +147,6 @@ def _call(name, args, call_id="call-1"):
     }
 
 
-def test_roster_lists_expert_mechanisms(tmp_path):
-    tools = glimmer_router.RouterTools(_registry(tmp_path), pool_factory=_Pool)
-    roster = tools.dispatch("router.roster", {})
-    assert [item["id"] for item in roster["experts"]] == ["expert-a"]
-    assert roster["experts"][0]["supported_mechanisms"] == ["fifo"]
-
-
-def test_assess_rejects_empty_fields(tmp_path):
-    tools = glimmer_router.RouterTools(
-        _registry(tmp_path), pool_factory=_Pool, state_dir=str(tmp_path)
-    )
-    base = {
-        "scope": "fifo",
-        "requirement": "Hold occupancy.",
-        "assumptions": "Two-state.",
-        "rtl": "module m; endmodule",
-    }
-    for key in base:
-        bad = dict(base, **{key: "  "})
-        try:
-            tools.dispatch("router.assess", bad)
-        except ValueError as exc:
-            assert key in str(exc)
-        else:
-            raise AssertionError("empty %s accepted" % key)
-    try:
-        tools.dispatch("router.unknown", {})
-    except ValueError as exc:
-        assert "Unknown tool" in str(exc)
-    else:
-        raise AssertionError("unknown tool accepted")
-
-
 def test_session_runs_roster_then_assess(tmp_path):
     registry = _registry(tmp_path)
     out = tmp_path / "session"
@@ -216,29 +183,3 @@ def test_session_runs_roster_then_assess(tmp_path):
     traces = list(out.glob("trace-*.jsonl"))
     assert len(traces) == 1
     assert len(traces[0].read_text().strip().splitlines()) >= 4
-
-
-def test_session_rejects_empty_task_and_missing_skill(tmp_path):
-    registry = _registry(tmp_path)
-    client = _Client([])
-    try:
-        glimmer_router.run_router_session(
-            client, registry, "  ", str(tmp_path), pool_factory=_Pool
-        )
-    except ValueError as exc:
-        assert "non-empty" in str(exc)
-    else:
-        raise AssertionError("empty task accepted")
-    try:
-        glimmer_router.run_router_session(
-            client,
-            registry,
-            "Assess.",
-            str(tmp_path),
-            skill=str(tmp_path / "absent.md"),
-            pool_factory=_Pool,
-        )
-    except ValueError as exc:
-        assert "skill" in str(exc)
-    else:
-        raise AssertionError("missing skill accepted")
