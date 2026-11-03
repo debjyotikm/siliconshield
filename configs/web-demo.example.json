@@ -1,0 +1,10 @@
+{
+  "registry": null,
+  "state_dir": "~/.local/state/siliconshield/web-demo",
+  "port": 8765,
+  "gpu": null,
+  "glimmer": null,
+  "training": {
+    "enabled": false
+  }
+}

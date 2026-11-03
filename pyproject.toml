@@ -60,3 +60,12 @@ warn_unused_ignores = true
 warn_return_any = true
 no_implicit_reexport = true
 strict_equality = true
+
+[tool.setuptools.package-data]
+"siliconshield.web_demo" = [
+    "static/*.html",
+    "static/*.js",
+    "static/*.css",
+    "static/*.svg",
+    "examples.example.json",
+]

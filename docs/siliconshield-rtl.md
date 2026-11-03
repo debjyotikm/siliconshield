@@ -11,6 +11,8 @@ different correct labels under different policies, which is exactly how a
 protection review works. Contract-1 focuses on visible local guards.
 Contract-2 adds a specialist for FIFO, counter, and arbitration behavior.
 Both return the same three-way decision and all three model scores.
+Both models were created with the help of Muse Wonder and Muse Spark 1.3
+through training studies on local GPU hardware.
 
 ## Releases and datasets
 

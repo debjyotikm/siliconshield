@@ -1,7 +1,7 @@
-"""Persistent LAYA inference worker for the desktop GUI.
+"""Persistent LAYA inference worker for the router and browser demo.
 
-Runs in the LAYA environment (Torch/CUDA) as a child of the Qt
-window. Speaks newline-delimited JSON on stdio: stdin carries
+Runs in the LAYA environment as an owned subprocess of the calling
+application. Speaks newline-delimited JSON on stdio: stdin carries
 ``load``/``analyze``/``shutdown`` commands, stdout carries only
 protocol lines (``progress``/``ready``/``result``/``error``), and
 diagnostics go to stderr. One model stays resident across many

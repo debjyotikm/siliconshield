@@ -1040,6 +1040,12 @@ coherent execution, balanced semantic tests, and preserved evaluation
 boundaries. This provides a concrete foundation for improving both the
 specialists and the agents that use them.
 
+## Acknowledgments
+
+Both decision models were created with the help of Muse Wonder and
+Muse Spark 1.3, working through Muse Code and OpenCode agentic coding
+sessions on local GPU hardware.
+
 ## References and public research resources
 
 [1] SiliconShield contributors. *SiliconShield source, model documentation,

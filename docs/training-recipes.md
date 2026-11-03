@@ -13,6 +13,9 @@ set](https://huggingface.co/datasets/danieltombay/siliconshield-rtl-training)
 [Contract-1](https://huggingface.co/danieltombay/siliconshield-rtl-contract-1)
 and [Contract-2](https://huggingface.co/danieltombay/siliconshield-rtl-contract-2).
 
+Both studies were directed with the help of Muse Wonder and Muse Spark 1.3
+on local GPU hardware.
+
 ## Published populations and weight lineage
 
 The two subsets have different relationships to the released

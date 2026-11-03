@@ -42,6 +42,7 @@ Upstream attribution and dependency terms are in [NOTICE](../NOTICE.md).
 | [Investigation](investigation.md) | Requirement-bound simulation, proposed repairs, candidate rechecks, report interpretation |
 | [Campaigns](campaigns.md) | Persisted round transitions, agent callbacks, controller selection, promotion authority |
 | [Operations](operations.md) | Resource ownership, inspection, stop/recovery procedures, and deployment updates |
+| [Browser demo](web-demo.md) | Four views for decision-model inference, routing, and bounded local training |
 | [Demo](demo.md) | Runnable presentation with explicit expected outputs and evidence boundaries |
 
 ## Models, data, and research

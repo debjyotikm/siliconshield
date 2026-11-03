@@ -43,6 +43,8 @@ or **insufficient context**. Muse uses the router to consult the relevant
 specialist, interpret its assessment, and focus the investigation on the logic
 that matters. The models run locally and expose a common interface, so new
 specialists can extend the workflow to additional design domains.
+Both models were created with the help of Muse Wonder and Muse Spark 1.3
+through training studies on local GPU hardware.
 
 ### Contract-1 · Local guards and register protection
 
@@ -293,7 +295,7 @@ or go directly to a guide below.
 
 | Area | Documentation |
 |---|---|
-| Getting started | [Environment setup](docs/setup.md) · [Model downloads and releases](docs/releases.md) · [Demo walkthrough](docs/demo.md) · [Example formats](examples/README.md) |
+| Getting started | [Environment setup](docs/setup.md) · [Model downloads and releases](docs/releases.md) · [Demo walkthrough](docs/demo.md) · [Browser demo](docs/web-demo.md) · [Example formats](examples/README.md) |
 | RTL investigation | [Router and API](docs/router.md) · [Investigation and repair checks](docs/investigation.md) · [Expert qualification](docs/expert-qualification.md) · [Command and configuration reference](docs/reference.md) |
 | Architecture | [System architecture](docs/architecture.md) · [Architecture diagrams](docs/diagrams/README.md) |
 | Decision models | [Contract-1 and Contract-2 capabilities](docs/siliconshield-rtl.md) · [Measured limitations](docs/LIMITATIONS.md) · [Release training recipes](docs/training-recipes.md) |

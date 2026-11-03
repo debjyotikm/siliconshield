@@ -1,6 +1,6 @@
-"""Shared multi-expert inference service (Qt-free, no Torch import).
+"""Shared multi-expert inference service with no Torch import.
 
-One interface serves the CLI, Muse, and the GUI demo over
+One interface serves the CLI, Muse, and the browser demo over
 persistent worker processes. The service owns registry loading,
 capability profiles, routing, per-request identity, timeouts, and
 worker failures; model execution stays in the worker back end.

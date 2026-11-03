@@ -5,7 +5,7 @@ label, all scores, checkpoint identity, the exact input judged, and
 coverage status, validated through the existing result protocol.
 Execution errors stay separate from model verdicts: a failed consult
 yields an ExpertError, never an insufficient_context label. The
-transport is injected so the CLI, Muse, and the GUI demo share
+transport is injected so the CLI, Muse, and the browser demo share
 this envelope over different worker back ends.
 """
 

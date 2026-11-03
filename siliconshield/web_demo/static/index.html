@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SiliconShield · Decision Model Lab</title>
+    <meta
+      name="description"
+      content="Local RTL security assessment and bounded decision-model training with Muse Glimmer."
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <a href="#contract-1" class="brand"
+          ><svg
+            width="35"
+            height="39"
+            viewBox="0 0 35 39"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M17 2 3 8v10c0 9 6 15 14 19v-6C11 28 8 24 8 18v-7l9-4Z"
+              fill="#ffffff"
+            />
+            <path d="m20 2 12 6v10c0 9-5 15-12 19Z" fill="#2875c9" /></svg
+          ><span class="brand-name"
+            >Silicon<span class="brand-accent">Shield</span
+            ><small>DECISION MODEL LAB</small></span
+          ></a
+        >
+        <div class="nav-label">WORKSPACE</div>
+        <nav aria-label="Demo sections">
+          <button data-view="contract-1">
+            <span class="nav-number">01</span
+            ><span>Contract-1<small>Local guards & registers</small></span>
+          </button>
+          <button data-view="contract-2">
+            <span class="nav-number">02</span
+            ><span>Contract-2<small>FIFO & counter control</small></span>
+          </button>
+          <button data-view="router">
+            <span class="nav-number">03</span
+            ><span>Expert router<small>Specialists + Muse Glimmer</small></span>
+          </button>
+          <button data-view="training">
+            <span class="nav-number">04</span
+            ><span>Train with Muse<small>Adapter training example</small></span>
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="connection-title">
+            <span class="dot" id="connection-dot"></span> Local infrastructure
+          </div>
+          <div class="runtime-row">
+            <span>Decision models</span
+            ><strong id="side-models">Checking</strong>
+          </div>
+          <div class="runtime-row">
+            <span>Muse Glimmer</span><strong id="side-glimmer">Checking</strong>
+          </div>
+          <div class="runtime-row">
+            <span>Training</span><strong id="side-training">Idle</strong>
+          </div>
+          <p>Decision-model inference<br />and training on local hardware.</p>
+          <button class="text-button" id="refresh-health">
+            Refresh connection
+          </button>
+        </div>
+      </aside>
+      <div class="workspace">
+        <header class="topbar">
+          <div>
+            <span class="breadcrumb">SiliconShield</span
+            ><span class="separator">/</span
+            ><span id="breadcrumb-page">Contract-1</span>
+          </div>
+          <div class="top-status">
+            <span class="pill neutral">LOCAL DEMO</span
+            ><span id="top-gpu">Compute status</span>
+          </div>
+        </header>
+        <main id="main" tabindex="-1">
+          <div class="loading-state">
+            Connecting to the local infrastructure…
+          </div>
+        </main>
+        <footer>
+          Model predictions are not simulation or formal proof.<span
+            >SiliconShield · Muse + specialized decision models</span
+          >
+        </footer>
+      </div>
+    </div>
+    <div id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>

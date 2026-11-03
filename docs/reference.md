@@ -12,6 +12,7 @@ Prefix module names below with `python -m`.
 
 | Module | Purpose | Main inputs |
 |---|---|---|
+| `siliconshield.web_demo` | Open the optional local browser interface. | `--config`, `--port`, `--check` |
 | `siliconshield.app` | Investigate a demo or supplied RTL. | `--case` or `--rtl --requirement`, `--output` |
 | `siliconshield.experts` | Route and consult security experts from the CLI. | `assess --registry`, `--scope`, `--state-file`, `--arbitrate` |
 | `siliconshield.benchmark` | List areas, score models, or sample routing. | `areas`, `run --registry --out-dir`, `router-eval --registry --out`, optional `--dataset` |

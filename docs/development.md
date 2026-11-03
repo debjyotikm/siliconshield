@@ -19,9 +19,10 @@ The gate checks Ruff format, narrow lint including import order, compilation,
 mypy, CPU fixtures, and wheel installation outside the checkout. CI runs it on
 Python 3.11 and 3.12. Keep the code compatible with Python 3.11.
 
-The submission tree carries a curated 20-test gate covering installation,
-routing, benchmark, studies, operators, selection, and the Glimmer bridge.
-Torch, solver, GUI, campaign-history, and optional-dependency suites live
+The submission tree carries a curated submission gate covering installation,
+routing, benchmark, studies, operators, selection, the Glimmer bridge, and
+browser request boundaries.
+Torch, solver, campaign-history, and optional-dependency suites live
 outside the submission tree as local-only fixtures. Pylint is a review
 signal rather than a blanket score gate.
 
@@ -30,6 +31,7 @@ signal rather than a blanket score gate.
 | Area | Tests |
 |---|---|
 | Investigations, classification, patch checks | `test_app_workflow.py` |
+| Browser HTTP, CPU dispatch, routing, and toy-job boundaries | `test_web_demo.py` |
 | Installed package and CLI imports | `test_installation.py` |
 | Router assessment and arbitration binding | `test_multi_expert.py`, `test_expert_safety.py` |
 | Area benchmark rerun and metric math | `test_benchmark.py` |

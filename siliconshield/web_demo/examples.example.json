@@ -1,0 +1,65 @@
+[
+  {
+    "id": "privilege-register",
+    "model": "contract-1",
+    "title": "Privilege-qualified register",
+    "scope": "ot-access-control",
+    "requirement": "Outside reset, cfg_reg may change only when privileged is asserted.",
+    "assumptions": "Two-state synchronous logic. Inputs are defined and may vary independently. Reset is exempt from the requirement.",
+    "rtl": "module topmodule(\n  input logic clk, rst_n, wr_en, privileged,\n  input logic [7:0] wdata,\n  output logic [7:0] cfg_reg\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n)\n      cfg_reg <= 8'h00;\n    else if (wr_en && privileged)\n      cfg_reg <= wdata;\n  end\nendmodule"
+  },
+  {
+    "id": "write-path",
+    "model": "contract-1",
+    "title": "Register write path",
+    "scope": "ot-access-control",
+    "requirement": "Outside reset, cfg_reg may change only when privileged is asserted.",
+    "assumptions": "Two-state synchronous logic. Inputs are defined and may vary independently. Reset is exempt from the requirement.",
+    "rtl": "module topmodule(\n  input logic clk, rst_n, wr_en, privileged,\n  input logic [7:0] wdata,\n  output logic [7:0] cfg_reg\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n)\n      cfg_reg <= 8'h00;\n    else if (wr_en)\n      cfg_reg <= wdata;\n  end\nendmodule"
+  },
+  {
+    "id": "policy-wire",
+    "model": "contract-1",
+    "title": "External policy wire \u00b7 challenge case",
+    "scope": "ot-access-control",
+    "requirement": "Outside reset, cfg_reg may change only when privileged is asserted.",
+    "assumptions": "Two-state synchronous logic. Reset is exempt. policy_allow is an omitted Boolean expression over the shown inputs. Its definition has not been provided.",
+    "rtl": "module topmodule(\n  input logic clk, rst_n, wr_en, privileged,\n  input logic [7:0] wdata,\n  output logic [7:0] cfg_reg\n);\n  wire policy_allow;\n  always_ff @(posedge clk) begin\n    if (!rst_n)\n      cfg_reg <= 8'h00;\n    else if (wr_en && policy_allow)\n      cfg_reg <= wdata;\n  end\nendmodule"
+  },
+  {
+    "id": "fifo-simultaneous-guarded",
+    "model": "contract-2",
+    "scope": "fifo",
+    "requirement": "Outside reset, when push and pop are both asserted, count must remain unchanged.",
+    "assumptions": "Two-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently.",
+    "rtl": "module topmodule(\n  input logic clk, rst_n, push, pop,\n  output logic [3:0] count\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n) count <= 4'd0;\n    else case ({push, pop})\n      2'b10: count <= count + 1'b1;\n      2'b01: count <= count - 1'b1;\n      default: count <= count;\n    endcase\n  end\nendmodule",
+    "title": "FIFO simultaneous push/pop \u2014 count holds"
+  },
+  {
+    "id": "fifo-simultaneous-faulty",
+    "model": "contract-2",
+    "scope": "fifo",
+    "requirement": "Outside reset, when push and pop are both asserted, count must remain unchanged.",
+    "assumptions": "Two-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently.",
+    "rtl": "module topmodule(\n  input logic clk, rst_n, push, pop,\n  output logic [3:0] count\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n) count <= 4'd0;\n    else case ({push, pop})\n      2'b10: count <= count + 1'b1;\n      2'b01: count <= count - 1'b1;\n      2'b11: count <= count + 1'b1;\n      default: count <= count;\n    endcase\n  end\nendmodule",
+    "title": "FIFO simultaneous push/pop \u2014 count increments"
+  },
+  {
+    "id": "counter-saturate-guarded",
+    "model": "contract-2",
+    "scope": "counter",
+    "requirement": "Outside reset, count must stay at fifteen when increment is asserted while count is fifteen.",
+    "assumptions": "Two-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently.",
+    "rtl": "module topmodule(\n  input logic clk, rst_n, increment,\n  output logic [3:0] count\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n) count <= 4'd0;\n    else if (increment && count != 4'd15) count <= count + 1'b1;\n  end\nendmodule",
+    "title": "Counter saturation at fifteen"
+  },
+  {
+    "id": "counter-enable-guarded",
+    "model": "contract-2",
+    "scope": "counter",
+    "requirement": "Outside reset, count must remain unchanged whenever enable is low.",
+    "assumptions": "Two-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently.",
+    "rtl": "module topmodule(\n  input logic clk, rst_n, enable,\n  output logic [3:0] count\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n) count <= 4'd0;\n    else if (enable) count <= count + 1'b1;\n  end\nendmodule",
+    "title": "Counter increment enable"
+  }
+]

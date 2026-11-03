@@ -40,6 +40,7 @@ def test_wheel_installs_and_runs_outside_checkout(tmp_path):
             ".pytest_cache",
             ".ruff_cache",
             "*.egg-info",
+            ".venv*",
             "build",
             "dist",
         ),
@@ -112,11 +113,27 @@ def test_wheel_installs_and_runs_outside_checkout(tmp_path):
         "siliconshield.training.laya.build_security_external",
         "siliconshield.research_loop.controller.serve_fast",
         "siliconshield.research_loop.procedures.muse_harness2",
+        "siliconshield.web_demo",
+        "siliconshield.web_demo.toy_runner",
     ):
         entry = run(
             [sys.executable, "-m", dotted, "--help"], cwd=outside, env=env
         )
         assert "usage:" in entry.stdout.lower()
+    assets = run(
+        [
+            sys.executable,
+            "-c",
+            "from importlib.resources import files; "
+            "p = files('siliconshield.web_demo'); "
+            "assert 'Decision Model Lab' in p.joinpath('static/index.html').read_text(); "
+            "assert 'fifo-simultaneous-guarded' in p.joinpath('examples.example.json').read_text(); "
+            "import siliconshield.web_demo.server",
+        ],
+        cwd=outside,
+        env=env,
+    )
+    assert assets.returncode == 0
 
 
 def test_package_version_comes_from_installed_metadata_or_source_fallback():

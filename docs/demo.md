@@ -8,6 +8,19 @@ and the training infrastructure builds or improves those specialists under
 reviewable constraints. Executable repair checks are a separate demonstration
 of how a proposed finding can be followed up.
 
+## Browser interface
+
+Use the [browser demo](web-demo.md) to present the same infrastructure in Chrome.
+The first two views expose Contract-1 and Contract-2 with editable RTL and
+requirements. The third runs the capability router with optional local Glimmer
+arbitration. The fourth follows a bounded toy training exercise through actual
+operator receipts. Model loading supports CPU or a configured GPU. Training
+requires separate, explicit configuration.
+
+The examples are authored presentation cases. Show the returned class scores,
+including incorrect predictions. The training view establishes workflow
+operation, not an improvement in model quality.
+
 ## Three-minute CLI demonstration
 
 This submission path uses public synthetic RTL and explicit commands. Prepare
