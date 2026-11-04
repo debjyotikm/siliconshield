@@ -308,7 +308,8 @@ OPERATOR_TOOLS = [
                     "feasible_ids (sorted IDs satisfying every checkpoint_constraint), "
                     "selected_feasible (boolean, or null if the selected ID is absent), "
                     "failed_constraints and unknown_constraints (each ID maps to a list of "
-                    "view.metric names, in constraint order; unknown means missing evidence)."
+                    "view.metric names, in constraint order; unknown means missing evidence). "
+                    "Without checkpoint_candidates, checkpoint_review is null."
                 ),
             },
         },

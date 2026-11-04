@@ -1,10 +1,17 @@
 """Synthetic tests for the area benchmark (no network, no GPU)."""
 
 import json
+from subprocess import TimeoutExpired
+from types import SimpleNamespace
 
 import pytest
 
 from siliconshield.benchmark import metrics
+from siliconshield.benchmark.dataset import validate_rows
+from siliconshield.benchmark.router_eval import (
+    evaluate_routing,
+    sample_triplets,
+)
 
 LABELS = [
     "satisfies_requirement",
@@ -106,6 +113,9 @@ def test_cli_run_end_to_end(tmp_path):
         def __exit__(self, *exc):
             return None
 
+        def __contains__(self, expert_id):
+            return True
+
         def load(self, entry):
             assert entry["id"] == "expert-a"
 
@@ -158,3 +168,440 @@ def test_metrics_counts_and_triplets():
     assert overall["nll"] > 0.0
     with pytest.raises(ValueError):
         metrics.score_predictions(rows, {"a0": "nope"}, probs)
+
+
+def _eval_service():
+    assessment = {
+        "routing": {
+            "experts": ["expert-a"],
+            "tiers": {"expert-a": "strong"},
+            "thin_evidence": False,
+        },
+        "responses": [{"expert_id": "expert-a", "label": LABELS[0]}],
+        "errors": [],
+    }
+    return SimpleNamespace(
+        expert_ids=["expert-a"],
+        route=lambda scope: assessment["routing"],
+        assess=lambda scope, state, consult: dict(assessment),
+        profiles_for=lambda ids: {name: {"id": name} for name in ids},
+    )
+
+
+def test_arbitration_timeout_and_oserror_stay_per_row():
+    service = _eval_service()
+    failures = [TimeoutExpired("muse", 5), OSError("synthetic pipe error")]
+    state = {"count": 0}
+
+    def arbitrate(assessment, state_text, requirement, profiles):
+        failure = failures[state["count"] % len(failures)]
+        state["count"] += 1
+        raise failure
+
+    rows = _eval_rows()
+    for row in rows:
+        row["state"] = (
+            "REQUIREMENT\nsynthetic requirement\nRTL\nassign q = d;\n"
+        )
+    data = {"rows": rows, "source": "synthetic", "rows_sha256": "ab" * 32}
+    report = evaluate_routing(
+        data,
+        service,
+        lambda expert_id, text: _payload(LABELS[0]),
+        0,
+        7,
+        arbitrate_per_area=99,
+        arbitrate=arbitrate,
+    )
+    assert len(report["arbitration"]) == len(rows)
+    assert all(
+        entry["verdict"]["conclusion"] == "unresolved"
+        for entry in report["arbitration"]
+    )
+    assert all(
+        "arbitration_error" in entry["verdict"]
+        for entry in report["arbitration"]
+    )
+    details = [
+        entry["verdict"]["arbitration_error"] for entry in report["arbitration"]
+    ]
+    assert any("TimeoutExpired" in detail for detail in details)
+    assert any(detail.startswith("OSError") for detail in details)
+
+
+def test_split_triplets_rejected_at_load_and_sample():
+    rows = _rows()
+    rows[2]["benchmark_area"] = "counter"
+    with pytest.raises(ValueError, match="span benchmark areas"):
+        validate_rows(rows)
+    with pytest.raises(ValueError, match="not a triplet"):
+        sample_triplets(rows, 0, 7)
+
+
+def _router_eval_inputs(tmp_path):
+    from siliconshield.schemas import (
+        EXPERT_CAPABILITY_SCHEMA,
+        GUI_MODEL_REGISTRY_SCHEMA,
+    )
+
+    bench = tmp_path / "bench.jsonl"
+    bench.write_text("\n".join(json.dumps(row) for row in _eval_rows()))
+    python = tmp_path / "python"
+    python.write_text("#!/bin/sh\n")
+    python.chmod(0o755)
+    laya = tmp_path / "laya"
+    (laya / "laya").mkdir(parents=True)
+    (laya / "laya" / "__init__.py").write_text("")
+    profile = {
+        "schema": EXPERT_CAPABILITY_SCHEMA,
+        "id": "expert-a",
+        "release": "synthetic-1",
+        "question_contract": "siliconshield-requirement-context-v1",
+        "checkpoint_sha256": "ab" * 32,
+        "qualification_ref": "synthetic run",
+        "supported_mechanisms": ["fifo", "counter"],
+        "strengths": ["synthetic"],
+        "weaknesses": ["synthetic"],
+        "known_failures": ["synthetic"],
+        "measurements": [{"eval": "synthetic", "correct": 1, "total": 2}],
+    }
+    profile_path = tmp_path / "profile.json"
+    profile_path.write_text(json.dumps(profile))
+    registry = tmp_path / "models.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "schema": GUI_MODEL_REGISTRY_SCHEMA,
+                "models": [
+                    {
+                        "id": "expert-a",
+                        "display_name": "Expert A",
+                        "checkpoint": str(tmp_path),
+                        "python": str(python),
+                        "laya_root": str(laya),
+                        "expected_files": {"model.safetensors": "ab" * 32},
+                        "device": "cpu",
+                        "profile": str(profile_path),
+                        "release": "synthetic-1",
+                        "question_contract": (
+                            "siliconshield-requirement-context-v1"
+                        ),
+                        "qualification": "synthetic run",
+                    }
+                ],
+            }
+        )
+    )
+    return bench, registry
+
+
+def test_router_eval_reloads_after_worker_discard(tmp_path):
+    from siliconshield.benchmark.cli import build_parser, run_router_eval
+
+    bench, registry = _router_eval_inputs(tmp_path)
+
+    class FlakyPool:
+        loads = 0
+
+        def __init__(self):
+            self.ready = set()
+            self.failed_once = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def __contains__(self, expert_id):
+            return expert_id in self.ready
+
+        def load(self, entry):
+            FlakyPool.loads += 1
+            self.ready.add(entry["id"])
+
+        def analyze(self, expert_id, state):
+            if expert_id not in self.ready:
+                raise RuntimeError("No validated worker ready")
+            if not self.failed_once:
+                self.failed_once = True
+                self.ready.discard(expert_id)
+                raise RuntimeError("synthetic transient")
+            return _payload(LABELS[0])
+
+    FlakyPool.loads = 0
+    args = build_parser().parse_args(
+        [
+            "router-eval",
+            "--dataset",
+            str(bench),
+            "--registry",
+            str(registry),
+            "--per-area",
+            "1",
+            "--out",
+            str(tmp_path / "report.json"),
+        ]
+    )
+    assert run_router_eval(args, pool_factory=FlakyPool) == 0
+    assert FlakyPool.loads == 2
+    report = json.loads((tmp_path / "report.json").read_text())
+    assert report["by_area"]["fifo"]["rows"] == 3
+    assert report["by_area"]["counter"]["rows"] == 3
+
+
+def test_cli_maps_unreadable_dataset_to_exit_2(tmp_path, capsys):
+    from siliconshield.benchmark.cli import build_parser, run_areas
+
+    for missing in ("", str(tmp_path / "missing.jsonl")):
+        args = build_parser().parse_args(["areas", "--dataset", missing])
+        assert run_areas(args) == 2
+        assert "benchmark:" in capsys.readouterr().err
+    args = build_parser().parse_args(["areas", "--dataset", str(tmp_path)])
+    assert run_areas(args) == 2
+    assert "benchmark:" in capsys.readouterr().err
+
+
+def test_non_object_rows_rejected_at_load(tmp_path, capsys):
+    from siliconshield.benchmark.cli import build_parser, run_areas
+
+    bench = tmp_path / "bench.jsonl"
+    bench.write_text("123\n")
+    args = build_parser().parse_args(["areas", "--dataset", str(bench)])
+    assert run_areas(args) == 2
+    assert "not an object" in capsys.readouterr().err
+    bench.write_text("not json\n")
+    assert run_areas(args) == 2
+    assert "invalid JSON" in capsys.readouterr().err
+
+
+def test_blank_lines_skipped_before_validation(tmp_path):
+    from siliconshield.benchmark.dataset import load_benchmark
+
+    bench = tmp_path / "bench.jsonl"
+    bench.write_text("\n".join(json.dumps(row) for row in _rows()) + "\n\n")
+    assert len(load_benchmark(str(bench))["rows"]) == 6
+
+
+def test_cli_maps_unwritable_report_to_exit_2(tmp_path, capsys):
+    from siliconshield.benchmark.cli import build_parser, run_benchmark
+    from siliconshield.schemas import GUI_MODEL_REGISTRY_SCHEMA
+
+    bench = tmp_path / "bench.jsonl"
+    bench.write_text("\n".join(json.dumps(row) for row in _rows()))
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "expert-a.json").mkdir()
+    python = tmp_path / "python"
+    python.write_text("#!/bin/sh\n")
+    python.chmod(0o755)
+    laya = tmp_path / "laya"
+    (laya / "laya").mkdir(parents=True)
+    (laya / "laya" / "__init__.py").write_text("")
+    registry = tmp_path / "models.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "schema": GUI_MODEL_REGISTRY_SCHEMA,
+                "models": [
+                    {
+                        "id": "expert-a",
+                        "display_name": "Expert A",
+                        "checkpoint": str(tmp_path),
+                        "python": str(python),
+                        "laya_root": str(laya),
+                        "expected_files": {"model": "cd" * 32},
+                        "device": "cpu",
+                    }
+                ],
+            }
+        )
+    )
+
+    class FakePool:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def __contains__(self, expert_id):
+            return True
+
+        def load(self, entry):
+            return None
+
+        def analyze(self, expert_id, state):
+            return _payload(LABELS[2])
+
+    args = build_parser().parse_args(
+        [
+            "run",
+            "--dataset",
+            str(bench),
+            "--registry",
+            str(registry),
+            "--out-dir",
+            str(out),
+        ]
+    )
+    assert run_benchmark(args, pool_factory=FakePool) == 2
+    assert "cannot write" in capsys.readouterr().err
+
+
+def test_non_string_mechanism_rejected_at_load(tmp_path, capsys):
+    from siliconshield.benchmark.cli import build_parser, run_areas
+
+    rows = _rows()
+    rows[0]["mechanism_id"] = ["fifo"]
+    bench = tmp_path / "bench.jsonl"
+    bench.write_text("\n".join(json.dumps(row) for row in rows))
+    args = build_parser().parse_args(["areas", "--dataset", str(bench)])
+    assert run_areas(args) == 2
+    assert "mechanism id" in capsys.readouterr().err
+
+
+def test_router_eval_retries_transient_load_failure(tmp_path):
+    from siliconshield.benchmark.cli import build_parser, run_router_eval
+
+    bench, registry = _router_eval_inputs(tmp_path)
+
+    class OnceFailingPool:
+        loads = 0
+
+        def __init__(self):
+            self.ready = set()
+            self.failed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def __contains__(self, expert_id):
+            return expert_id in self.ready
+
+        def load(self, entry):
+            OnceFailingPool.loads += 1
+            if not self.failed:
+                self.failed = True
+                raise RuntimeError("synthetic transient load")
+            self.ready.add(entry["id"])
+
+        def analyze(self, expert_id, state):
+            return _payload(LABELS[0])
+
+    OnceFailingPool.loads = 0
+    args = build_parser().parse_args(
+        [
+            "router-eval",
+            "--dataset",
+            str(bench),
+            "--registry",
+            str(registry),
+            "--per-area",
+            "1",
+            "--out",
+            str(tmp_path / "report.json"),
+        ]
+    )
+    assert run_router_eval(args, pool_factory=OnceFailingPool) == 0
+    # One failed attempt plus one successful retry: a cached failure
+    # would load only once and poison every row instead.
+    assert OnceFailingPool.loads == 2
+    report = json.loads((tmp_path / "report.json").read_text())
+    assert report["by_area"]["fifo"]["rows"] == 3
+    assert report["by_area"]["counter"]["rows"] == 3
+
+
+def _runner_data(rows):
+    return {"rows": rows, "source": "synthetic", "rows_sha256": "ab" * 32}
+
+
+def test_non_object_consult_becomes_a_row_error():
+    from siliconshield.benchmark.runner import BenchmarkRunner
+
+    runner = BenchmarkRunner(_runner_data(_rows()))
+    report = runner.run_model("synthetic", "ab" * 32, lambda state: None)
+    assert len(report["row_errors"]) == 6
+    assert report["overall"]["rows"] == 6
+
+
+def test_benchmark_area_is_type_checked():
+    rows = _rows()
+    rows[0]["benchmark_area"] = None
+    with pytest.raises(ValueError, match="benchmark area"):
+        validate_rows(rows)
+    rows = _rows()
+    rows[0]["benchmark_area"] = ["fifo"]
+    with pytest.raises(ValueError, match="benchmark area"):
+        validate_rows(rows)
+
+
+def test_short_limit_scores_a_partial_group():
+    from siliconshield.benchmark.runner import BenchmarkRunner
+
+    runner = BenchmarkRunner(_runner_data(_rows()))
+    report = runner.run_model(
+        "synthetic",
+        "ab" * 32,
+        lambda state: _payload("satisfies_requirement"),
+        limit=2,
+    )
+    assert report["overall"]["rows"] == 2
+    assert report["overall"]["triplets_incomplete"] == 1
+
+
+def test_all_error_split_reports_null_nll():
+    import json
+
+    rows = _rows()
+    labels = {row["id"]: LABELS[0] for row in rows}
+    probs = {row["id"]: {name: 0.34 for name in LABELS} for row in rows}
+    errors = {row["id"]: "consult: synthetic" for row in rows}
+    overall, areas, _ = metrics.score_predictions(rows, labels, probs, errors)
+    assert overall["nll"] is None
+    assert areas["fifo"]["nll"] is None
+    json.dumps({"overall": overall, "areas": areas}, allow_nan=False)
+
+
+def test_empty_selection_is_a_clean_error():
+    from siliconshield.benchmark.runner import BenchmarkRunner
+
+    runner = BenchmarkRunner(_runner_data(_rows()))
+    with pytest.raises(ValueError, match="selection is empty"):
+        runner.run_model(
+            "synthetic",
+            "ab" * 32,
+            lambda state: _payload("satisfies_requirement"),
+            limit=0,
+        )
+
+
+def test_negative_limit_is_rejected():
+    from siliconshield.benchmark.runner import BenchmarkRunner
+
+    runner = BenchmarkRunner(_runner_data(_rows()))
+    with pytest.raises(ValueError, match="cannot be negative"):
+        runner.run_model(
+            "synthetic",
+            "ab" * 32,
+            lambda state: _payload("satisfies_requirement"),
+            limit=-1,
+        )
+
+
+def test_per_mechanism_triplets_are_counted():
+    rows = _rows()
+    labels = {row["id"]: row["expected"]["security"] for row in rows}
+    probabilities = {
+        row["id"]: {
+            name: (0.9 if name == row["expected"]["security"] else 0.05)
+            for name in LABELS
+        }
+        for row in rows
+    }
+    _, _, by_mech = metrics.score_predictions(rows, labels, probabilities)
+    assert by_mech["synthetic-mech"]["triplets_total"] == 2
+    assert by_mech["synthetic-mech"]["triplets_correct"] == 2

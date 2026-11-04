@@ -44,8 +44,20 @@ class BenchmarkData(TypedDict):
 
 
 def _read_local(path: str) -> tuple[list[dict[str, Any]], str]:
-    blob = Path(path).read_bytes()
-    rows = [json.loads(line) for line in blob.decode().splitlines()]
+    try:
+        blob = Path(path).read_bytes()
+    except OSError as exc:
+        raise ValueError("Cannot read benchmark %s: %s" % (path, exc)) from exc
+    try:
+        text = blob.decode()
+    except UnicodeDecodeError as exc:
+        raise ValueError("Benchmark %s is not UTF-8: %s" % (path, exc)) from exc
+    try:
+        rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+    except ValueError as exc:
+        raise ValueError(
+            "Benchmark %s has invalid JSON: %s" % (path, exc)
+        ) from exc
     digest = hashlib.sha256(blob).hexdigest()
     return rows, digest
 
@@ -77,14 +89,18 @@ def validate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Validate benchmark rows; return them unchanged.
 
     Raises ValueError for missing keys, empty state, unknown labels,
-    duplicate ids, or triplet keys that do not group exactly three
-    rows: whole-triplet scoring requires complete triplets.
+    duplicate ids, triplet keys that do not group exactly three
+    rows, or triplets split across benchmark areas: whole-triplet
+    scoring requires complete, area-contained triplets.
     """
     if not rows:
         raise ValueError("Benchmark has no rows.")
     seen: set[str] = set()
     groups: dict[str, int] = {}
+    pair_areas: dict[str, set[str]] = {}
     for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError("Row %d is not an object." % index)
         missing = REQUIRED_KEYS - set(row)
         if missing:
             raise ValueError(
@@ -105,13 +121,25 @@ def validate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         key = row["pair_id"]
         if not key or not isinstance(key, str):
             raise ValueError("Row %s has no triplet key." % row_id)
+        mechanism = row.get("mechanism_id")
+        if mechanism is not None and (
+            not isinstance(mechanism, str) or not mechanism
+        ):
+            raise ValueError("Row %s has no string mechanism id." % row_id)
+        area = row.get("benchmark_area")
+        if not isinstance(area, str) or not area:
+            raise ValueError("Row %s has no string benchmark area." % row_id)
         groups[key] = groups.get(key, 0) + 1
+        pair_areas.setdefault(key, set()).add(row["benchmark_area"])
     broken = {key: size for key, size in groups.items() if size != 3}
     if broken:
         raise ValueError(
             "Triplet keys must group 3 rows: %s"
             % (dict(list(broken.items())[:5]))
         )
+    split = sorted(key for key, areas in pair_areas.items() if len(areas) > 1)
+    if split:
+        raise ValueError("Triplets span benchmark areas: %s" % split[:5])
     return rows
 
 

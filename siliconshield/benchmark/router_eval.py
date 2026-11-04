@@ -10,6 +10,7 @@ CLI, so it defaults off and never gates the routing verdict.
 
 import random
 from collections import Counter
+from subprocess import TimeoutExpired
 from typing import Any, TypedDict
 
 from siliconshield.benchmark.dataset import BenchmarkData
@@ -54,6 +55,13 @@ def sample_triplets(
     for row in rows:
         trips = by_area.setdefault(row["benchmark_area"], {})
         trips.setdefault(row["pair_id"], []).append(row)
+    for area, trips in by_area.items():
+        for pair_id, members in trips.items():
+            if len(members) != 3:
+                raise ValueError(
+                    "Pair %s in area %s holds %d rows, not a triplet."
+                    % (pair_id, area, len(members))
+                )
     rng = random.Random(seed)
     sampled: list[dict[str, Any]] = []
     for area in sorted(by_area):
@@ -147,8 +155,17 @@ def evaluate_routing(
                         [item["expert_id"] for item in assessment["responses"]]
                     ),
                 )
-            except (ValueError, RuntimeError, TimeoutError) as exc:
-                verdict = {"conclusion": "arbitration_failed: %s" % exc}
+            except (
+                ValueError,
+                RuntimeError,
+                TimeoutError,
+                TimeoutExpired,
+                OSError,
+            ) as exc:
+                verdict = {
+                    "conclusion": "unresolved",
+                    "arbitration_error": "%s: %s" % (type(exc).__name__, exc),
+                }
             arbitration.append(
                 {
                     "row_id": row["id"],

@@ -43,6 +43,8 @@ class ChatClient:
         api_key_env=None,
         max_calls=None,
     ):
+        if not isinstance(endpoint, str) or not endpoint:
+            raise ValueError("Chat endpoint must be a non-empty URL")
         scheme = urllib.parse.urlsplit(endpoint).scheme
         if scheme not in ("http", "https"):
             raise ValueError("Chat endpoint must be http(s): " + endpoint[:64])
@@ -59,6 +61,18 @@ class ChatClient:
             or max_calls < 1
         ):
             raise ValueError("max_calls must be a positive integer")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or timeout <= 0
+        ):
+            raise ValueError("Chat timeout must be a positive number")
+        if (
+            isinstance(max_tokens, bool)
+            or not isinstance(max_tokens, int)
+            or max_tokens < 1
+        ):
+            raise ValueError("max_tokens must be a positive integer")
         self.endpoint, self.model = endpoint, model
         self.timeout, self.max_tokens = timeout, max_tokens
         # Identity of the weights actually served; names alone do not identify a checkpoint.
@@ -145,7 +159,12 @@ class ChatClient:
                 request, timeout=self.timeout
             ) as response:
                 result = json.load(response)
-        choice = result["choices"][0]
+        try:
+            choice = result["choices"][0]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError("Chat response has no choices: %s" % exc) from exc
+        if not isinstance(choice, dict):
+            raise ValueError("Chat response choice must be an object")
         self.last_completion_metrics = {
             "usage": result.get("usage"),
             "timing": result.get("timing"),
@@ -154,11 +173,22 @@ class ChatClient:
             raise RuntimeError(
                 "The model response was cut short; increase the token or context limit"
             )
-        message = choice["message"]
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            raise ValueError("Chat response has no message object")
         # Validate only: the message stays in wire format so the next
         # turn can echo it. Strict servers reject parsed arguments.
-        for call in message.get("tool_calls", []):
-            args = call["function"]["arguments"]
+        calls = message.get("tool_calls", [])
+        if calls and not isinstance(calls, list):
+            raise ValueError("Model tool_calls must be a list")
+        # An explicit null is the wire encoding of no calls.
+        for call in calls or []:
+            if not isinstance(call, dict):
+                raise ValueError("Tool call must be an object")
+            function = call.get("function")
+            if not isinstance(function, dict):
+                raise ValueError("Tool call must name a function")
+            args = function.get("arguments", {})
             if isinstance(args, str):
                 try:
                     args = json.loads(args)
@@ -172,17 +202,36 @@ class ChatClient:
 
 
 def run_agent(client, messages, tools, dispatch, trace_path, max_turns=20):
-    """Run one tool-use conversation, up to the configured turn limit."""
+    """Run one tool-use conversation, up to the configured turn limit.
+
+    Malformed tool calls become tool errors the model can see and
+    retry; failures that stop the loop are recorded in the trace
+    before they propagate.
+    """
+    if (
+        isinstance(max_turns, bool)
+        or not isinstance(max_turns, int)
+        or max_turns < 1
+    ):
+        raise ValueError("max_turns must be a positive integer")
     trace_path = Path(trace_path)
     trace_path.parent.mkdir(parents=True, exist_ok=True)
     history = [dict(m) for m in messages]
 
     def record(value):
-        with trace_path.open("a") as stream:
-            stream.write(
-                json.dumps({"time": time.time(), **value}, allow_nan=False)
-                + "\n"
+        try:
+            line = json.dumps({"time": time.time(), **value}, allow_nan=False)
+        except (TypeError, ValueError):
+            line = json.dumps(
+                {
+                    "time": time.time(),
+                    "kind": value.get("kind"),
+                    "unserializable": repr(value),
+                },
+                allow_nan=False,
             )
+        with trace_path.open("a") as stream:
+            stream.write(line + "\n")
 
     record(
         {
@@ -190,42 +239,134 @@ def run_agent(client, messages, tools, dispatch, trace_path, max_turns=20):
             "messages": history,
             "tools": tools,
             "model": client.model,
+            "checkpoint": {
+                "adapter_path": getattr(client, "adapter_path", None),
+                "checkpoint_fingerprint": getattr(
+                    client, "checkpoint_fingerprint", None
+                ),
+            },
+            "client_settings": {
+                "timeout": getattr(client, "timeout", None),
+                "max_tokens": getattr(client, "max_tokens", None),
+                "max_calls": getattr(client, "max_calls", None),
+            },
         }
     )
-    for _ in range(max_turns):
-        started = time.perf_counter()
-        message = client.complete(history, tools)
-        history.append(message)
+    try:
+        for _ in range(max_turns):
+            started = time.perf_counter()
+            message = client.complete(history, tools)
+            if not isinstance(message, dict):
+                raise ValueError("Model completion must be an object")
+            # Model output is always assistant content: a forged
+            # role=tool message must never pair with a real tool
+            # call or satisfy the evidence gate downstream.
+            message = dict(message)
+            message["role"] = "assistant"
+            history.append(message)
+            record(
+                {
+                    "kind": "message",
+                    "message": message,
+                    "completion_seconds": time.perf_counter() - started,
+                    "completion_metrics": getattr(
+                        client, "last_completion_metrics", None
+                    ),
+                }
+            )
+            calls = message.get("tool_calls", [])
+            if not calls:
+                return history
+            # Malformed calls are reported as a user message, never as a
+            # tool result: a tool message must reference a real call id,
+            # and strict OpenAI-compatible servers reject histories whose
+            # tool messages reference unknown ids. The trajectory keeps
+            # the original malformed message; only the live history is
+            # rewritten so the next turn stays valid everywhere.
+            assistant_index = len(history) - 1
+            if not isinstance(calls, list):
+                history[assistant_index] = {
+                    "role": "user",
+                    "content": (
+                        "Tool error (ValueError): model tool_calls "
+                        "must be a list; reply again."
+                    ),
+                }
+                record({"kind": "message", "message": history[assistant_index]})
+                continue
+            valid_calls = [
+                call
+                for call in calls
+                if isinstance(call, dict)
+                and isinstance(call.get("id"), str)
+                and call.get("id")
+            ]
+            if len(valid_calls) != len(calls):
+                history[assistant_index] = {
+                    "role": "assistant",
+                    "content": message.get("content", ""),
+                    "tool_calls": valid_calls,
+                }
+                history.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Tool error (ValueError): every tool call "
+                            "needs a string id; calls without one were "
+                            "dropped. Reply again."
+                        ),
+                    }
+                )
+                record({"kind": "message", "message": history[-1]})
+                calls = valid_calls
+                if not calls:
+                    continue
+            for call in calls:
+                call_id = call["id"]
+                try:
+                    if not isinstance(call, dict):
+                        raise ValueError("Tool call must be an object")
+                    function = call.get("function")
+                    if not isinstance(function, dict):
+                        raise ValueError("Tool call must name a function")
+                    name = function.get("name")
+                    if not isinstance(name, str) or not name:
+                        raise ValueError("Tool call must name a function")
+                    args = function.get("arguments", {})
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except ValueError:
+                            raise ValueError("Tool arguments must be an object")
+                    if not isinstance(args, dict):
+                        raise ValueError("Tool arguments must be an object")
+                    result = dispatch(name, args)
+                    content = json.dumps(result, allow_nan=False)
+                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                    content = json.dumps(
+                        {"error": type(exc).__name__, "detail": str(exc)}
+                    )
+                tool_result = {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": content,
+                }
+                history.append(tool_result)
+                record({"kind": "message", "message": tool_result})
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         record(
             {
-                "kind": "message",
-                "message": message,
-                "completion_seconds": time.perf_counter() - started,
-                "completion_metrics": getattr(
-                    client, "last_completion_metrics", None
-                ),
+                "kind": "error",
+                "error": type(exc).__name__,
+                "detail": str(exc),
             }
         )
-        calls = message.get("tool_calls", [])
-        if not calls:
-            return history
-        for call in calls:
-            try:
-                args = call["function"]["arguments"]
-                if isinstance(args, str):
-                    args = json.loads(args)
-                if not isinstance(args, dict):
-                    raise ValueError("Tool arguments must be an object")
-                result = dispatch(call["function"]["name"], args)
-            except (KeyError, ValueError, OSError) as exc:
-                result = {"error": type(exc).__name__, "detail": str(exc)}
-            tool_result = {
-                "role": "tool",
-                "tool_call_id": call["id"],
-                "content": json.dumps(result, allow_nan=False),
-            }
-            history.append(tool_result)
-            record({"kind": "message", "message": tool_result})
-    raise RuntimeError(
-        "Replay did not finish within its configured turn budget"
+        raise
+    record(
+        {
+            "kind": "error",
+            "error": "RuntimeError",
+            "detail": "Turn budget exhausted without a final answer",
+        }
     )
+    raise RuntimeError("Agent did not finish within its configured turn budget")

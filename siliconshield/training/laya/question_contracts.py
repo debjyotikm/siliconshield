@@ -112,6 +112,11 @@ def validate_rows(rows, version):
     if version not in _CONTRACTS:
         raise ValueError("unknown question contract: %r" % (version,))
     for row in rows:
+        if not isinstance(row, dict) or "questions" not in row:
+            raise ValueError(
+                "row %s has no questions to validate"
+                % (row.get("id") if isinstance(row, dict) else row)
+            )
         found = match_version(row["questions"])
         if found != version:
             raise ValueError(
@@ -144,6 +149,8 @@ def read_export_record(export_dir):
             "legacy_default": True,
         }
     record = json.loads(path.read_text())
+    if not isinstance(record, dict):
+        raise ValueError("export contract record must be an object")
     version = record.get("version")
     if version not in _CONTRACTS:
         raise ValueError("export records unknown contract: %r" % (version,))

@@ -34,7 +34,7 @@ class SplitScore(TypedDict):
     triplets_total: int
     triplets_failed: int
     triplets_incomplete: int
-    nll: float
+    nll: float | None
     errors: int
 
 
@@ -73,7 +73,14 @@ def _empty() -> SplitScore:
 
 def _finish(split: SplitScore) -> SplitScore:
     scored = split["rows"] - split["errors"]
-    split["nll"] = split["nll"] / scored if scored else math.inf
+    total = split["nll"]
+    # _empty seeds a float running total and _finish runs once per
+    # split, so anything else here means double finalization.
+    if not isinstance(total, float):
+        raise ValueError("Split score was already finalized.")
+    # No scored rows means no measured NLL: null, not Infinity,
+    # which strict JSON parsers reject.
+    split["nll"] = total / scored if scored else None
     return split
 
 
@@ -122,7 +129,11 @@ def score_predictions(
             )
         probs = probabilities.get(row_id, {})
         target = probs.get(expected, 0.0)
-        if not isinstance(target, float) or target < 0.0:
+        if (
+            isinstance(target, bool)
+            or not isinstance(target, (int, float))
+            or not 0.0 <= target <= 1.0
+        ):
             raise ValueError("Row %s has an invalid target score." % row_id)
         # Floor matches the campaign scorer: worker probabilities round
         # to 4 decimals, so confident misses legitimately score 0.0.
@@ -134,7 +145,8 @@ def score_predictions(
             for entry in split["classes"]:
                 if entry["label"] == expected:
                     entry["correct"] += 1 if hit else 0
-            split["nll"] += -math.log(target)
+            running = split["nll"] or 0.0
+            split["nll"] = running - math.log(target)
         if (
             expected == "violates_requirement"
             and predicted == "satisfies_requirement"
@@ -169,6 +181,9 @@ def score_predictions(
         targets = [overall]
         if len(homes) == 1:
             targets.append(areas[next(iter(homes))])
+        mechnames = {m.get("mechanism_id", "unknown") for m in members}
+        if len(mechnames) == 1:
+            targets.append(mechs[next(iter(mechnames))])
         for split in targets:
             split["triplets_total"] += 1
             if not complete:

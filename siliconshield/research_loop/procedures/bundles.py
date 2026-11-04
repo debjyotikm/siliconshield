@@ -51,7 +51,11 @@ def publish_bundle(
     candidate: dict[str, Any],
 ) -> dict[str, Any]:
     """Atomically replace guidance only after replay qualification succeeds."""
-    if not guidance.strip() or not qualifies(baseline, candidate):
+    if (
+        not isinstance(guidance, str)
+        or not guidance.strip()
+        or not qualifies(baseline, candidate)
+    ):
         raise ValueError("Procedure did not pass replay qualification")
     body: dict[str, Any] = {
         "schema": PROCEDURE_BUNDLE_SCHEMA,

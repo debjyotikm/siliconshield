@@ -14,11 +14,13 @@ content hashes. `runtime` names the LAYA runtime that loads it.
 
 import hashlib
 import json
+import math
 import os
 import subprocess
 from pathlib import Path
 from typing import TypedDict
 
+from siliconshield.experts.identity import SECTION_HEADERS
 from siliconshield.training.laya.question_contracts import (
     LABELS as _CONTRACT_LABELS,
 )
@@ -37,7 +39,26 @@ class CheckpointManifest(TypedDict):
 
 
 def state_text(requirement, assumptions, rtl):
-    """The exact input format used by the security-training builders."""
+    """The exact input format used by the security-training builders.
+
+    The byte format is frozen: trained models read it, and
+    experts.identity.assemble_state emits these same bytes so the
+    router and the backend judge identical inputs. The
+    requirement and assumptions must not smuggle an exact
+    section-header line, which would truncate the judged
+    requirement and pollute the judged RTL.
+    """
+    for name, value in (
+        ("requirement", requirement),
+        ("assumptions", assumptions),
+    ):
+        smuggled = SECTION_HEADERS.intersection(str(value).splitlines())
+        if smuggled:
+            raise ValueError(
+                name
+                + " must not contain a section header line: "
+                + ",".join(sorted(smuggled))
+            )
     return "REQUIREMENT\n%s\nASSUMPTIONS\n%s\nRTL\n%s" % (
         requirement,
         assumptions,
@@ -171,9 +192,21 @@ class LayaBackend:
             return _identity_failure(result, exc)
         result["checkpoint_fingerprint"] = manifest
         worker = Path(__file__).with_name("laya_worker.py")
+        try:
+            state = state_text(requirement, assumptions, rtl)
+        except ValueError as exc:
+            # A smuggled section header rejects this assessment; it
+            # must not abort the run without a report.
+            return {
+                **result,
+                "status": "error",
+                "label": None,
+                "probabilities": None,
+                "detail": "Invalid security-model input: %s" % exc,
+            }
         payload = json.dumps(
             {
-                "state": state_text(requirement, assumptions, rtl),
+                "state": state,
                 "checkpoint": str(checkpoint),
             }
         )
@@ -244,14 +277,78 @@ class LayaBackend:
                 "probabilities": None,
                 "detail": "Security-model worker returned an unknown label",
             }
-        usage = answer.get("usage") or {}
+        probabilities = answer.get("probabilities")
+        if (
+            not isinstance(probabilities, dict)
+            or set(probabilities) != set(LABELS)
+            or any(
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or not 0.0 <= value <= 1.0
+                for value in probabilities.values()
+            )
+            # Same unit-sum rule as the router path: a verdict whose
+            # scores do not form a distribution is rejected, not shown.
+            or abs(sum(probabilities.values()) - 1.0) > 1e-3
+            or answer.get("label")
+            != max(LABELS, key=lambda name: probabilities[name])
+        ):
+            return {
+                **result,
+                "status": "error",
+                "label": None,
+                "probabilities": None,
+                "detail": "Security-model worker returned "
+                "invalid probabilities",
+            }
+        usage = answer.get("usage")
+        if usage is None:
+            usage = {}
+        if not isinstance(usage, dict):
+            return {
+                **result,
+                "status": "error",
+                "label": None,
+                "probabilities": None,
+                "detail": "Security-model worker returned a non-object usage",
+            }
         dropped_tokens = usage.get("state_tokens_dropped")
+        truncated_questions = usage.get("truncated_questions")
+        if truncated_questions is None:
+            truncated_questions = []
+        if (
+            not isinstance(truncated_questions, list)
+            or (
+                dropped_tokens is not None
+                and (
+                    isinstance(dropped_tokens, bool)
+                    or not isinstance(dropped_tokens, (int, float))
+                )
+            )
+            or any(
+                not isinstance(token, (int, float)) or isinstance(token, bool)
+                for token in (
+                    usage.get("input_tokens"),
+                    usage.get("state_tokens"),
+                )
+                if token is not None
+            )
+        ):
+            return {
+                **result,
+                "status": "error",
+                "label": None,
+                "probabilities": None,
+                "detail": "Security-model worker returned "
+                "an invalid usage report",
+            }
         coverage = {
             "input_tokens": usage.get("input_tokens"),
             "state_tokens": usage.get("state_tokens"),
             "state_tokens_dropped": dropped_tokens,
             "truncated": bool(usage.get("truncated")),
-            "truncated_questions": usage.get("truncated_questions") or [],
+            "truncated_questions": truncated_questions,
         }
         truncated = (
             coverage["truncated"]
@@ -265,7 +362,7 @@ class LayaBackend:
                 **result,
                 "status": "truncated",
                 "label": None,
-                "probabilities": answer.get("probabilities"),
+                "probabilities": probabilities,
                 "coverage": coverage,
                 "detail": "Security-model input was truncated "
                 "(LAYA runtime); assessment rejected as "
@@ -276,7 +373,7 @@ class LayaBackend:
             **result,
             "status": "assessed",
             "label": answer["label"],
-            "probabilities": answer.get("probabilities"),
+            "probabilities": probabilities,
             "usage": usage,
             "coverage": coverage,
         }

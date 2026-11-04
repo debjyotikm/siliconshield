@@ -19,6 +19,7 @@ from siliconshield.experts.identity import (
     text_digest,
     validate_execution_identity,
 )
+from siliconshield.experts.worker import WorkerLoadError
 
 
 class ExpertResponse(TypedDict):
@@ -42,7 +43,7 @@ class ExpertError(TypedDict):
 
     expert_id: str
     stage: str
-    detail: str
+    detail: NotRequired[str]
 
 
 Transport = Callable[[str, str], Mapping[str, Any]]
@@ -59,6 +60,8 @@ def build_expert_response(
     truncated input) or names a different model than the profile:
     callers must surface the failure, never judge from it.
     """
+    if not isinstance(payload, Mapping):
+        raise ValueError("Worker result must be an object")
     worker_id = payload.get("model_id")
     if worker_id != profile["id"]:
         raise ValueError(
@@ -105,14 +108,29 @@ def consult_experts(
     """Consult routed experts; collect responses and errors separately.
 
     Unknown expert ids and transport failures yield ExpertError
-    entries; validation failures do too. Responses keep profile
-    order. Raises ValueError for empty state text only.
+    entries; validation failures do too, whether raised while
+    building the envelope or by the transport itself. Responses keep
+    profile order. Raises ValueError for empty state text or a
+    malformed expert-id list. Responses need request stamping
+    before arbitration: route them through InferenceService.assess,
+    which binds each response to its request, state, and scope.
     """
-    if not state.strip():
+    if not isinstance(state, str) or not state.strip():
         raise ValueError("Cannot consult experts on empty state text")
+    if isinstance(expert_ids, str) or not isinstance(expert_ids, list):
+        raise ValueError("Expert ids must be a list of names")
+    for expert_id in expert_ids:
+        if not isinstance(expert_id, str) or not expert_id:
+            raise ValueError("Expert ids must be a list of names")
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for expert_id in expert_ids:
+        if expert_id not in seen:
+            seen.add(expert_id)
+            ordered.append(expert_id)
     responses: list[ExpertResponse] = []
     errors: list[ExpertError] = []
-    for expert_id in expert_ids:
+    for expert_id in ordered:
         profile = profiles.get(expert_id)
         if profile is None:
             errors.append(
@@ -125,6 +143,26 @@ def consult_experts(
             continue
         try:
             payload = transport(expert_id, state)
+        except ValueError as exc:
+            errors.append(
+                {
+                    "expert_id": expert_id,
+                    "stage": "validate",
+                    "detail": "%s" % exc,
+                }
+            )
+            continue
+        except WorkerLoadError as exc:
+            # A model that never loaded is not a transport flake;
+            # mislabeling it would send GPU debugging astray.
+            errors.append(
+                {
+                    "expert_id": expert_id,
+                    "stage": "load",
+                    "detail": "%s" % exc,
+                }
+            )
+            continue
         except Exception as exc:  # noqa: BLE001 - envelope, not verdict
             errors.append(
                 {

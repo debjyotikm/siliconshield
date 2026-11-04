@@ -200,7 +200,12 @@ def rotate_checkpoint(stage, destination):
 def dev_subset(rows, count):
     by_action = {}
     for row in sorted(rows, key=lambda r: r["id"]):
-        by_action.setdefault(row["target"]["action"], []).append(row)
+        target = row.get("target")
+        if not isinstance(target, dict) or "action" not in target:
+            raise ValueError(
+                "Row %s has no target action to stratify" % row.get("id")
+            )
+        by_action.setdefault(target["action"], []).append(row)
     chosen = []
     group_counts = Counter()
     while len(chosen) < count and any(by_action.values()):

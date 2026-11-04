@@ -21,14 +21,32 @@ SYSTEM = (
 
 
 def parse_proposal(text):
+    """Parse exact replacements; every malformed shape is a ValueError."""
+    if not isinstance(text, str):
+        raise ValueError("Muse proposal must be text")
     stripped = text.strip()
     if stripped.startswith("```"):
-        stripped = stripped.split("\n", 1)[1].rsplit("```", 1)[0]
+        lines = stripped.split("\n", 1)
+        if len(lines) != 2 or "```" not in lines[1]:
+            raise ValueError("Muse proposal has an unterminated code fence")
+        stripped = lines[1].rsplit("```", 1)[0]
     value = json.loads(stripped)
+    if not isinstance(value, dict):
+        raise ValueError("Muse proposal must be a JSON object")
     replacements = value.get("replacements")
     if not isinstance(replacements, list) or not replacements:
         raise ValueError("Muse proposal contains no replacements")
-    return [(item["old"], item["new"]) for item in replacements]
+    parsed = []
+    for item in replacements:
+        if not isinstance(item, dict):
+            raise ValueError("Muse replacement must be an object")
+        old, new = item.get("old"), item.get("new")
+        if not isinstance(old, str) or not old:
+            raise ValueError("Muse replacement needs exact old text")
+        if not isinstance(new, str):
+            raise ValueError("Muse replacement needs new text")
+        parsed.append((old, new))
+    return parsed
 
 
 def make_muse_proposer(endpoint, model, client=None, max_tokens=4096):

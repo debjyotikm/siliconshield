@@ -61,14 +61,20 @@ class BenchmarkRunner:
             if wanted is None or row["benchmark_area"] in wanted
         ]
         if limit is not None:
+            if limit < 0:
+                raise ValueError("Benchmark limit cannot be negative.")
             kept: list[dict[str, Any]] = []
             groups: dict[str, list[dict[str, Any]]] = {}
             for row in selected:
                 groups.setdefault(row["pair_id"], []).append(row)
             for members in groups.values():
-                if len(kept) + len(members) > limit:
+                room = limit - len(kept)
+                if room <= 0:
                     break
-                kept.extend(members)
+                # Triplets stay grouped, but a short limit keeps a
+                # partial trailing group instead of scoring nothing:
+                # incomplete triplets are counted, not an error.
+                kept.extend(members[:room])
             selected = kept
         if not selected:
             raise ValueError("Benchmark selection is empty.")
@@ -84,11 +90,19 @@ class BenchmarkRunner:
                 errors[row_id] = "consult: %s" % exc
             else:
                 try:
+                    if not isinstance(payload, Mapping):
+                        raise ValueError(
+                            "Row %s consult returned a non-object." % row_id
+                        )
                     checked = contracts.validate_result(payload)
                     label = checked["label"]
                     scores = checked["scores"]
-                    assert isinstance(label, str)
-                    assert isinstance(scores, dict)
+                    if not isinstance(label, str) or not isinstance(
+                        scores, dict
+                    ):
+                        raise ValueError(
+                            "Row %s has a malformed checked result." % row_id
+                        )
                     numbers: dict[str, float] = {}
                     for name, value in scores.items():
                         if isinstance(value, bool) or not isinstance(

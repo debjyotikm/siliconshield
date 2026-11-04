@@ -79,6 +79,10 @@ def load_config(
             raise ValueError(
                 "glimmer accepts endpoint, model, and optional ssh_host"
             )
+        if not isinstance(glimmer.get("endpoint"), str) or not isinstance(
+            glimmer.get("model"), str
+        ):
+            raise ValueError("glimmer needs endpoint and model strings")
         from siliconshield.web_demo.glimmer_client import LocalGlimmerClient
 
         LocalGlimmerClient(**glimmer)

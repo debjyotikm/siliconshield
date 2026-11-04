@@ -53,15 +53,21 @@ def main():
         for name, case in sorted(CASES.items()):
             print("%-26s %s" % (name, case["title"]))
         return
+    if args.case and (args.rtl or args.requirement):
+        raise SystemExit("Use --case or --rtl, not both at once.")
     if args.case:
         case = CASES[args.case]
     elif args.rtl and args.requirement:
+        try:
+            rtl_text = args.rtl.read_text()
+        except OSError as exc:
+            raise SystemExit("Cannot read --rtl file: %s" % exc)
         # No demo testbench is inherited: without a check explicitly bound to
         # the supplied requirement and interface, it is reported unverified.
         case = {
             "name": "custom",
             "title": "Custom RTL investigation",
-            "rtl": args.rtl.read_text(),
+            "rtl": rtl_text,
             "requirement": args.requirement,
             "assumptions": args.assumptions,
             "protected_signals": [],

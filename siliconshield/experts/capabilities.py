@@ -9,6 +9,7 @@ to the registry (outside Git); validation is CPU-only and never
 touches the GPU.
 """
 
+import copy
 import json
 import os
 import re
@@ -19,8 +20,13 @@ from siliconshield.experts.identity import (
     is_digest,
     validate_execution_identity,
 )
+from siliconshield.experts.routing_data import (
+    BENCHMARK_AREAS,
+    MECHANISM_TO_AREA,
+)
+from siliconshield.training.laya.question_contracts import known_contracts
 
-DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class CapabilityMeasurement(TypedDict):
@@ -55,7 +61,7 @@ def _need_str(raw: dict[str, object], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str) or not value.strip():
         raise _fail("missing non-empty %r" % key)
-    return value
+    return value.strip()
 
 
 def _need_str_list(raw: dict[str, object], key: str) -> list[str]:
@@ -64,7 +70,7 @@ def _need_str_list(raw: dict[str, object], key: str) -> list[str]:
         isinstance(item, str) and item.strip() for item in value
     ):
         raise _fail("%r must be a list of non-empty strings" % key)
-    return list(value)
+    return [item.strip() for item in value]
 
 
 def validate_capability_profile(data: object) -> CapabilityProfile:
@@ -81,6 +87,11 @@ def validate_capability_profile(data: object) -> CapabilityProfile:
         raise _fail("top-level object must be a mapping")
     if data.get("schema") != EXPERT_CAPABILITY_SCHEMA:
         raise _fail("unsupported schema %r" % (data.get("schema"),))
+    unknown_top = (
+        set(data) - set(CapabilityProfile.__annotations__) - {"schema"}
+    )
+    if unknown_top:
+        raise _fail("profile has unknown keys: %s" % sorted(unknown_top))
     profile_id = _need_str(data, "id")
     digest = _need_str(data, "checkpoint_sha256")
     if not DIGEST_PATTERN.match(digest):
@@ -92,6 +103,14 @@ def validate_capability_profile(data: object) -> CapabilityProfile:
     for index, raw in enumerate(raw_measurements):
         if not isinstance(raw, dict):
             raise _fail("measurement %d must be an object" % index)
+        unknown_measurement = set(raw) - set(
+            CapabilityMeasurement.__annotations__
+        )
+        if unknown_measurement:
+            raise _fail(
+                "measurement %d has unknown keys: %s"
+                % (index, sorted(unknown_measurement))
+            )
         correct = raw.get("correct")
         total = raw.get("total")
         if (
@@ -111,9 +130,20 @@ def validate_capability_profile(data: object) -> CapabilityProfile:
             }
         )
     strengths = _need_str_list(data, "strengths")
-    supported = _need_str_list(data, "supported_mechanisms")
+    supported = list(
+        dict.fromkeys(_need_str_list(data, "supported_mechanisms"))
+    )
     if not strengths or not supported:
         raise _fail("strengths and supported_mechanisms must be non-empty")
+    known = set(BENCHMARK_AREAS) | set(MECHANISM_TO_AREA)
+    unknown_supported = [tag for tag in supported if tag not in known]
+    if unknown_supported:
+        # A typo here would silently unroute the expert: no scope
+        # tag would ever match, and the profile would look fine.
+        raise _fail(
+            "supported_mechanisms names unknown tags: %s"
+            % sorted(unknown_supported)
+        )
     profile: CapabilityProfile = {
         "id": profile_id,
         "release": _need_str(data, "release"),
@@ -126,6 +156,10 @@ def validate_capability_profile(data: object) -> CapabilityProfile:
         "qualification_ref": _need_str(data, "qualification_ref"),
         "measurements": measurements,
     }
+    if profile["question_contract"] not in known_contracts():
+        raise _fail(
+            "unknown question_contract %r" % profile["question_contract"]
+        )
     evidence = data.get("routing_evidence")
     if evidence is not None:
         profile["routing_evidence"] = validate_routing_evidence(
@@ -137,9 +171,25 @@ def validate_capability_profile(data: object) -> CapabilityProfile:
 def validate_routing_evidence(
     value: Any, profile: CapabilityProfile
 ) -> dict[str, Any]:
-    """Validate measured counts bound to one complete inference identity."""
+    """Validate measured counts bound to one complete inference identity.
+
+    Areas must name real benchmark areas. Evidence with execution
+    errors validates so imperfect runs stay on record, but the
+    router never rates such areas: no tier is assigned where the
+    evaluation itself failed.
+    """
     if not isinstance(value, dict):
         raise _fail("routing_evidence must be an object")
+    unknown_evidence = set(value) - {
+        "execution_identity",
+        "benchmark_sha256",
+        "benchmark_source",
+        "areas",
+    }
+    if unknown_evidence:
+        raise _fail(
+            "routing_evidence has unknown keys: %s" % sorted(unknown_evidence)
+        )
     execution = validate_execution_identity(value.get("execution_identity"))
     for key in ("checkpoint_sha256", "question_contract"):
         if execution[key] != profile[key]:
@@ -148,12 +198,13 @@ def validate_routing_evidence(
         raise _fail("routing evidence needs benchmark bytes")
     if (
         not isinstance(value.get("benchmark_source"), str)
-        or not value["benchmark_source"]
+        or not value["benchmark_source"].strip()
     ):
         raise _fail("routing evidence needs benchmark source")
     areas = value.get("areas")
     if not isinstance(areas, dict) or not areas:
         raise _fail("routing evidence needs area counts")
+    checked_areas: dict[str, dict[str, int]] = {}
     for area, counts in areas.items():
         if (
             not isinstance(area, str)
@@ -161,6 +212,16 @@ def validate_routing_evidence(
             or not isinstance(counts, dict)
         ):
             raise _fail("invalid routing evidence area")
+        if area not in BENCHMARK_AREAS:
+            raise _fail("unknown routing evidence area %r" % (area,))
+        extra = [
+            key
+            for key in counts
+            if key
+            not in ("correct", "total", "violations", "false_safe", "errors")
+        ]
+        if extra:
+            raise _fail("unknown routing evidence counts %s" % sorted(extra))
         for key in ("correct", "total", "violations", "false_safe", "errors"):
             if type(counts.get(key)) is not int or counts[key] < 0:
                 raise _fail("invalid routing evidence count " + key)
@@ -170,7 +231,20 @@ def validate_routing_evidence(
             and counts["false_safe"] <= counts["violations"] <= counts["total"]
         ):
             raise _fail("inconsistent routing evidence counts")
-    return dict(value)
+        checked_areas[area] = {
+            key: counts[key]
+            for key in (
+                "correct",
+                "total",
+                "violations",
+                "false_safe",
+                "errors",
+            )
+        }
+    checked = copy.deepcopy(dict(value))
+    checked["benchmark_source"] = value["benchmark_source"].strip()
+    checked["areas"] = checked_areas
+    return checked
 
 
 def load_capability_profile(
@@ -187,8 +261,3 @@ def load_capability_profile(
     except (OSError, ValueError) as exc:
         raise ValueError("Cannot read capability profile: %s" % exc)
     return validate_capability_profile(data)
-
-
-def covers(profile: CapabilityProfile, mechanism: str) -> bool:
-    """Whether the profile claims the mechanism as supported."""
-    return mechanism in profile["supported_mechanisms"]

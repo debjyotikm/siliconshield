@@ -1,13 +1,17 @@
 "use strict";
 const $ = (s, root = document) => root.querySelector(s);
 const esc = (value) =>
-  String(value ?? "").replace(
-    /[&<>"']/g,
-    (c) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-        c
-      ],
-  );
+  String(value ?? "")
+    // Strip invisible bidi controls: receipts preserve backend bytes
+    // exactly, but rendered text must not reorder visually.
+    .replace(/[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/g, "")
+    .replace(
+      /[&<>"']/g,
+      (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+          c
+        ],
+    );
 const labels = {
   satisfies_requirement: "Satisfies requirement",
   violates_requirement: "Violates requirement",
@@ -123,13 +127,22 @@ function selectView(view) {
   render();
 }
 function initialForm() {
-  const e = app.examples.find(
+  const e = (app.examples || []).find(
     (x) =>
       x.id ===
       (app.view === "contract-1"
         ? "privilege-register"
         : "fifo-simultaneous-guarded"),
   );
+  if (!e)
+    return {
+      example: "custom",
+      rtl: "",
+      requirement: "",
+      assumptions: "",
+      arbitrate: false,
+      device: app.default_device,
+    };
   return { ...e, example: e.id, arbitrate: false, device: app.default_device };
 }
 function render() {
@@ -142,7 +155,9 @@ function render() {
   const router = app.view === "router",
     c1 = app.view === "contract-1",
     f = app.forms[app.view];
-  const examples = app.examples.filter((e) => router || e.model === app.view);
+  const examples = (app.examples || []).filter(
+    (e) => router || e.model === app.view,
+  );
   $("#main").innerHTML =
     `<section class="page-heading"><div><div class="eyebrow">${router ? "RTL REQUIREMENT ASSESSMENT" : "RTL REQUIREMENT ASSESSMENT"}</div><h1>${router ? "Expert routing" : c1 ? "Contract-1" : "Contract-2"}</h1><p>${router ? "Select a property domain, compare specialist predictions, and optionally request a Muse Glimmer assessment." : c1 ? "Evaluate authorization, lock, and write-enable requirements against the supplied RTL." : "Evaluate FIFO occupancy, counter, and arbitration requirements against the supplied RTL."}</p></div><div class="badge-icon">${icon(router ? "network" : "chip", 28)}</div></section>
 ${router ? `<div class="routing-flow"><div class="flow-box">RTL + requirement<small>Selected property domain</small></div><span class="flow-arrow">${icon("arrow")}</span><div class="flow-box">Capability router<small>Contract-1 · Contract-2</small></div><span class="flow-arrow">${icon("arrow")}</span><div class="flow-box">Muse Glimmer<small>Review specialist outputs</small></div></div>` : `<div class="capability-strip"><div class="strip-cell"><label>Design focus</label><strong>${c1 ? "Local guards & register writes" : "FIFO · Counter · Arbitration"}</strong></div><div class="strip-cell"><label>Decision contract</label><strong>Three outcomes</strong><div class="sub">Satisfies · Violates · Context</div></div><div class="strip-cell"><label>Execution</label><strong>CPU or GPU inference</strong><div class="sub" id="model-device-status">Select a device and load the model</div></div></div>`}
@@ -180,11 +195,16 @@ ${
   });
   for (const field of ["#requirement", "#assumptions"])
     $(field).addEventListener("input", invalidate);
+  // Router controls change the assessment too: a verdict computed
+  // for another domain must not stay on screen as current.
+  if ($("#scope")) $("#scope").addEventListener("change", invalidate);
+  if ($("#arbitrate"))
+    $("#arbitrate").addEventListener("change", invalidate);
   $("#rtl").addEventListener("scroll", () => {
     $("#line-numbers").scrollTop = $("#rtl").scrollTop;
   });
   $("#example").onchange = () => {
-    const e = app.examples.find((e) => e.id === $("#example").value);
+    const e = (app.examples || []).find((e) => e.id === $("#example").value);
     if (e) {
       app.forms[app.view] = {
         ...e,
@@ -384,6 +404,10 @@ function renderRouterResult(box, result) {
   }
   for (const e of a.errors)
     experts += `<div class="error-box"><strong>${esc(e.expert_id)} failed</strong>${esc(e.detail)}</div>`;
+  for (const [id, why] of Object.entries(result.broken_experts || {}))
+    experts += `<div class="error-box"><strong>${esc(id)} excluded</strong>${esc(why)}</div>`;
+  for (const id of result.unprofiled_experts || [])
+    experts += `<div class="error-box"><strong>${esc(id)} excluded</strong>no capability profile; not consulted</div>`;
   experts += `<p class="note">${esc(a.routing.rationale.join(" "))}${a.routing.thin_evidence ? " Coverage is thin. Additional verification is required." : ""}</p></div>`;
   box.innerHTML = `<div class="panel-tabs" role="tablist" aria-label="Router result"><button id="summary-tab" role="tab" aria-controls="router-summary" aria-selected="true">Muse conclusion</button><button id="experts-tab" role="tab" aria-controls="router-experts" aria-selected="false">Specialists (${a.responses.length})${a.errors.length ? " · " + a.errors.length + " errors" : ""}</button></div><div id="router-summary" class="result-tab" role="tabpanel" aria-labelledby="summary-tab">${summary}</div><div id="router-experts" class="result-tab" role="tabpanel" aria-labelledby="experts-tab" hidden>${experts}</div>${evidenceControls(result, "router-assessment.json")}`;
   for (const [button, panel] of [

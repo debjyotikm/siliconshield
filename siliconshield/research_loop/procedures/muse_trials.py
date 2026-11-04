@@ -9,7 +9,10 @@ from harness2.core import tree
 from harness2.core.library import Library
 from harness2.core.schedule import Namespace, run_task
 
-from siliconshield.research_loop.controller.replay import execute, grade
+from siliconshield.research_loop.controller.replay import (
+    execute,
+    safe_grade,
+)
 from siliconshield.research_loop.episodes.contracts import (
     atomic_json,
     digest,
@@ -56,7 +59,10 @@ OPERATOR_ASSESSMENT_CONTRACT = (
     "are null. Empty/mismatched histories have no comparisons. Copy observed "
     "execution failure and selected step; acceptance is passed/failed/unknown "
     "from acceptance.accepted; plateau_reductions counts the recorded "
-    "schedule.plateau_lr_reductions, or is null if unavailable. In prose, "
+    "schedule.plateau_lr_reductions, or is null if unavailable. "
+    "When checkpoint_candidates are provided, include checkpoint_review with "
+    "feasible_ids, selected_feasible, failed_constraints, and "
+    "unknown_constraints; otherwise checkpoint_review is null. In prose, "
     "distinguish absolute metrics from their deltas and keep observed numeric "
     "precision. Use the structured assessment for numerical deltas. "
     "Development gains do not establish generalization."
@@ -107,7 +113,10 @@ def validate_populations(
                     "Episode identifiers must be unique safe names"
                 )
             identifiers.add(identifier)
-            scope = row["summary"].get("split_role")
+            summary = row.get("summary")
+            if not isinstance(summary, dict):
+                raise ValueError("Episode %r has no summary" % (identifier,))
+            scope = summary.get("split_role")
             operator = any(
                 tool["function"]["name"] == "operator.decide"
                 for tool in row["tools"]
@@ -233,15 +242,26 @@ def score_checks(
     rows: list[dict[str, Any]], client: Any, root: Path, guidance: str
 ) -> dict[str, Any]:
     """Evaluate all checks; only the external grader reads the targets."""
-    results = {}
+    results: dict[str, Any] = {}
     for row in rows:
+        try:
+            prompt = procedure_prompt(row, guidance)
+        except (KeyError, TypeError, IndexError) as exc:
+            results[row["id"]] = {
+                "execution_complete": 0,
+                "analysis_correct": 0,
+                "verified": False,
+                "grade_error": "ValueError: row has no usable prompt (%s)"
+                % exc,
+            }
+            continue
         delivered = execute(
             row,
             client,
             root / row["id"],
-            system=procedure_prompt(row, guidance),
+            system=prompt,
         )
-        results[row["id"]] = grade(row, delivered)
+        results[row["id"]] = safe_grade(row, delivered)
     atomic_json(root / "grades.json", results)
     return results
 

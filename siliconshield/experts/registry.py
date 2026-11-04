@@ -15,10 +15,8 @@ import re
 from pathlib import Path
 from typing import TypedDict, Union
 
-from siliconshield.experts.capabilities import load_capability_profile
-
-DEVICE_PATTERN = re.compile(r"^(cpu|cuda:\d+)$")
-DIGEST_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+DEVICE_PATTERN = re.compile(r"(cpu|cuda:\d+)\Z")
+DIGEST_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class ModelEntry(TypedDict, total=False):
@@ -80,7 +78,12 @@ def _resolve(base: Path, value: str) -> str:
     candidate = Path(value)
     if not candidate.is_absolute():
         candidate = base / candidate
-    return str(candidate)
+    # Entries promise absolute paths: a relative survivor would
+    # misresolve after any working-directory change between
+    # registry load and worker spawn. Normalize without resolving
+    # symlinks: the configured python is routinely a venv link,
+    # and dereferencing it would lose the venv's packages.
+    return os.path.abspath(candidate)
 
 
 def _validate_entry(
@@ -88,11 +91,16 @@ def _validate_entry(
 ) -> ModelEntry:
     if not isinstance(raw, dict):
         raise _fail("model %d must be an object" % index)
+    unknown = set(raw) - set(ModelEntry.__annotations__)
+    if unknown:
+        raise _fail("model %d has unknown keys: %s" % (index, sorted(unknown)))
     model_id = raw.get("id")
     if not _is_non_empty_str(model_id):
         raise _fail("model %d is missing a non-empty id" % index)
     if not isinstance(model_id, str):
         raise _fail("model %d has a non-string id" % index)
+    if model_id != model_id.strip():
+        raise _fail("model id %r must be exact" % model_id)
     if model_id in seen:
         raise _fail("duplicate model id %r" % model_id)
     seen.add(model_id)
@@ -127,6 +135,12 @@ def _validate_entry(
     for name, digest_value in expected.items():
         if not isinstance(name, str) or not isinstance(digest_value, str):
             raise _fail("model %r has malformed expected_files" % model_id)
+        if not name.strip():
+            raise _fail("model %r has an empty expected filename" % model_id)
+        if name != name.strip():
+            # Bind compares exact file names; padded names would
+            # pass here and fail there with a misleading message.
+            raise _fail("model %r has a padded expected filename" % model_id)
         if not DIGEST_PATTERN.match(digest_value):
             raise _fail(
                 "model %r has a malformed digest for %r" % (model_id, name)
@@ -155,55 +169,24 @@ def _validate_entry(
             raise _fail(
                 "capability profile is not a file: %s" % resolved_profile
             )
-        loaded = load_capability_profile(resolved_profile)
-        if loaded["id"] != model_id:
-            raise _fail(
-                "profile id %r does not match model %r"
-                % (loaded["id"], model_id)
-            )
-        weights = digests.get("model.safetensors")
-        if weights is None or loaded["checkpoint_sha256"] != weights:
-            raise _fail(
-                "profile checkpoint %s does not match weights %s for %r"
-                % (
-                    loaded["checkpoint_sha256"][:12],
-                    str(weights)[:12],
-                    model_id,
-                )
-            )
-        stated_release = raw.get("release")
-        if stated_release is not None and stated_release != loaded["release"]:
-            raise _fail(
-                "registry release %r disagrees with profile %r for %r"
-                % (stated_release, loaded["release"], model_id)
-            )
-        stated_contract = raw.get("question_contract")
-        if (
-            stated_contract is not None
-            and stated_contract != loaded["question_contract"]
-        ):
-            raise _fail(
-                "registry question_contract %r disagrees with profile %r for %r"
-                % (stated_contract, loaded["question_contract"], model_id)
-            )
+        # Content checks stay with the service: one corrupt profile
+        # file must not block loading unrelated registry entries.
         entry["profile"] = resolved_profile
-        entry["release"] = loaded["release"]
-        entry["question_contract"] = loaded["question_contract"]
     release = raw.get("release")
     if release is not None:
         if not _is_non_empty_str(release):
             raise _fail("model %r has an empty release" % model_id)
-        entry["release"] = release
+        entry["release"] = release.strip()
     contract = raw.get("question_contract")
     if contract is not None:
         if not _is_non_empty_str(contract):
             raise _fail("model %r has an empty question_contract" % model_id)
-        entry["question_contract"] = contract
+        entry["question_contract"] = contract.strip()
     qualification = raw.get("qualification")
     if qualification is not None:
         if not _is_non_empty_str(qualification):
             raise _fail("model %r has an empty qualification" % model_id)
-        entry["qualification"] = qualification
+        entry["qualification"] = qualification.strip()
     return entry
 
 

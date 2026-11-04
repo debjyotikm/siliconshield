@@ -15,10 +15,14 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from siliconshield.research_loop.episodes.contracts import atomic_json
+from siliconshield.research_loop.episodes.contracts import (
+    atomic_json,
+    finite_number,
+)
 from siliconshield.research_loop.execution.campaign_supervisor import (
     parse_exec_jsonl,
 )
+from siliconshield.research_loop.execution.sandbox import restricted_env
 
 
 class MuseClient:
@@ -89,6 +93,10 @@ class MuseClient:
         self, messages: list[dict[str, Any]], tools: Any = ()
     ) -> dict[str, Any]:
         """Return one validated assistant message and save its CLI receipt."""
+        if isinstance(tools, tuple):
+            # Tool-free proposers call complete() without tools; the
+            # replay schema validators below require a list.
+            tools = list(tools)
         self.last_completion_metrics = None
         if (
             hashlib.sha256(self.executable.read_bytes()).hexdigest()
@@ -132,10 +140,13 @@ class MuseClient:
                 stdout=stdout,
                 stderr=stderr,
                 start_new_session=True,
+                # The child authenticates through the existing login
+                # under HOME; campaign secrets must not leak into it.
+                env=restricted_env(),
             )
             try:
                 code = process.wait(timeout=self.timeout)
-            except BaseException:
+            except BaseException as exc:
                 # Reap the whole *owned* process group on timeout/cancellation.
                 # Never search for or signal a campaign process by name.
                 try:
@@ -143,9 +154,34 @@ class MuseClient:
                 except ProcessLookupError:
                     pass
                 process.wait()
-                atomic_json(attempt / "receipt.json", {"completed": False})
+                atomic_json(
+                    attempt / "receipt.json",
+                    {
+                        "identity": self.execution_identity,
+                        "exit_code": None,
+                        "completed": False,
+                        "terminal": "timeout"
+                        if isinstance(exc, subprocess.TimeoutExpired)
+                        else type(exc).__name__,
+                    },
+                )
                 raise
-        parsed = parse_exec_jsonl((attempt / "stdout.jsonl").read_text())
+        try:
+            parsed = parse_exec_jsonl((attempt / "stdout.jsonl").read_text())
+        except ValueError as exc:
+            # An empty or truncated transcript still gets a receipt so
+            # the attempt stays auditable; the completion itself fails.
+            atomic_json(
+                attempt / "receipt.json",
+                {
+                    "identity": self.execution_identity,
+                    "exit_code": code,
+                    "completed": False,
+                    "terminal": "transcript-unparseable",
+                    "detail": str(exc),
+                },
+            )
+            raise
         atomic_json(
             attempt / "receipt.json",
             {"identity": self.execution_identity, "exit_code": code, **parsed},
@@ -178,6 +214,26 @@ def operator_assessment_schema() -> dict[str, Any]:
             "false_safe_delta_pp": {"type": ["number", "null"]},
         }
     )
+    review = closed_object(
+        {
+            "feasible_ids": {"type": "array", "items": {"type": "string"}},
+            "selected_feasible": {"type": ["boolean", "null"]},
+            "failed_constraints": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "unknown_constraints": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+        }
+    )
     return closed_object(
         {
             "execution_failed": {"type": ["boolean", "null"]},
@@ -188,15 +244,22 @@ def operator_assessment_schema() -> dict[str, Any]:
             "selected_step": {"type": ["integer", "null"]},
             "plateau_reductions": {"type": ["integer", "null"]},
             "comparisons": {"type": "array", "items": comparison},
+            "checkpoint_review": {"anyOf": [review, {"type": "null"}]},
         }
     )
 
 
 def argument_schema(tool: dict[str, Any]) -> dict[str, Any]:
     """Encode optional arguments as nullable required fields for the provider."""
-    schema = copy.deepcopy(tool["function"]["parameters"])
+    function = _tool_function(tool)
+    parameters = function.get("parameters")
+    if not isinstance(parameters, dict) or not isinstance(
+        parameters.get("properties"), dict
+    ):
+        raise ValueError("Replay tool needs parameter properties")
+    schema = copy.deepcopy(parameters)
     properties = schema["properties"]
-    if tool["function"]["name"] == "operator.decide":
+    if function["name"] == "operator.decide":
         properties["assessment"] = operator_assessment_schema()
     required = set(schema.get("required", []))
     for name, description in properties.items():
@@ -207,7 +270,7 @@ def argument_schema(tool: dict[str, Any]) -> dict[str, Any]:
 
 def content_schema(tools: Any) -> dict[str, Any]:
     """Allow structured final answers without JSON nested inside JSON strings."""
-    names = {tool["function"]["name"] for tool in tools}
+    names = {function["name"] for function in _checked_tools(tools)}
     if "operator.decide" in names:
         structured = closed_object(
             {
@@ -240,11 +303,13 @@ def content_schema(tools: Any) -> dict[str, Any]:
 
 def response_schema(tools: Any) -> dict[str, Any]:
     """Constrain the provider's final response to the replay message shape."""
+    if not isinstance(tools, list):
+        raise ValueError("Replay tools must be a list")
     functions = [
         {
             "type": "object",
             "properties": {
-                "name": {"const": tool["function"]["name"]},
+                "name": {"const": _tool_function(tool)["name"]},
                 "arguments": argument_schema(tool),
             },
             "required": ["name", "arguments"],
@@ -279,9 +344,37 @@ def response_schema(tools: Any) -> dict[str, Any]:
     }
 
 
+def _tool_function(tool: Any) -> dict[str, Any]:
+    """Return one validated tool function binding or raise ValueError."""
+    if not isinstance(tool, dict) or not isinstance(tool.get("function"), dict):
+        raise ValueError("Replay tool must name a function")
+    function = tool["function"]
+    if not isinstance(function.get("name"), str) or not function["name"]:
+        raise ValueError("Replay tool must name a function")
+    checked: dict[str, Any] = function
+    return checked
+
+
+def _checked_tools(tools: Any) -> list[dict[str, Any]]:
+    """Return tool functions after validating the advertised list."""
+    if not isinstance(tools, list):
+        raise ValueError("Replay tools must be a list")
+    return [_tool_function(tool) for tool in tools]
+
+
 def parse_message(text: str, tools: Any) -> dict[str, Any]:
-    """Reject malformed messages or attempts to call unadvertised tools."""
-    message = json.loads(text)
+    """Reject malformed messages or attempts to call unadvertised tools.
+
+    Strictness here is intentional: this CLI path constrains the
+    provider with response_schema, so an explicit tool_calls null
+    never validates, unlike the wire-tolerant chat clients.
+    """
+    if not isinstance(text, str):
+        raise ValueError("Assistant message must be text")
+    try:
+        message = json.loads(text)
+    except ValueError as exc:
+        raise ValueError("Assistant message must be JSON: %s" % exc) from exc
     if not isinstance(message, dict) or message.get("role") != "assistant":
         raise ValueError("Expected an assistant message object")
     content, calls = message.get("content"), message.get("tool_calls", [])
@@ -291,7 +384,7 @@ def parse_message(text: str, tools: Any) -> dict[str, Any]:
         raise ValueError("Assistant content must be text or null")
     if not isinstance(calls, list) or (not content and not calls):
         raise ValueError("Empty or malformed assistant message")
-    allowed = {tool["function"]["name"] for tool in tools}
+    allowed = {function["name"] for function in _checked_tools(tools)}
     identifiers = set()
     for call in calls:
         if not isinstance(call, dict) or call.get("type") != "function":
@@ -314,15 +407,21 @@ def parse_message(text: str, tools: Any) -> dict[str, Any]:
 
 def decode_operator_arguments(arguments: dict[str, Any]) -> None:
     """Restore the tool contract without inferring actions, values, or evidence."""
+    if not isinstance(arguments, dict):
+        raise ValueError("Operator arguments must be an object")
     for name in ("lr", "checkpoint_dir", "assessment"):
         if arguments.get(name) is None:
             arguments.pop(name, None)
     assessment = arguments.get("assessment")
+    if assessment is None:
+        return
     if not isinstance(assessment, dict):
-        return
+        raise ValueError("Operator assessment must be an object")
     comparisons = assessment.get("comparisons")
-    if not isinstance(comparisons, list):
+    if comparisons is None:
         return
+    if not isinstance(comparisons, list):
+        raise ValueError("Operator comparisons must be a list")
     mapped = {}
     for item in comparisons:
         if not isinstance(item, dict) or set(item) != {
@@ -335,6 +434,16 @@ def decode_operator_arguments(arguments: dict[str, Any]) -> None:
         name = item["view"]
         if not isinstance(name, str) or not name or name in mapped:
             raise ValueError("Duplicate or invalid comparison view")
+        for key in (
+            "accuracy_delta_pp",
+            "nll_delta",
+            "false_safe_delta_pp",
+        ):
+            value = item[key]
+            if value is not None and not finite_number(value):
+                raise ValueError(
+                    "Operator comparison needs numeric or null " + key
+                )
         mapped[name] = {
             key: value for key, value in item.items() if key != "view"
         }

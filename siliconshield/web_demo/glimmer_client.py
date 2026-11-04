@@ -49,6 +49,24 @@ class LocalGlimmerClient:
             raise ValueError(
                 "ssh_host must be a local SSH configuration alias or user@host"
             )
+        if (
+            isinstance(max_tokens, bool)
+            or not isinstance(max_tokens, int)
+            or max_tokens < 1
+        ):
+            raise ValueError("max_tokens must be a positive integer")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or timeout <= 0
+        ):
+            raise ValueError("timeout must be positive")
+        if (
+            isinstance(max_calls, bool)
+            or not isinstance(max_calls, int)
+            or max_calls < 1
+        ):
+            raise ValueError("max_calls must be a positive integer")
         self.endpoint, self.model, self.ssh_host = endpoint, model, ssh_host
         self.timeout, self.max_tokens, self.max_calls = (
             timeout,
@@ -119,15 +137,23 @@ class LocalGlimmerClient:
         """Return the real model response, refusing incomplete tool output."""
         if self.calls >= self.max_calls:
             raise RuntimeError("Local demo agent-call budget exhausted.")
-        self.calls += 1
+        if not isinstance(messages, list) or any(
+            not isinstance(item, dict) for item in messages
+        ):
+            raise ValueError("Chat messages must be a list of objects.")
         messages = copy.deepcopy(messages)
         if messages and messages[0].get("role") == "system":
+            if not isinstance(messages[0].get("content"), str):
+                raise ValueError("System message content must be text.")
             messages[0]["content"] = messages[0]["content"].replace(
                 "Reasoning strength: high.", "Reasoning strength: low."
             )
             messages[0]["content"] += (
                 "\nReasoning strength: low. Keep explanations concise, at most 100 words. Complete the required tool call."
             )
+        # Rejected inputs never reach the service, so they must not
+        # consume the fixed agent-call budget.
+        self.calls += 1
         payload = {
             "model": self.model,
             "messages": messages,
@@ -140,12 +166,25 @@ class LocalGlimmerClient:
         # The final acknowledgement is still generated and validated, never fabricated.
         if messages and messages[-1].get("role") == "tool":
             last = messages[-1]
-            decided = any(
-                call.get("id") == last.get("tool_call_id")
-                and call.get("function", {}).get("name") == "operator.decide"
-                for message in messages[:-1]
-                for call in message.get("tool_calls") or []
-            )
+            decided = False
+            for prior in messages[:-1]:
+                calls = prior.get("tool_calls") or []
+                if not isinstance(calls, list):
+                    continue
+                for call in calls:
+                    if not isinstance(call, dict):
+                        continue
+                    function = call.get("function")
+                    if not isinstance(function, dict):
+                        continue
+                    if (
+                        call.get("id") == last.get("tool_call_id")
+                        and function.get("name") == "operator.decide"
+                    ):
+                        decided = True
+                        break
+                if decided:
+                    break
             try:
                 recorded = (
                     json.loads(last.get("content", "{}")).get("recorded")
@@ -167,6 +206,8 @@ class LocalGlimmerClient:
                 )
         started = time.monotonic()
         data = self._request(self.endpoint, payload)
+        if not isinstance(data, dict):
+            raise ValueError("Glimmer response must be a JSON object.")
         self.last_completion_metrics = {
             "usage": data.get("usage"),
             "seconds": time.monotonic() - started,
@@ -185,25 +226,45 @@ class LocalGlimmerClient:
                 )
                 + "\n"
             )
-        choice = data["choices"][0]
+        try:
+            choice = data["choices"][0]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError(
+                "Glimmer response has no usable choice: %s" % exc
+            ) from exc
+        if not isinstance(choice, dict):
+            raise ValueError("Glimmer response choice must be an object.")
         if choice.get("finish_reason") == "length":
             raise RuntimeError(
                 "Glimmer exhausted the response budget before a complete action."
             )
-        message = choice["message"]
-        for call in message.get("tool_calls") or []:
-            arguments = call["function"]["arguments"]
-            parsed = (
-                json.loads(arguments)
-                if isinstance(arguments, str)
-                else arguments
-            )
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            raise ValueError("Glimmer response has no message object.")
+        tool_calls = message.get("tool_calls") or []
+        if not isinstance(tool_calls, list):
+            raise ValueError("Glimmer tool calls must be a list.")
+        for call in tool_calls:
+            function = call.get("function") if isinstance(call, dict) else None
+            if not isinstance(function, dict):
+                raise ValueError("Glimmer tool call must name a function.")
+            arguments = function.get("arguments")
+            try:
+                parsed = (
+                    json.loads(arguments)
+                    if isinstance(arguments, str)
+                    else arguments
+                )
+            except ValueError as exc:
+                raise ValueError(
+                    "Glimmer tool arguments must be a JSON object: %s" % exc
+                ) from exc
             if not isinstance(parsed, dict):
                 raise ValueError(
                     "Glimmer tool arguments must be a JSON object."
                 )
             if self.decode_arguments:
-                call["function"]["arguments"] = parsed
+                function["arguments"] = parsed
         if not message.get("content") and not message.get("tool_calls"):
             raise ValueError("Empty Glimmer completion.")
         return cast(dict[str, Any], message)

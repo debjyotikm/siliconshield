@@ -146,8 +146,13 @@ def run_benchmark(
                 return 2
 
             def consult(
-                state: str, _pool: Any = pool, _id: str = model_id
+                state: str,
+                _pool: Any = pool,
+                _id: str = model_id,
+                _entry: Any = entry,
             ) -> Any:
+                if _id not in _pool:
+                    _pool.load(_entry)
                 return _pool.analyze(_id, state)
 
             def progress(done: int, total: int) -> None:
@@ -165,7 +170,14 @@ def run_benchmark(
             except ValueError as exc:
                 print("benchmark: %s" % exc, file=sys.stderr)
                 return 2
-        _write(out_dir / ("%s.json" % model_id), dict(report))
+        try:
+            _write(out_dir / ("%s.json" % model_id), dict(report))
+        except OSError as exc:
+            print(
+                "benchmark: cannot write %s: %s" % (out_dir, exc),
+                file=sys.stderr,
+            )
+            return 2
         reports.append(report)
         overall = report["overall"]
         print(
@@ -180,7 +192,13 @@ def run_benchmark(
                 len(report["row_errors"]),
             )
         )
-    _write(out_dir / "comparison.json", metrics.compare(reports))
+    try:
+        _write(out_dir / "comparison.json", metrics.compare(reports))
+    except OSError as exc:
+        print(
+            "benchmark: cannot write %s: %s" % (out_dir, exc), file=sys.stderr
+        )
+        return 2
     return 0
 
 
@@ -202,17 +220,12 @@ def run_router_eval(
         return 2
     with pool_factory() as pool:
         loaded: set[str] = set()
-        load_errors: dict[str, str] = {}
 
         def consult(expert_id: str, state: str) -> Any:
-            if expert_id in load_errors:
-                raise RuntimeError(load_errors[expert_id])
-            if expert_id not in loaded:
-                try:
-                    pool.load(service.model_entry(expert_id))
-                except RuntimeError as exc:
-                    load_errors[expert_id] = str(exc)
-                    raise
+            # Load failures are never cached: a transient first-row
+            # failure must not poison every later row.
+            if expert_id not in loaded or expert_id not in pool:
+                pool.load(service.model_entry(expert_id))
                 loaded.add(expert_id)
             return pool.analyze(expert_id, state)
 

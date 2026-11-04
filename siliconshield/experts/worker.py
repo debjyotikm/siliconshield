@@ -9,6 +9,8 @@ import threading
 import time
 import uuid
 from _thread import RLock
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from siliconshield.experts import contracts
@@ -23,6 +25,10 @@ from siliconshield.training.laya.question_contracts import (
     question_for,
     read_export_record,
 )
+
+
+class WorkerLoadError(RuntimeError):
+    """Model loading failed; the worker was discarded, never half-ready."""
 
 
 def _spawn(
@@ -67,17 +73,52 @@ class WorkerPool:
         self._queues: dict[str, queue.Queue[str | None]] = {}
         self._ready: dict[str, dict[str, Any]] = {}
         self._locks: dict[str, RLock] = {}
+        self._pool_lock = threading.RLock()
+        self._closed = False
         self._module, self._extra_env = worker_module, extra_env
+
+    def __contains__(self, expert_id: object) -> bool:
+        """Whether a validated worker is currently ready for analysis."""
+        return expert_id in self._ready
 
     def ready(self, expert_id: str) -> dict[str, Any]:
         """Return an immutable copy of the validated ready receipt."""
         return copy.deepcopy(self._ready[expert_id])
 
     def load(self, entry: ModelEntry) -> None:
-        """Load and validate identity before permitting any analysis."""
-        expert_id = entry["id"]
-        with self._locks.setdefault(expert_id, threading.RLock()):
-            self._ready.pop(expert_id, None)
+        """Load and validate identity before permitting any analysis.
+
+        Reloading an expert that fails re-validation discards the
+        previous generation too: a worker that just failed an
+        identity check must not keep serving. Availability yields
+        to identity safety here; callers retry the load.
+        """
+        with self._pool_lock:
+            if self._closed:
+                raise RuntimeError("Worker pool is closed")
+        if not isinstance(entry, Mapping):
+            raise WorkerLoadError("Cannot load worker: entry is not an object")
+        expert_id = entry.get("id")
+        if not isinstance(expert_id, str) or not expert_id:
+            raise WorkerLoadError("Cannot load worker: entry names no expert")
+        for key in (
+            "checkpoint",
+            "device",
+            "expected_files",
+            "laya_root",
+            "python",
+        ):
+            if key not in entry:
+                raise WorkerLoadError(
+                    "Cannot load %s: entry lacks %s" % (expert_id, key)
+                )
+        with self._pool_lock:
+            expert_lock = self._locks.setdefault(expert_id, threading.RLock())
+        with expert_lock:
+            with self._pool_lock:
+                if self._closed:
+                    raise RuntimeError("Worker pool is closed")
+                self._ready.pop(expert_id, None)
             try:
                 worker = self._workers.get(expert_id)
                 if worker is None or worker.poll() is not None:
@@ -89,10 +130,16 @@ class WorkerPool:
                     threading.Thread(
                         target=_pump, args=(worker.stdout, box), daemon=True
                     ).start()
-                    self._workers[expert_id], self._queues[expert_id] = (
-                        worker,
-                        box,
-                    )
+                    with self._pool_lock:
+                        if self._closed:
+                            self._workers[expert_id] = worker
+                            self._queues[expert_id] = box
+                            self._discard(expert_id)
+                            raise RuntimeError("Worker pool is closed")
+                        self._workers[expert_id], self._queues[expert_id] = (
+                            worker,
+                            box,
+                        )
                 request_id = uuid.uuid4().hex
                 request: dict[str, Any] = dict(
                     contracts.make_load_request(request_id, expert_id)
@@ -110,15 +157,17 @@ class WorkerPool:
                 self._ready[expert_id] = reply
             except (OSError, ValueError, RuntimeError) as exc:
                 self._discard(expert_id)
-                raise RuntimeError(
+                raise WorkerLoadError(
                     "Cannot load %s: %s" % (expert_id, exc)
                 ) from exc
 
     @staticmethod
     def _validate_ready(entry: ModelEntry, reply: dict[str, Any]) -> None:
+        staged = Path(entry["checkpoint"])
+        record_dir = staged.parent if staged.is_file() else staged
         expected_contract = (
             entry.get("question_contract")
-            or read_export_record(entry["checkpoint"])["version"]
+            or (read_export_record(record_dir)["version"])
         )
         for field, expected in (
             ("model_id", entry["id"]),
@@ -158,7 +207,15 @@ class WorkerPool:
             )
 
     def analyze(self, expert_id: str, state: str) -> dict[str, Any]:
-        """Return one result only from the loaded generation and exact input."""
+        """Return one result only from the loaded generation and exact input.
+
+        Transport and protocol failures discard the worker and raise
+        RuntimeError. Input rejections from result validation raise
+        ValueError and keep the loaded worker: a truncated input says
+        nothing about the worker's health.
+        """
+        if not isinstance(state, str) or not state.strip():
+            raise ValueError("Cannot analyze empty state text")
         with self._locks.setdefault(expert_id, threading.RLock()):
             if expert_id not in self._ready:
                 raise RuntimeError("No validated worker ready for " + expert_id)
@@ -167,26 +224,31 @@ class WorkerPool:
                 self._send(
                     expert_id, contracts.make_analyze_request(request_id, state)
                 )
-                reply = self._wait(
-                    expert_id,
-                    request_id,
-                    ("result",),
-                    contracts.ANALYZE_TIMEOUT_SECONDS,
-                    "analyze",
-                )
+                try:
+                    reply = self._wait(
+                        expert_id,
+                        request_id,
+                        ("result",),
+                        contracts.ANALYZE_TIMEOUT_SECONDS,
+                        "analyze",
+                    )
+                except ValueError as exc:
+                    raise RuntimeError(
+                        "Worker for %s broke protocol: %s" % (expert_id, exc)
+                    ) from exc
                 ready = self._ready[expert_id]
                 for field in ("model_id", "device", "execution_identity"):
                     if reply.get(field) != ready[field]:
                         raise RuntimeError("Result changed loaded " + field)
                 if reply.get("state_sha256") != text_digest(state):
                     raise RuntimeError("Result belongs to a different state")
-                contracts.validate_result(reply)
-                return reply
-            except (RuntimeError, ValueError) as exc:
+            except RuntimeError as exc:
                 self._discard(expert_id)
                 raise RuntimeError(
                     "Expert %s analysis failed: %s" % (expert_id, exc)
                 ) from exc
+            contracts.validate_result(reply)
+            return reply
 
     def transport(self) -> Any:
         """Return the checked analysis callable."""
@@ -194,9 +256,10 @@ class WorkerPool:
 
     def _discard(self, expert_id: str) -> None:
         """Invalidate and reap only this pool's owned child."""
-        self._ready.pop(expert_id, None)
-        self._queues.pop(expert_id, None)
-        worker = self._workers.pop(expert_id, None)
+        with self._pool_lock:
+            self._ready.pop(expert_id, None)
+            self._queues.pop(expert_id, None)
+            worker = self._workers.pop(expert_id, None)
         if worker is None:
             return
         try:
@@ -206,7 +269,10 @@ class WorkerPool:
                     worker.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     worker.kill()
-                    worker.wait(timeout=2)
+                    try:
+                        worker.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        pass
         finally:
             if worker.stdin is not None:
                 try:
@@ -215,9 +281,31 @@ class WorkerPool:
                     pass
 
     def close(self) -> None:
-        """Reap all owned children, including failed or timed-out generations."""
-        for expert_id in list(self._workers):
-            self._discard(expert_id)
+        """Reap all owned children, including failed or timed-out generations.
+
+        One stuck child never blocks the rest: every owned
+        generation is discarded, and the first failure surfaces
+        only after all siblings were attempted. Close is terminal:
+        later loads are refused, and sweeps repeat until no owned
+        child remains, so a concurrent spawn cannot leak.
+        """
+        with self._pool_lock:
+            self._closed = True
+        first: BaseException | None = None
+        while True:
+            with self._pool_lock:
+                pending = list(self._workers)
+            if not pending:
+                break
+            for expert_id in pending:
+                try:
+                    with self._locks.setdefault(expert_id, threading.RLock()):
+                        self._discard(expert_id)
+                except BaseException as exc:  # noqa: BLE001 - reap all first
+                    if first is None:
+                        first = exc
+        if first is not None:
+            raise first
 
     def __enter__(self) -> "WorkerPool":
         return self
@@ -265,12 +353,17 @@ class WorkerPool:
                 )
             try:
                 message = json.loads(line)
-            except ValueError:
-                continue
-            if (
-                not isinstance(message, dict)
-                or message.get("request_id") != request_id
-            ):
+            except ValueError as exc:
+                raise RuntimeError(
+                    "Worker for %s sent invalid JSON during %s: %s"
+                    % (expert_id, stage, exc)
+                ) from exc
+            if not isinstance(message, dict):
+                raise RuntimeError(
+                    "Worker for %s sent a non-object message during %s"
+                    % (expert_id, stage)
+                )
+            if message.get("request_id") != request_id:
                 continue
             session = message.get("session_id")
             if (
@@ -294,3 +387,7 @@ class WorkerPool:
                 )
             if kind in wanted:
                 return dict(message)
+            raise RuntimeError(
+                "Worker for %s sent unexpected %s during %s"
+                % (expert_id, kind, stage)
+            )

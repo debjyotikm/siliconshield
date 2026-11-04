@@ -11,7 +11,11 @@ from siliconshield.research_loop.adapters.glimmer_training import (
     dev_subset,
     load_rows,
 )
-from siliconshield.research_loop.controller.replay import execute, grade
+from siliconshield.research_loop.controller.replay import (
+    execute,
+    safe_episode_dir,
+    safe_grade,
+)
 from siliconshield.research_loop.controller.serve import local_completion
 from siliconshield.research_loop.episodes.contracts import atomic_json
 from siliconshield.training.glimmer.identity import checkpoint_fingerprint
@@ -60,6 +64,19 @@ class InProcessClient:
                 "Generation reached the token limit before the response finished"
             )
         return choice["message"]
+
+
+def require_episodes(rows: list) -> list:
+    """Refuse a vacuous evaluation that would report a hollow pass.
+
+    Zero selected episodes verify nothing; adapter-vs-reference
+    counts of 0 >= 0 must never read as non-regression evidence.
+    """
+    if not rows:
+        raise ValueError(
+            "Evaluation selected no episodes; refusing a vacuous report."
+        )
+    return rows
 
 
 def main():
@@ -140,6 +157,7 @@ def main():
     )
     if not args.final:
         rows = dev_subset(rows, args.examples)
+    require_episodes(rows)
     from siliconshield.training.glimmer.identity import (
         MODEL_REVISION,
         code_identity,
@@ -220,12 +238,13 @@ def main():
         )
         with model.disable_adapter() if arm == "base" else nullcontext():
             for row in rows:
-                path = output / arm / row["id"]
+                path = safe_episode_dir(output / arm, row["id"])
                 delivered = execute(row, client, path)
+                scored = safe_grade(row, delivered)
                 result = {
                     "episode_id": row["id"],
                     "group_id": row["group_id"],
-                    **grade(row, delivered),
+                    **scored,
                 }
                 atomic_json(path / "grade.json", result)
                 scores.append(result)

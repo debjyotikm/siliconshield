@@ -119,8 +119,12 @@ def assessment(summary):
         else None,
         "comparisons": comparisons,
     }
+    # The key is always present (null without candidates) so the
+    # Muse CLI output schema and the field-equality check agree.
     if "checkpoint_candidates" in summary:
         result["checkpoint_review"] = checkpoint_review(summary)
+    else:
+        result["checkpoint_review"] = None
     return result
 
 

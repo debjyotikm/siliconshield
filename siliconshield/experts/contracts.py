@@ -84,11 +84,14 @@ def validate_result(
 ) -> dict[str, JsonValue]:
     """Validate a worker result and return the checked assessment fields.
 
-    Requires the three fixed labels, finite scores in [0, 1] summing to a
-    unit total, an explicit verdict consistent with the top score, and
-    coverage fields proving the model saw the complete input. Raises
-    ValueError with an actionable message otherwise; callers must surface
-    the failure instead of producing a verdict.
+    Requires exactly the three fixed labels, finite scores in [0, 1]
+    summing to a unit total, an explicit verdict consistent with the
+    top score, and coverage fields proving the model saw the complete
+    input. Score ties resolve to the first label in the fixed order
+    above; the worker applies the same first-max rule, so both sides
+    always agree. Raises ValueError with an actionable message
+    otherwise; callers must surface the failure instead of producing
+    a verdict.
     """
     label = payload.get("label")
     probabilities = payload.get("probabilities")
@@ -105,6 +108,9 @@ def validate_result(
         raise ValueError(
             "Worker result is missing labels: %s" % sorted(missing)
         )
+    extra = [name for name in probabilities if name not in expected]
+    if extra:
+        raise ValueError("Worker result has unknown labels: %s" % sorted(extra))
     scores: dict[str, float] = {}
     for name in expected:
         number = _require_finite_number(
@@ -157,7 +163,12 @@ def validate_result(
                 or usage[field] != coverage[field]
             ):
                 raise ValueError("Worker usage contradicts coverage: " + field)
-    scores_json: dict[str, JsonValue] = dict(scores)
+    # Sums within tolerance validate but would linger unnormalized
+    # downstream; rescale once so every consumer sees a distribution.
+    # Rescaling preserves the top-score order checked above.
+    scores_json: dict[str, JsonValue] = {
+        name: scores[name] / total for name in expected
+    }
     checked: dict[str, JsonValue] = {
         "label": label if isinstance(label, str) else None,
         "scores": scores_json,

@@ -529,11 +529,26 @@ def check_prep_receipt(record: Any, round_id: str) -> dict[str, Any]:
     }
 
 
+def _token_sum(models: list[Any], key: str) -> float:
+    """Sum one token count, skipping malformed model entries."""
+    total = 0.0
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        value = model.get(key, 0)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        total += value
+    return total
+
+
 def parse_exec_jsonl(text: str) -> dict[str, Any]:
     """Extract the session id, terminal state, and final text.
 
     Raises when the transcript carries no terminal record, so a
     truncated or killed run never reads as a completed analysis.
+    Malformed records are skipped the same way as unparsable
+    lines: only a well-formed terminal record counts.
     """
     session: Optional[str] = None
     terminal: Optional[str] = None
@@ -547,24 +562,31 @@ def parse_exec_jsonl(text: str) -> dict[str, Any]:
         if not isinstance(record, dict):
             continue
         stream = record.get("stream") or {}
+        if not isinstance(stream, dict):
+            continue
         if stream.get("kind") == "session" and session is None:
             session = stream.get("id")
         payload = record.get("payload") or {}
+        if not isinstance(payload, dict):
+            continue
         kind = record.get("payload_type", "")
+        if not isinstance(kind, str):
+            continue
         if kind.startswith("run.terminal."):
-            terminal = payload.get("terminal")
-            final_text = payload.get("text") or ""
+            terminal_value = payload.get("terminal")
+            if not isinstance(terminal_value, str):
+                continue
+            terminal = terminal_value
+            text_value = payload.get("text") or ""
+            final_text = text_value if isinstance(text_value, str) else ""
         elif kind == "run.usage":
+            models = payload.get("models", [])
+            if not isinstance(models, list):
+                continue
             usage = {
                 "calls": payload.get("calls"),
-                "input_tokens": sum(
-                    model.get("input_tokens", 0)
-                    for model in payload.get("models", [])
-                ),
-                "output_tokens": sum(
-                    model.get("output_tokens", 0)
-                    for model in payload.get("models", [])
-                ),
+                "input_tokens": _token_sum(models, "input_tokens"),
+                "output_tokens": _token_sum(models, "output_tokens"),
             }
     if terminal is None:
         raise ValueError("Agent transcript has no terminal record")

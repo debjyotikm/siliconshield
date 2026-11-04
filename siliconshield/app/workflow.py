@@ -11,7 +11,7 @@ A repair is accepted only after all configured checks pass.
 
 import difflib
 import hashlib
-import json
+import os
 import re
 import shutil
 import subprocess
@@ -21,6 +21,7 @@ from siliconshield.app.laya_assessor import (
     SecurityAssessor,
     UnavailableAssessor,
 )
+from siliconshield.research_loop.episodes.contracts import atomic_json
 from siliconshield.schemas import INVESTIGATION_SCHEMA
 
 TOOL_TIMEOUT = 300
@@ -108,36 +109,57 @@ def tool_versions():
 
 
 def relevant_statements(rtl, protected, controls):
-    """Line-numbered assignments to protected signals and their guarding conditions."""
+    """Line-numbered assignments to protected signals and their guarding conditions.
+
+    Matches run over the whole text, so an assignment split across
+    lines still reads as one write; only whitespace may separate a
+    signal from its operator, never another statement. Guard lookup
+    starts from the write's first line.
+    """
     lines = rtl.splitlines()
     findings = []
-    for index, line in enumerate(lines):
-        for signal in protected:
-            if re.search(r"\b%s\b\s*<=" % re.escape(signal), line):
-                guard = None
-                candidates = (
-                    [index] + list(range(index - 1, max(-1, index - 4), -1))
-                    if re.search(r"\b(if|else if)\b", line.split("<=")[0])
-                    else list(range(index - 1, max(-1, index - 4), -1))
-                )
-                for back in candidates:
-                    if re.search(r"\b(if|else if)\b", lines[back]):
-                        guard = {
-                            "line": back + 1,
-                            "text": lines[back].strip(),
-                            "mentions_controls": [
-                                c for c in controls if c in lines[back]
-                            ],
-                        }
-                        break
-                findings.append(
-                    {
-                        "signal": signal,
-                        "line": index + 1,
-                        "text": line.strip(),
-                        "guard": guard,
+    for signal in protected:
+        pattern = re.compile(
+            r"\b%s\b\s*(?:\[[^\]]*\]\s*)*(<=|=(?!=|>))" % re.escape(signal)
+        )
+        for match in pattern.finditer(rtl):
+            first = rtl.count("\n", 0, match.start()) + 1
+            last = rtl.count("\n", 0, match.end(1)) + 1
+            line_start = rtl.rfind("\n", 0, match.start()) + 1
+            head = rtl[line_start : match.start(1)]
+            if match[1] == "<=" and re.search(
+                r"=(?!=|>)", re.sub(r"\([^()]*\)", " ", head)
+            ):
+                # A `<=` after a plain `=` in the same statement
+                # compares; only assignments write the signal.
+                continue
+            index = first - 1
+            guard = None
+            candidates = (
+                [index] + list(range(index - 1, max(-1, index - 4), -1))
+                if re.search(r"\b(if|else if)\b", head)
+                else list(range(index - 1, max(-1, index - 4), -1))
+            )
+            for back in candidates:
+                if re.search(r"\b(if|else if)\b", lines[back]):
+                    guard = {
+                        "line": back + 1,
+                        "text": lines[back].strip(),
+                        "mentions_controls": [
+                            c for c in controls if c in lines[back]
+                        ],
                     }
-                )
+                    break
+            text = " ".join(line.strip() for line in lines[first - 1 : last])
+            findings.append(
+                {
+                    "signal": signal,
+                    "line": first,
+                    "text": text,
+                    "guard": guard,
+                }
+            )
+    findings.sort(key=lambda finding: (finding["line"], finding["signal"]))
     return findings
 
 
@@ -166,7 +188,12 @@ def classify_markers(run):
 
 def run_verilator_check(rtl, check, workdir, label):
     """Compile RTL + the testbench bound to THIS check's requirement."""
-    folder = (Path(workdir) / label).resolve()
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", label):
+        raise ValueError("Check label is not a safe name: %r" % (label,))
+    root = Path(workdir).resolve()
+    folder = (root / label).resolve()
+    if folder != root and root not in folder.parents:
+        raise ValueError("Check label escapes its workdir: %r" % (label,))
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "dut.sv").write_text(rtl)
     (folder / "tb.sv").write_text(check["testbench"])
@@ -275,6 +302,14 @@ def investigate(case, output, assessor=None, proposer=None):
     """Run the full investigation for one case dict; write report.json/report.md."""
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
+    # A rerun must not present the previous run's checks, candidate,
+    # or reports as its own evidence: clear generated paths first.
+    for generated in ("checks", "candidate", "report.json", "report.md"):
+        target = output / generated
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        elif target.is_file() or target.is_symlink():
+            target.unlink()
     rtl, requirement = case["rtl"], case["requirement"]
     assumptions = case.get("assumptions", "")
     assessor = (
@@ -394,11 +429,16 @@ def investigate(case, output, assessor=None, proposer=None):
         },
         "conclusion": conclusion,
     }
-    (output / "report.json").write_text(
-        json.dumps(report, indent=2, allow_nan=False) + "\n"
-    )
-    (output / "report.md").write_text(_markdown(report))
+    atomic_json(output / "report.json", report)
+    _atomic_text(output / "report.md", _markdown(report))
     return report
+
+
+def _atomic_text(path: Path, text: str) -> None:
+    """Write text atomically so a crash never leaves a half report."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _kind_verdict(checks, kind):

@@ -8,6 +8,7 @@ workflow never imports LAYA core.
 
 import copy
 import json
+import os
 import sys
 
 from siliconshield.training.laya.question_contracts import (
@@ -28,10 +29,16 @@ def questions_for_checkpoint(checkpoint):
 
     Reads the export's recorded question contract and returns
     ``(questions, version)`` with a deterministic option order.
-    Legacy exports without a record resolve to the original
-    omitted-definitions-only contract.
+    Single-file checkpoints read the record from their parent
+    export directory; without that, a v1 single file would
+    silently fall back to the legacy questions its weights never
+    trained on. Legacy exports without a record resolve to the
+    original omitted-definitions-only contract.
     """
-    record = read_export_record(checkpoint)
+    record_dir = checkpoint
+    if os.path.isfile(checkpoint):
+        record_dir = os.path.dirname(os.path.abspath(checkpoint))
+    record = read_export_record(record_dir)
     questions = copy.deepcopy(question_for(record["version"]))
     questions["security"]["option_order"] = list(range(len(CONTRACT_LABELS)))
     return questions, record["version"]

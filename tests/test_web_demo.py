@@ -95,6 +95,9 @@ class FixturePool:
     def load(self, entry):
         self.entry = entry
 
+    def __contains__(self, model):
+        return True
+
     def ready(self, model):
         return {"device": self.entry["device"]}
 
@@ -280,6 +283,27 @@ def test_real_router_consults_both_workers_and_preserves_agent_error(
         and "Configure local Glimmer" in result["arbitration_error"]
     )
     assert result["input"]["rtl"] == BODY["rtl"]
+
+
+def test_route_evicts_dead_pool_and_recovers(demo, tmp_path, monkeypatch):
+    add_models(demo, tmp_path, monkeypatch)
+    calls = {"count": 0}
+    real_analyze = FixturePool.analyze
+
+    def flaky(self, model, state):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("synthetic worker death")
+        return real_analyze(self, model, state)
+
+    monkeypatch.setattr(FixturePool, "analyze", flaky)
+    first = demo.route(dict(BODY), lambda text: None)
+    assert len(first["assessment"]["errors"]) == 1
+    assert "contract-1" not in demo.pools
+    assert "contract-1" not in demo.loaded
+    second = demo.route(dict(BODY), lambda text: None)
+    assert len(second["assessment"]["responses"]) == 2
+    assert not second["assessment"]["errors"]
 
 
 def test_foreign_gpu_process_blocks_loading(demo, monkeypatch):
@@ -483,6 +507,31 @@ def test_glimmer_incomplete_response_is_never_accepted(monkeypatch):
         client.complete([])
 
 
+def test_glimmer_malformed_responses_raise_value_errors(monkeypatch):
+    bodies = [
+        {},
+        {"choices": []},
+        {"choices": [{"message": "not-a-dict"}]},
+        {"choices": [{"message": {"tool_calls": "not-a-list"}}]},
+        {"choices": [{"message": {"tool_calls": [{"id": "call-1"}]}}]},
+        [1, 2],
+    ]
+    calls = {"count": 0}
+
+    def reply(self, url, payload=None):
+        body = bodies[calls["count"]]
+        calls["count"] += 1
+        return body
+
+    monkeypatch.setattr(LocalGlimmerClient, "_request", reply)
+    client = LocalGlimmerClient(
+        "http://127.0.0.1:18400/v1/chat/completions", "synthetic"
+    )
+    for _ in bodies:
+        with pytest.raises(ValueError):
+            client.complete([])
+
+
 def test_toy_controller_stop_prevents_next_phase(tmp_path, monkeypatch):
     path = tmp_path / "campaign.json"
     path.write_text(
@@ -556,3 +605,322 @@ def test_final_operator_acknowledgement_is_requested_from_glimmer(monkeypatch):
     assert captured[0]["response_format"] == {"type": "json_object"}
     assert captured[0]["tool_choice"] == "none"
     assert captured[0]["messages"][-1]["role"] == "user"
+
+
+def test_state_text_rejects_smuggled_section_headers():
+    from siliconshield.experts.identity import state_sections
+
+    good = backend.state_text(dict(BODY))
+    requirement, _, _ = state_sections(good)
+    assert requirement == BODY["requirement"]
+    for field in ("requirement", "assumptions"):
+        for header in ("REQUIREMENT", "ASSUMPTIONS", "RTL"):
+            body = dict(BODY)
+            body[field] = "first line\n%s\nsecond line" % header
+            with pytest.raises(ValueError, match="section header"):
+                backend.state_text(body)
+
+
+def test_glimmer_complete_rejects_malformed_messages(monkeypatch):
+    def reply(self, url, payload=None):
+        raise AssertionError("no network in this test")
+
+    monkeypatch.setattr(LocalGlimmerClient, "_request", reply)
+    client = LocalGlimmerClient(
+        endpoint="http://127.0.0.1:1/v1/chat/completions",
+        model="synthetic",
+        max_calls=4,
+        timeout=1,
+    )
+    with pytest.raises(ValueError, match="list of objects"):
+        client.complete([{"role": "system"}, "nope"])
+    with pytest.raises(ValueError, match="must be text"):
+        client.complete([{"role": "system", "content": ["nope"]}])
+
+
+def test_non_ascii_token_is_forbidden_not_dropped(http_api):
+    code, result = http_api(
+        "/api/assess", dict(BODY), headers={"X-Demo-Token": "tökén"}
+    )
+    assert code == 403
+    assert "error" in result
+    code, _ = http_api("/api/status", None)
+    assert code == 200
+
+
+def test_empty_transfer_encoding_is_rejected(http_api):
+    code, _ = http_api(
+        "/api/assess", dict(BODY), headers={"Transfer-Encoding": ""}
+    )
+    assert code == 400
+
+
+def test_glimmer_config_needs_endpoint_and_model(tmp_path):
+    with pytest.raises(ValueError, match="endpoint and model"):
+        settings(tmp_path, glimmer={})
+    with pytest.raises(ValueError, match="endpoint and model"):
+        settings(
+            tmp_path,
+            glimmer={"endpoint": "http://127.0.0.1:1/chat/completions"},
+        )
+
+
+def test_glimmer_budgets_validated_at_construction():
+    good = {
+        "endpoint": "http://127.0.0.1:1/v1/chat/completions",
+        "model": "synthetic",
+    }
+    with pytest.raises(ValueError, match="max_calls"):
+        LocalGlimmerClient(**good, max_calls="6")
+    with pytest.raises(ValueError, match="max_tokens"):
+        LocalGlimmerClient(**good, max_tokens=0)
+    with pytest.raises(ValueError, match="timeout"):
+        LocalGlimmerClient(**good, timeout=-1)
+
+
+def test_toy_study_rejects_non_integer_cycles():
+    from siliconshield.web_demo import toy_runner
+
+    with pytest.raises(ValueError, match="max_cycles"):
+        toy_runner.max_calls_for_cycles("6")
+    with pytest.raises(ValueError, match="max_cycles"):
+        toy_runner.max_calls_for_cycles(0)
+    assert toy_runner.max_calls_for_cycles(6) == 72
+
+
+def _await_quiet(demo, timeout=10):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        with demo.lock:
+            running = [
+                job
+                for job in demo.jobs.values()
+                if job.get("status") == "running"
+            ]
+            threads = [thread for thread in demo._threads if thread.is_alive()]
+        if not running and not threads:
+            return
+        time.sleep(0.05)
+    raise AssertionError("jobs did not finish")
+
+
+def test_close_drains_running_jobs(demo):
+    started = threading.Event()
+
+    def slow(log):
+        started.set()
+        time.sleep(0.5)
+        return {"ok": True}
+
+    receipt = demo.submit_task("assess", slow)
+    assert started.wait(timeout=10)
+    demo.close()
+    with demo.lock:
+        job = demo.jobs[receipt["job_id"]]
+    assert job["status"] == "complete"
+    assert (demo.state / ("request-%s.json" % receipt["job_id"])).exists()
+
+
+def test_terminal_jobs_evicted_from_memory_and_disk(demo):
+    for _ in range(2):
+        for _ in range(5):
+            demo.submit_task("assess", lambda log: {"ok": True})
+        _await_quiet(demo)
+    with demo.lock:
+        assert len(demo.jobs) <= 8
+    assert len(list(demo.state.glob("request-*.json"))) <= 8
+
+
+def test_status_read_never_rewrites_training_pointer(
+    demo, tmp_path, monkeypatch
+):
+    folder = tmp_path / "run"
+    (folder / "runs").mkdir(parents=True)
+    pointer = demo.state / "active-training.json"
+    saved = {
+        "id": "synthetic-run",
+        "directory": str(folder),
+        "unit": "synthetic-unit",
+        "status": "running",
+    }
+    pointer.write_text(json.dumps(saved))
+    demo.training = dict(saved)
+    before = pointer.read_bytes()
+    monkeypatch.setattr(backend, "run_command", lambda *args, **kwargs: "")
+    status = demo.training_status()
+    assert status["active"] is False
+    assert pointer.read_bytes() == before
+
+
+def test_rejected_glimmer_input_keeps_its_budget(tmp_path):
+    client = LocalGlimmerClient(
+        "http://127.0.0.1:9/v1/chat/completions",
+        "synthetic",
+        max_calls=1,
+        audit_dir=tmp_path,
+    )
+    with pytest.raises(ValueError, match="list of objects"):
+        client.complete([{"role": "system"}, "nope"])
+    assert client.calls == 0
+
+
+def test_route_scope_is_validated_synchronously(http_api):
+    code, result = http_api("/api/route", {**BODY, "scope": "not-a-domain"})
+    assert code == 400
+    assert "measured routing domain" in result["error"]
+
+
+def test_status_survives_a_missing_registry(demo, tmp_path):
+    demo.config["registry"] = str(tmp_path / "missing.json")
+    status = demo.status()
+    assert status["registry_error"].startswith(
+        ("ValueError", "OSError", "FileNotFoundError")
+    )
+    assert status["models"] == []
+
+
+def test_device_change_unloads_and_logs(demo, monkeypatch):
+    demo.entries = {"contract-1": {"device": "cpu"}}
+    demo.config["gpu"] = 0
+    monkeypatch.setattr(backend, "run_command", lambda *a, **k: "")
+    monkeypatch.setattr(backend, "WorkerPool", FixturePool)
+    lines = []
+    demo.ensure_model("contract-1", lines.append, "cpu")
+    demo.ensure_model("contract-1", lines.append, "cuda:0")
+    assert any("Unloading contract-1" in line for line in lines)
+    assert demo.loaded["contract-1"]["device"] == "cuda:0"
+
+
+def test_close_does_not_wait_out_a_stuck_job(demo, monkeypatch):
+    pool = FixturePool()
+    calls = []
+    pool.close = lambda: calls.append(1)
+    demo.pools["contract-1"] = pool
+
+    class StuckLock:
+        def acquire(self, timeout=None):
+            assert timeout == 30
+            return False
+
+        def release(self):  # pragma: no cover - never acquired
+            raise AssertionError("not acquired")
+
+    monkeypatch.setattr(demo, "inference_lock", StuckLock())
+    demo.close()
+    assert calls == [1]
+
+
+def test_evicted_jobs_leave_tombstones(demo):
+    first = demo.submit_task("assess", lambda log: {"ok": True})["job_id"]
+    for _ in range(2):
+        for _ in range(5):
+            demo.submit_task("assess", lambda log: {"ok": True})
+        _await_quiet(demo)
+    assert demo.was_evicted(first) is True
+    assert demo.was_evicted("0" * 32) is False
+
+
+def test_evicted_job_polls_as_expired(demo, http_api):
+    first = demo.submit_task("assess", lambda log: {"ok": True})["job_id"]
+    for _ in range(2):
+        for _ in range(5):
+            demo.submit_task("assess", lambda log: {"ok": True})
+        _await_quiet(demo)
+    code, result = http_api(f"/api/jobs/{first}")
+    assert code == 410
+    assert "expired" in result["error"]
+    code, _ = http_api("/api/jobs/" + "0" * 32)
+    assert code == 404
+
+
+def test_pointer_with_non_string_directory_is_a_value_error(tmp_path):
+    cfg = settings(tmp_path)
+    cfg["training_root"] = str(tmp_path / "runs")
+    Path(cfg["state_dir"]).mkdir(parents=True, exist_ok=True)
+    pointer = Path(cfg["state_dir"]) / "active-training.json"
+    pointer.write_text(
+        json.dumps(
+            {
+                "id": "20240101-000000-abcdef",
+                "directory": 123,
+                "unit": "siliconshield-web-toy-20240101-000000-abcdef",
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="Malformed training pointer"):
+        backend.Demo(cfg, health_poll=False)
+
+
+def test_training_status_reports_only_the_log_tail(demo, tmp_path):
+    folder = tmp_path / "run"
+    folder.mkdir()
+    (folder / "controller-result.json").write_text(
+        json.dumps({"status": "complete"})
+    )
+    head = "H" * 8000
+    tail = "T" * 12000
+    (folder / "controller.log").write_text(head + tail)
+    demo.training = {"directory": str(folder), "status": "complete"}
+    value = demo.training_status()
+    assert value["log"] == tail
+    assert "H" not in value["log"]
+
+
+def test_malformed_history_never_breaks_the_recorded_scan(monkeypatch):
+    client = LocalGlimmerClient(
+        endpoint="http://127.0.0.1:1/chat/completions",
+        model="synthetic",
+        max_calls=3,
+    )
+    seen = []
+
+    def fake_request(endpoint, payload):
+        seen.append(payload)
+        return {"choices": [{"message": {"content": "done"}}]}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+    histories = [
+        [{"role": "assistant", "tool_calls": "operator.decide"}],
+        [{"role": "assistant", "tool_calls": ["x", 1]}],
+        [
+            {
+                "role": "assistant",
+                "tool_calls": [{"id": "1", "function": "operator.decide"}],
+            }
+        ],
+    ]
+    for history in histories:
+        message = client.complete(
+            history + [{"role": "tool", "tool_call_id": "1", "content": "{}"}]
+        )
+        assert message["content"] == "done"
+    assert len(seen) == 3
+
+
+def test_stop_reports_without_experiment_id(demo, tmp_path, monkeypatch):
+    import siliconshield.web_demo.backend as backend_mod
+
+    folder = tmp_path / "run"
+    run = folder / "runs" / "r1"
+    run.mkdir(parents=True)
+    (folder / "profile.json").write_text("{}")
+    (run / "run-manifest.json").write_text('{"phase": "observe"}')
+    demo.training = {"directory": str(folder), "status": "running"}
+
+    class FakeOperator:
+        def __init__(self, profile):
+            self.stopped = []
+
+        def observe(self, manifest):
+            return manifest
+
+        def intervene(self, manifest, action):
+            self.stopped.append(action)
+
+    fake = FakeOperator("x")
+    monkeypatch.setattr(backend_mod, "Operator", lambda profile: fake)
+    result = demo.stop_training()
+    assert result["status"] == "stop_requested"
+    assert fake.stopped == ["stop"]
+    assert len(result["messages"]) == 1
+    assert "r1" in result["messages"][0]

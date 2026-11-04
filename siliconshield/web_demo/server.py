@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from siliconshield.web_demo.backend import Demo, read_json, state_text
+from siliconshield.web_demo.backend import (
+    ROUTING_SCOPES,
+    Demo,
+    read_json,
+    state_text,
+)
 
 ROOT = Path(__file__).resolve().parent
 
@@ -89,7 +94,9 @@ class Handler(BaseHTTPRequestHandler):
                     200,
                     {
                         "token": self.server.token,
-                        "examples": read_json(ROOT / "examples.example.json"),
+                        "examples": read_json(
+                            ROOT / "examples.example.json", []
+                        ),
                         "title": "SiliconShield",
                         "gpu": gpu,
                         "devices": devices,
@@ -119,6 +126,10 @@ class Handler(BaseHTTPRequestHandler):
                     value = read_json(demo.state / f"request-{job_id}.json")
                 if value:
                     self.send(200, value)
+                elif demo.was_evicted(job_id):
+                    self.send(
+                        410, {"error": "Request expired; resubmit the task."}
+                    )
                 else:
                     self.send(404, {"error": "Unknown request."})
                 return
@@ -142,10 +153,14 @@ class Handler(BaseHTTPRequestHandler):
         port = self.server.server_port
         allowed = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
         token = self.headers.get("X-Demo-Token", "")
+        try:
+            authorized = secrets.compare_digest(token, self.server.token)
+        except (TypeError, ValueError):
+            authorized = False
         if (
             not self.local_host()
             or self.headers.get("Origin") not in allowed | {None}
-            or not secrets.compare_digest(token, self.server.token)
+            or not authorized
         ):
             self.send(
                 403, {"error": "Invalid local session. Reload this page."}
@@ -153,7 +168,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             if (
-                self.headers.get("Transfer-Encoding")
+                self.headers.get("Transfer-Encoding") is not None
                 or self.headers.get_content_type() != "application/json"
             ):
                 raise ValueError(
@@ -194,6 +209,8 @@ class Handler(BaseHTTPRequestHandler):
             )
         if path == "/api/route":
             state_text(body)
+            if body.get("scope") not in ROUTING_SCOPES:
+                raise ValueError("Select a measured routing domain.")
             if not demo.config["registry"]:
                 raise ValueError("Configure a model registry before routing.")
             return demo.submit_task("router", lambda log: demo.route(body, log))

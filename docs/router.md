@@ -165,9 +165,13 @@ python -m siliconshield.research_loop.procedures.glimmer_router \
 The session records messages, tool results, and the state files submitted for
 assessment. Specialist predictions come from the validated router tool. Glimmer
 chooses the tool arguments and writes a final conversational response. The
-bridge does not pass that response through the experts CLI arbitration
-validator. Review the trace to confirm that the assessed RTL and requirement
-match the task and that the summary follows the tool evidence. See
+session accepts that response only after at least one successful
+`router.assess` result with expert responses, and only when the verdict
+names every consulted expert id and label; anything else aborts with an
+error instead of returning a verdict. The bridge does not pass the
+response through the experts CLI arbitration validator. Review the
+trace to confirm that the assessed RTL and requirement match the task
+and that the summary follows the tool evidence. See
 [Glimmer inference](inference.md) for serving and model naming.
 
 Demonstrated on two base-model sessions against local experts.
@@ -181,7 +185,8 @@ inherit the experts' documented domain limits.
    and service do not infer scope from it. Use only tags represented by the
    capability profiles. Unratable tags stay visible instead of being dropped.
 2. **Profile gate.** An expert is eligible only when its capability
-   profile claims every tag. Unclaimed scopes route nowhere and are
+   profile claims every tag; claiming a benchmark area also claims
+   that area's mechanism tags. Unclaimed scopes route nowhere and are
    reported unsupported. Experts covering only some tags are
    reported as partial coverage for scope splitting, never
    consulted.
@@ -200,6 +205,8 @@ inherit the experts' documented domain limits.
    validated through the result protocol. Transport and validation
    failures return as errors, never as labels. Models load on demand
    after routing, so an unrelated broken expert cannot block the scope.
+   Stored profiles that fail to load or bind are likewise excluded
+   from routing and disclosed as broken, never silently dropped.
    The returned `routing` is recomputed from successful replies.
    `planned_routing` preserves the original consultation plan.
 6. **Arbitrate.** Muse weighs expert suitability, RTL evidence, and

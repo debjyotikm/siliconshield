@@ -166,7 +166,19 @@ def _stage_checkpoint(checkpoint: Path, emit_progress: Any) -> tuple[Path, str]:
     staged_root = Path(tempfile.gettempdir()) / (
         "siliconshield-gui-staging-%s" % fingerprint
     )
-    staged_root.mkdir(parents=True, exist_ok=True)
+    try:
+        staged_root.mkdir(mode=0o700, parents=True)
+    except FileExistsError:
+        pass
+    # The staging path is predictable under a shared /tmp: a planted
+    # symlink or foreign directory would redirect model loading, so
+    # refuse anything that is not our own real directory.
+    if staged_root.is_symlink() or not staged_root.is_dir():
+        raise ValueError("Staging path is not a directory: %s" % staged_root)
+    if staged_root.stat().st_uid != os.geteuid():
+        raise ValueError(
+            "Staging path is not owned by this user: %s" % staged_root
+        )
     if checkpoint.is_file():
         staged = staged_root / checkpoint.name
         if staged.is_file() and _hash_file(staged) == _hash_file(checkpoint):

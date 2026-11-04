@@ -18,6 +18,19 @@ class Cancelled(RuntimeError):
     """Stop the bounded strategy after settling its owned job."""
 
 
+def max_calls_for_cycles(cycles: Any) -> int:
+    """Return the Glimmer call budget for a cycle count.
+
+    Raises ValueError for non-integer or out-of-range counts so
+    a malformed campaign file fails before any worker spawns.
+    """
+    if isinstance(cycles, bool) or not isinstance(cycles, int):
+        raise ValueError("Study max_cycles must be an integer")
+    if not 1 <= cycles <= 50:
+        raise ValueError("Study max_cycles must be 1 through 50")
+    return 12 * int(cycles)
+
+
 def execute(campaign_path: Path) -> None:
     """Reconcile the real operator and preserve its final status on disk."""
     folder = campaign_path.resolve().parent
@@ -52,7 +65,7 @@ def execute(campaign_path: Path) -> None:
             **transport,
             max_tokens=2048,
             timeout=180,
-            max_calls=12 * spec.get("max_cycles", 6),
+            max_calls=max_calls_for_cycles(spec.get("max_cycles", 6)),
             audit_dir=folder / "glimmer-calls",
         )
         result = run_operator(

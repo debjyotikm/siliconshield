@@ -1,5 +1,6 @@
 """Content identities shared by workers, profiles, and arbitration."""
 
+import copy
 import hashlib
 import json
 import re
@@ -53,17 +54,20 @@ def validate_execution_identity(value: Any) -> dict[str, Any]:
     ):
         if not is_digest(value.get(key)):
             raise ValueError("Invalid execution identity " + key)
-    if (
-        not isinstance(value.get("question_contract"), str)
-        or not value["question_contract"]
-    ):
+    contract = value.get("question_contract")
+    if not isinstance(contract, str) or not contract.strip():
         raise ValueError("Execution identity needs a question contract")
+    if contract != contract.strip():
+        raise ValueError("Execution identity contract must be exact")
     settings = value.get("inference")
     if not isinstance(settings, dict):
         raise ValueError("Execution identity needs inference settings")
     for key in ("backend", "precision", "torch_version", "device_type"):
-        if not isinstance(settings.get(key), str) or not settings[key]:
+        text = settings.get(key)
+        if not isinstance(text, str) or not text.strip():
             raise ValueError("Inference identity needs " + key)
+        if text != text.strip():
+            raise ValueError("Inference identity %s must be exact" % key)
     for key in ("batch_size", "max_len", "head_max_len"):
         if type(settings.get(key)) is not int or settings[key] <= 0:
             raise ValueError("Inference identity needs a positive " + key)
@@ -72,8 +76,60 @@ def validate_execution_identity(value: Any) -> dict[str, Any]:
     if settings.get("option_order") != [0, 1, 2]:
         raise ValueError("Expert inference requires identity option order")
     # This also rejects NaN in any extra numerical settings.
-    digest(value)
-    return dict(value)
+    try:
+        digest(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "Execution identity has non-JSON settings: %s" % exc
+        ) from exc
+    # Deep copy: nested inference settings must not alias the
+    # caller's payload after validation.
+    return copy.deepcopy(dict(value))
+
+
+SECTION_HEADERS = frozenset({"REQUIREMENT", "ASSUMPTIONS", "RTL"})
+
+
+def assemble_state(requirement: str, assumptions: str, rtl: str) -> str:
+    """Build one judged state from separate fields.
+
+    Emits the exact training-renderer bytes (single newlines, no
+    trailing newline): the router must feed the model the same
+    bytes it trained on, or state digests stop matching training
+    rows and inference drifts off-distribution.
+
+    Construction is strict (non-empty sections) while parsing
+    stays lenient: a state with empty sections still splits, but
+    only complete states are built for inference.
+
+    The requirement and assumptions must not smuggle an exact
+    section-header line: sections split on the first RTL header,
+    so a smuggled header would truncate the judged requirement
+    and pollute the judged RTL.
+    """
+    for name, value in (
+        ("requirement", requirement),
+        ("assumptions", assumptions),
+        ("rtl", rtl),
+    ):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("assembled state needs non-empty " + name)
+    for name, value in (
+        ("requirement", requirement),
+        ("assumptions", assumptions),
+    ):
+        smuggled = SECTION_HEADERS.intersection(value.splitlines())
+        if smuggled:
+            raise ValueError(
+                name
+                + " must not contain a section header line: "
+                + ",".join(sorted(smuggled))
+            )
+    return "REQUIREMENT\n%s\nASSUMPTIONS\n%s\nRTL\n%s" % (
+        requirement,
+        assumptions,
+        rtl,
+    )
 
 
 def state_sections(state: str) -> tuple[str, str, str]:

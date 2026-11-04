@@ -48,7 +48,15 @@ def _area_tier(
     area: str,
     execution: Mapping[str, Any] | None = None,
 ) -> str:
-    """Use measured counts only for the matching artifact and protocol."""
+    """Use measured counts only for the matching artifact and protocol.
+
+    Areas stay unrated without evidence, after execution errors,
+    or without violations: a false-safe rate cannot be judged
+    where no violation was ever tested. The execution comparison
+    is deliberately whole-dict: a measurement from another
+    device, precision, or runtime build does not describe this
+    run, so it stays unrated rather than mislabeled.
+    """
     evidence = profile.get("routing_evidence")
     if not evidence:
         return "unrated"
@@ -62,6 +70,8 @@ def _area_tier(
         return "unrated"
     counts = evidence["areas"].get(area)
     if counts is None or counts["errors"]:
+        return "unrated"
+    if not counts["violations"]:
         return "unrated"
     correct, total = counts["correct"], counts["total"]
     rank = (
@@ -83,6 +93,19 @@ def _worst(tiers: list[str]) -> str:
     return max(tiers, key=lambda tier: TIER_RANK[tier])
 
 
+def _covers(supported: list[str], tag: str) -> bool:
+    """True when a profile covers one scope tag.
+
+    Exact mechanism tags match directly. A profile that covers a
+    benchmark area also covers the mechanism tags mapped to that
+    area, so area-level profiles stay usable for mechanism scopes.
+    """
+    if tag in supported:
+        return True
+    area = area_for_tag(tag)
+    return area is not None and area in supported
+
+
 def route_scope(
     scope: list[str],
     profiles: list[CapabilityProfile],
@@ -91,7 +114,8 @@ def route_scope(
     """Route one scope to qualified experts, ranked by evidence.
 
     An expert is consulted only when its supported mechanisms cover
-    every scope tag. Consulted experts sort by worst area tier,
+    every scope tag; covering a benchmark area also covers that
+    area's mechanism tags. Consulted experts sort by worst area tier,
     profile order breaking ties. Partial-cover experts and per-tag
     coverage are reported for scope splitting, never consulted.
     thin_evidence is true when a tag is unsupported or unratable,
@@ -103,13 +127,19 @@ def route_scope(
         not isinstance(tag, str) or not tag.strip() for tag in scope
     ):
         raise ValueError("Scope must be a list of nonempty mechanism tags")
-    tags = list(dict.fromkeys(scope))
+    tags = list(dict.fromkeys(tag.strip() for tag in scope))
     covered_tags: dict[str, list[str]] = {tag: [] for tag in tags}
     full: list[CapabilityProfile] = []
     partial: list[PartialCover] = []
+    seen: set[str] = set()
+    unique: list[CapabilityProfile] = []
     for profile in profiles:
+        if profile["id"] not in seen:
+            seen.add(profile["id"])
+            unique.append(profile)
+    for profile in unique:
         supported = profile["supported_mechanisms"]
-        claimed = [tag for tag in tags if tag in supported]
+        claimed = [tag for tag in tags if _covers(supported, tag)]
         for tag in claimed:
             covered_tags[tag].append(profile["id"])
         if tags and len(claimed) == len(tags):
@@ -119,7 +149,9 @@ def route_scope(
                 {
                     "expert_id": profile["id"],
                     "covered": claimed,
-                    "missing": [tag for tag in tags if tag not in supported],
+                    "missing": [
+                        tag for tag in tags if not _covers(supported, tag)
+                    ],
                 }
             )
     unsupported = [tag for tag in tags if not covered_tags[tag]]
@@ -142,7 +174,7 @@ def route_scope(
         expert: _worst(list(per_area.values())) if per_area else "unrated"
         for expert, per_area in area_tiers.items()
     }
-    order = [item["id"] for item in profiles]
+    order = [item["id"] for item in unique]
     ranked = sorted(
         full,
         key=lambda item: (
@@ -181,11 +213,17 @@ def route_scope(
             )
         )
     if experts:
+        # Name both aggregates with their tiers: the worst consulted
+        # tier bounds the consult, while the best consulted expert
+        # (experts[0], ranked first) carries the thin-evidence flag.
+        # A measured poor tier is evidence of weakness, never a sign
+        # of missing measurements; only unrated means unmeasured.
         rationale.append(
-            "scope tier: %s (worst area per expert; best consulted %s)."
+            "scope tier: worst consulted %s, best consulted %s (%s)."
             % (
                 _worst([tiers[expert] for expert in experts]),
                 experts[0],
+                tiers[experts[0]],
             )
         )
     best = min(

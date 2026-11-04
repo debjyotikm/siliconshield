@@ -6,7 +6,10 @@ at .agents/skills/glimmer-router/SKILL.md is the system prompt.
 """
 
 import argparse
+import http.client
 import json
+import re
+import subprocess
 import sys
 import tempfile
 import uuid
@@ -14,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from siliconshield.experts.cli import run_assess
+from siliconshield.experts.identity import assemble_state
 from siliconshield.experts.service import InferenceService
 from siliconshield.experts.worker import WorkerPool
 from siliconshield.research_loop.controller.client import (
@@ -116,7 +120,14 @@ class RouterTools:
                     "qualification_ref": (profile["qualification_ref"]),
                 }
             )
-        return {"experts": experts}
+        return {
+            "experts": experts,
+            "broken_experts": [
+                {"id": expert_id, "detail": detail}
+                for expert_id, detail in sorted(service.broken_experts.items())
+            ],
+            "unprofiled_experts": service.unprofiled_experts,
+        }
 
     def _assess(self, args: dict[str, Any]) -> dict[str, Any]:
         fields = {}
@@ -130,14 +141,8 @@ class RouterTools:
         ]
         if not tags:
             raise ValueError("router.assess needs a scope tag")
-        state = (
-            "REQUIREMENT\n"
-            + fields["requirement"]
-            + "\n\nASSUMPTIONS\n"
-            + fields["assumptions"]
-            + "\n\nRTL\n"
-            + fields["rtl"]
-            + "\n"
+        state = assemble_state(
+            fields["requirement"], fields["assumptions"], fields["rtl"]
         )
         with tempfile.NamedTemporaryFile(
             mode="w",
@@ -162,16 +167,93 @@ class RouterTools:
             report = run_assess(namespace, pool_factory=self.pool_factory)
         except RuntimeError as exc:
             raise ValueError("assessment failed: %s" % exc) from exc
+        finally:
+            target.unlink(missing_ok=True)
         assessment: dict[str, Any] = report["assessment"]
         return assessment
 
     def dispatch(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
-        """Run one tool call; unknown tools raise ValueError."""
+        """Run one tool call; unknown tools and arguments raise ValueError."""
         if name == "router.roster":
+            if args:
+                raise ValueError(
+                    "router.roster takes no arguments, got %s" % sorted(args)
+                )
             return self._roster()
         if name == "router.assess":
+            unknown = set(args) - {
+                "scope",
+                "requirement",
+                "assumptions",
+                "rtl",
+            }
+            if unknown:
+                raise ValueError(
+                    "router.assess takes no extra arguments %s"
+                    % sorted(unknown)
+                )
             return self._assess(args)
         raise ValueError("Unknown tool: %s" % name)
+
+
+def _successful_assessments(
+    history: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Collect router.assess tool results that carry expert responses.
+
+    Each result pairs with the earliest unmatched call carrying its
+    id, so duplicate ids pair positionally instead of collapsing.
+    """
+    pending: list[list[Any]] = []
+    for message in history:
+        for call in message.get("tool_calls", []) or []:
+            if isinstance(call, dict):
+                pending.append(
+                    [
+                        call.get("id"),
+                        (call.get("function") or {}).get("name"),
+                        False,
+                    ]
+                )
+    found: list[dict[str, Any]] = []
+    for message in history:
+        if message.get("role") != "tool":
+            continue
+        target = message.get("tool_call_id")
+        name = None
+        for entry in pending:
+            if not entry[2] and entry[0] == target:
+                entry[2] = True
+                name = entry[1]
+                break
+        if name != "router.assess":
+            continue
+        try:
+            payload = json.loads(message.get("content", ""))
+        except ValueError:
+            continue
+        responses = (
+            payload.get("responses") if isinstance(payload, dict) else None
+        )
+        if isinstance(responses, list) and responses:
+            found.append(payload)
+    return found
+
+
+def _names_token(final: str, token: str) -> bool:
+    """Whether the verdict names one token exactly, not a longer word.
+
+    A leading dot still disqualifies (dotted paths are not bare
+    citations), but a trailing dot is sentence punctuation: verdicts
+    routinely end with a period.
+    """
+    return (
+        re.search(
+            r"(?<![A-Za-z0-9_.-])%s(?![A-Za-z0-9_-])" % re.escape(token),
+            final,
+        )
+        is not None
+    )
 
 
 def run_router_session(
@@ -184,7 +266,16 @@ def run_router_session(
     max_turns: int = 12,
     pool_factory: Any = WorkerPool,
 ) -> list[dict[str, Any]]:
-    """Run one Glimmer-driven router session; return the history."""
+    """Run one Glimmer-driven router session; return the history.
+
+    The registry, pool factory, and output dir are validated before
+    any model call, and the final verdict is accepted only when the
+    session holds at least one successful router.assess result
+    naming expert responses, with every consulted expert id and
+    label present in the verdict text. Anything else raises
+    ValueError: no verdict is ever returned without evidence
+    behind it.
+    """
     skill_path = Path(skill) if skill else DEFAULT_SKILL
     try:
         system = skill_path.read_text(encoding="utf-8")
@@ -192,8 +283,23 @@ def run_router_session(
         raise ValueError("Cannot read skill file: %s" % exc) from exc
     if not task.strip():
         raise ValueError("The session task must be non-empty")
+    if not output or not str(output).strip():
+        raise ValueError("The session output dir must be non-empty")
+    InferenceService(registry)
+    try:
+        probe = pool_factory()
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+        raise ValueError("Cannot construct expert pool: %s" % exc) from exc
+    close = getattr(probe, "close", None)
+    if callable(close):
+        close()
     out = Path(output)
-    out.mkdir(parents=True, exist_ok=True)
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise ValueError(
+            "Cannot use session output dir %s: %s" % (output, exc)
+        ) from exc
     tools = RouterTools(registry, pool_factory, str(out))
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system},
@@ -203,6 +309,40 @@ def run_router_session(
     history: list[dict[str, Any]] = run_agent(
         client, messages, TOOL_SCHEMAS, tools.dispatch, str(trace), max_turns
     )
+    assessments = _successful_assessments(history)
+    if not assessments:
+        raise ValueError(
+            "Session produced no successful router.assess result; "
+            "refusing an evidence-free verdict."
+        )
+    final = history[-1].get("content", "") if history else ""
+    if not isinstance(final, str):
+        raise ValueError("Session final message has no verdict text.")
+    for assessment in assessments:
+        responses = assessment.get("responses")
+        if not isinstance(responses, list):
+            raise ValueError("A router.assess result has no response list.")
+        for response in responses:
+            if not isinstance(response, dict):
+                raise ValueError("A router.assess response is malformed.")
+            expert_id = response.get("expert_id")
+            label = response.get("label")
+            if (
+                not isinstance(expert_id, str)
+                or not expert_id
+                or not isinstance(label, str)
+                or not label
+            ):
+                raise ValueError(
+                    "A router.assess response names no expert or label."
+                )
+            if not _names_token(final, expert_id) or not _names_token(
+                final, label
+            ):
+                raise ValueError(
+                    "Final verdict does not report expert %r with "
+                    "label %r." % (expert_id, label)
+                )
     return history
 
 
@@ -230,6 +370,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--max-calls", type=int, default=None, help="Chat call budget."
     )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=2048,
+        help="Completion token budget.",
+    )
     return parser
 
 
@@ -246,6 +392,7 @@ def main(argv: list[str] | None = None) -> int:
             args.model,
             ssh_host=args.ssh_host,
             max_calls=args.max_calls,
+            max_tokens=args.max_tokens,
         )
         history = run_router_session(
             client,
@@ -255,7 +402,16 @@ def main(argv: list[str] | None = None) -> int:
             skill=args.skill,
             max_turns=args.max_turns,
         )
-    except (ValueError, RuntimeError, OSError) as exc:
+    except (
+        ValueError,
+        RuntimeError,
+        OSError,
+        KeyError,
+        IndexError,
+        TypeError,
+        subprocess.SubprocessError,
+        http.client.HTTPException,
+    ) as exc:
         print("glimmer-router: %s" % exc, file=sys.stderr)
         return 2
     print(json.dumps(history[-1], indent=2, sort_keys=True))

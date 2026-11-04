@@ -84,6 +84,16 @@ artifacts in place.
 Removing a model removes its registry entry. Recheck affected scopes: if no
 remaining profile covers a scope, the router must report it unsupported.
 
+## Migrating an older registry
+
+Registries written before strict binding may carry descriptive
+`qualification` text. The service requires each stated registry field to
+agree exactly with the bound profile and refuses the expert otherwise,
+naming the differing field and both values. Copy the profile values into
+the registry entry, or remove the registry fields to backfill them from
+the profile at load. The qualification example above writes correct
+references for fresh measurements.
+
 ## Routing and arbitration baselines
 
 Before claiming that the combined system improves on individual experts,

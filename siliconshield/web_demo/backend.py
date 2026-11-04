@@ -16,6 +16,7 @@ from typing import Any, cast
 from siliconshield.app.laya_assessor import checkpoint_manifest
 from siliconshield.experts.arbitration import arbitrate_assessment
 from siliconshield.experts.contracts import validate_result
+from siliconshield.experts.identity import assemble_state
 from siliconshield.experts.service import InferenceService
 from siliconshield.experts.worker import WorkerPool
 from siliconshield.research_loop.episodes.contracts import atomic_json
@@ -28,6 +29,8 @@ LABELS = [
     "violates_requirement",
     "insufficient_context",
 ]
+
+ROUTING_SCOPES = ("fifo", "counter", "arbitration", "ot-access-control")
 
 
 def read_json(path: Path, fallback: Any = None) -> Any:
@@ -78,7 +81,13 @@ def gpu_status() -> list[dict[str, str]]:
 
 
 def state_text(body: dict[str, Any]) -> str:
-    """Preserve supplied RTL and refuse oversized inputs before inference."""
+    """Preserve supplied RTL and refuse oversized inputs before inference.
+
+    The requirement and assumptions must not smuggle an exact
+    section-header line: the judged sections are split on the
+    first RTL header, so a smuggled header would truncate the
+    judged requirement and pollute the judged RTL.
+    """
     fields = {}
     for field, limit in [
         ("rtl", 50000),
@@ -94,14 +103,8 @@ def state_text(body: dict[str, Any]) -> str:
                 + " exceeds the demo input limit. Submit a self-contained region."
             )
         fields[field] = value.strip()
-    return (
-        "REQUIREMENT\n"
-        + fields["requirement"]
-        + "\n\nASSUMPTIONS\n"
-        + fields["assumptions"]
-        + "\n\nRTL\n"
-        + fields["rtl"]
-        + "\n"
+    return assemble_state(
+        fields["requirement"], fields["assumptions"], fields["rtl"]
     )
 
 
@@ -118,6 +121,8 @@ class Demo:
         self.pools: dict[str, WorkerPool] = {}
         self.loaded: dict[str, dict[str, Any]] = {}
         self.jobs: dict[str, dict[str, Any]] = {}
+        self._evicted: list[str] = []
+        self._threads: list[threading.Thread] = []
         self.lock = threading.RLock()
         self.inference_lock = threading.Lock()
         self.training: dict[str, Any] | None = None
@@ -149,8 +154,13 @@ class Demo:
                 "Malformed training pointer: inspect the saved session."
             )
         expected = Path(self.config["training_root"]).resolve() / run_id
+        directory = record.get("directory", "")
+        if not isinstance(directory, str):
+            raise ValueError(
+                "Malformed training pointer: inspect the saved session."
+            )
         if (
-            Path(record.get("directory", "")).resolve() != expected
+            Path(directory).resolve() != expected
             or record.get("unit") != "siliconshield-web-toy-" + run_id
         ):
             raise ValueError(
@@ -225,14 +235,39 @@ class Demo:
                     return
                 time.sleep(1)
 
+    def was_evicted(self, job_id: str) -> bool:
+        """Whether a job id names an expired, evicted receipt."""
+        with self.lock:
+            return job_id in self._evicted
+
     def close(self) -> None:
-        """Close only the inference workers owned by this application."""
+        """Drain owned jobs, then close this application's workers.
+
+        Running jobs get a bounded drain before the pools close:
+        a job that outlasts the drain fails loudly when its pool
+        closes instead of writing receipts post-close.
+        """
         self.stopping = True
-        with self.inference_lock:
+        with self.lock:
+            threads = list(self._threads)
+        for thread in threads:
+            thread.join(timeout=30)
+        if not self.inference_lock.acquire(timeout=30):
+            # An outlasting job still holds the lock; close its
+            # pools anyway so shutdown stays bounded. The job then
+            # fails loudly against closed pools, as documented.
+            with self.lock:
+                pools = list(self.pools.values())
+            for pool in pools:
+                pool.close()
+            return
+        try:
             for pool in self.pools.values():
                 pool.close()
             self.pools.clear()
             self.loaded.clear()
+        finally:
+            self.inference_lock.release()
 
     def training_active(self) -> bool:
         """Reconcile controller receipts and independently owned jobs."""
@@ -268,11 +303,13 @@ class Demo:
             return True
         if self.owned_job_running(folder):
             return True
+        # In-memory only: a status read reconciles the diagnosis but
+        # never rewrites the pointer file. The same diagnosis is
+        # recomputed on the next read.
         self.training["status"] = "error"
         self.training["error"] = (
             "Controller exited without a completion receipt. Inspect the saved run before retrying."
         )
-        atomic_json(self.state / "active-training.json", self.training)
         return False
 
     def owned_job_running(self, folder: Path) -> bool:
@@ -332,12 +369,42 @@ class Demo:
                     self.jobs[job_id].update(
                         status="error", error=str(exc), finished=time.time()
                     )
-            atomic_json(
-                self.state / f"request-{job_id}.json", self.jobs[job_id]
-            )
+            with self.lock:
+                snapshot = dict(self.jobs[job_id])
+            atomic_json(self.state / f"request-{job_id}.json", snapshot)
+            self._evict_jobs()
 
-        threading.Thread(target=worker, daemon=True).start()
+        thread = threading.Thread(target=worker, daemon=True)
+        with self.lock:
+            self._threads = [t for t in self._threads if t.is_alive()]
+            self._threads.append(thread)
+        thread.start()
         return {"job_id": job_id}
+
+    def _evict_jobs(self, keep: int = 8) -> None:
+        """Retain only recent terminal jobs in memory and on disk."""
+        with self.lock:
+            terminal = sorted(
+                (
+                    job_id
+                    for job_id, job in self.jobs.items()
+                    if job.get("status") in ("complete", "error")
+                    and job.get("finished") is not None
+                ),
+                key=lambda job_id: self.jobs[job_id]["finished"],
+            )
+            evict = terminal[:-keep] if len(terminal) > keep else []
+            for job_id in evict:
+                del self.jobs[job_id]
+            # Tombstones distinguish an expired receipt from a
+            # forged id for clients still polling evicted jobs.
+            self._evicted.extend(evict)
+            del self._evicted[:-32]
+        for job_id in evict:
+            try:
+                (self.state / f"request-{job_id}.json").unlink(missing_ok=True)
+            except OSError:
+                pass
 
     def ensure_model(
         self, model: str, log: Any, device: str | None = None
@@ -352,8 +419,19 @@ class Demo:
             raise ValueError(
                 "Toy training owns this demo session. Wait for closeout before loading models."
             )
-        if model in self.loaded and self.loaded[model].get("device") == device:
+        pool = self.pools.get(model)
+        if (
+            model in self.loaded
+            and self.loaded[model].get("device") == device
+            and pool is not None
+            and model in pool
+        ):
             return self.loaded[model]
+        stale = self.pools.pop(model, None)
+        if stale is not None:
+            log(f"Unloading {model} before changing inference device.")
+            stale.close()
+        self.loaded.pop(model, None)
         if device.startswith("cuda:"):
             processes = run_command(
                 [
@@ -372,10 +450,6 @@ class Demo:
                 raise RuntimeError(
                     "Demo GPU has an unrelated compute process. No process was interrupted."
                 )
-        if model in self.pools:
-            log(f"Unloading {model} before changing inference device.")
-            self.pools.pop(model).close()
-        self.loaded.pop(model, None)
         entry = copy.deepcopy(self.entries[model])
         entry["device"] = device
         env = {
@@ -453,12 +527,7 @@ class Demo:
         """Use the capability router and optionally interpret its evidence."""
         text = state_text(body)
         scope = body.get("scope")
-        if not isinstance(scope, str) or scope not in [
-            "fifo",
-            "counter",
-            "arbitration",
-            "ot-access-control",
-        ]:
+        if not isinstance(scope, str) or scope not in ROUTING_SCOPES:
             raise ValueError("Select a measured routing domain.")
         if not self.config["registry"]:
             raise ValueError("Register decision models before routing.")
@@ -471,14 +540,23 @@ class Demo:
                 self.ensure_model(
                     model, log, service.model_entry(model)["device"]
                 )
-                return cast(
-                    dict[str, Any], self.pools[model].analyze(model, state)
-                )
+                try:
+                    return cast(
+                        dict[str, Any], self.pools[model].analyze(model, state)
+                    )
+                except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
+                    dead = self.pools.pop(model, None)
+                    if dead is not None:
+                        dead.close()
+                    self.loaded.pop(model, None)
+                    raise
 
             log("Routing by measured domain coverage: " + scope + ".")
             assessment = service.assess([scope], text, consult)
         result: dict[str, Any] = {
             "assessment": assessment,
+            "broken_experts": service.broken_experts,
+            "unprofiled_experts": service.unprofiled_experts,
             "input": {
                 k: body[k] for k in ["rtl", "requirement", "assumptions"]
             },
@@ -497,7 +575,9 @@ class Demo:
                     assessment,
                     text,
                     body["requirement"],
-                    profiles=service.profiles_for(service.expert_ids),
+                    profiles=service.profiles_for(
+                        assessment["routing"]["experts"]
+                    ),
                     assumptions=body["assumptions"],
                     client_factory=lambda: LocalGlimmerClient(
                         **self.config["glimmer"],
@@ -746,7 +826,7 @@ class Demo:
                     op.intervene(manifest, "stop")
                     messages.append(
                         "Checkpoint-boundary stop requested for "
-                        + manifest["experiment_id"]
+                        + str(manifest.get("experiment_id", file.parent.name))
                     )
                 except Exception as exc:
                     messages.append(str(exc))
@@ -853,16 +933,28 @@ class Demo:
         value["campaign"] = campaign
         log = folder / "controller.log"
         if log.exists():
-            value["log"] = log.read_text(errors="replace")[-12000:]
+            # Status polls every couple of seconds; seek the tail
+            # instead of reading a growing log end to end.
+            with log.open("rb") as stream:
+                stream.seek(0, 2)
+                stream.seek(max(stream.tell() - 12000, 0))
+                value["log"] = stream.read().decode("utf-8", "replace")[-12000:]
         return value
 
     def status(self) -> dict[str, Any]:
         """Report actual model readiness, profiles, and configured services."""
-        service = (
-            InferenceService(self.config["registry"])
-            if self.config["registry"]
-            else None
-        )
+        service = None
+        registry_error = None
+        if self.config["registry"]:
+            try:
+                service = InferenceService(self.config["registry"])
+            except (ValueError, OSError) as exc:
+                # Health polling must survive a transient registry
+                # problem; readiness still comes from loaded workers.
+                registry_error = "%s: %s" % (
+                    type(exc).__name__,
+                    exc,
+                )
         return {
             "models": [
                 {
@@ -880,6 +972,7 @@ class Demo:
                 }
                 for key, entry in self.entries.items()
             ],
+            "registry_error": registry_error,
             "health": copy.deepcopy(self.health),
             "training": self.training_status(),
             "training_enabled": self.config["training_enabled"],

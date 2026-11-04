@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from siliconshield.experts.capabilities import validate_capability_profile
 from siliconshield.experts.identity import digest, state_sections, text_digest
+from siliconshield.experts.inspection import inspect_structure
 from siliconshield.experts.router import route_scope
 from siliconshield.schemas import EXPERT_CAPABILITY_SCHEMA
 
@@ -83,17 +84,29 @@ _ARBITRATION_CONCLUSIONS = frozenset(
 
 
 def validate_arbitration(
-    arguments: Any, consulted: Collection[str] | None = None
+    arguments: Any, consulted: Collection[str]
 ) -> dict[str, Any]:
     """Strictly validate one experts.arbitrate tool call payload.
 
     Raises ValueError for any shape or content violation: unknown
-    conclusion, empty explanation, evidence entries that do not name
-    an expert and its relevance, evidence citing experts outside
-    the consulted set, or non-string open questions.
+    top-level keys, unknown conclusion, empty explanation, missing
+    or duplicate evidence, evidence entries that do not name a
+    consulted expert and its relevance, or open questions that are
+    not non-empty strings. Only an unresolved conclusion may carry
+    empty evidence, since it makes no claim.
     """
     if not isinstance(arguments, dict):
         raise ValueError("Arbitration payload must be an object.")
+    unknown = [
+        key
+        for key in arguments
+        if key
+        not in ("conclusion", "explanation", "evidence", "open_questions")
+    ]
+    if unknown:
+        raise ValueError(
+            "Arbitration payload has unknown keys: %s" % sorted(unknown)
+        )
     conclusion = arguments.get("conclusion")
     if conclusion not in _ARBITRATION_CONCLUSIONS:
         raise ValueError(
@@ -103,29 +116,42 @@ def validate_arbitration(
     if not isinstance(explanation, str) or not explanation.strip():
         raise ValueError("Arbitration needs a non-empty explanation.")
     evidence = arguments.get("evidence")
-    if not isinstance(evidence, list) or not evidence:
+    if not isinstance(evidence, list) or (
+        not evidence and conclusion != "unresolved"
+    ):
         raise ValueError("Arbitration needs non-empty evidence.")
-    allowed = set(consulted) if consulted is not None else None
+    allowed = set(consulted)
     checked_evidence: list[dict[str, str]] = []
+    seen: set[str] = set()
     for entry in evidence:
         if not isinstance(entry, dict):
             raise ValueError("Arbitration evidence must be objects.")
+        extra = [key for key in entry if key not in ("expert_id", "relevance")]
+        if extra:
+            raise ValueError(
+                "Arbitration evidence has unknown keys: %s" % sorted(extra)
+            )
         expert_id = entry.get("expert_id")
         relevance = entry.get("relevance")
-        if not expert_id or not isinstance(expert_id, str):
+        if not isinstance(expert_id, str) or not expert_id.strip():
             raise ValueError("Arbitration evidence needs an expert id.")
-        if allowed is not None and expert_id not in allowed:
+        if expert_id in seen:
+            raise ValueError(
+                "Arbitration cites %r more than once." % (expert_id,)
+            )
+        seen.add(expert_id)
+        if expert_id not in allowed:
             raise ValueError(
                 "Arbitration cites %r, which was not consulted." % (expert_id,)
             )
-        if not relevance or not isinstance(relevance, str):
+        if not isinstance(relevance, str) or not relevance.strip():
             raise ValueError("Arbitration evidence needs relevance text.")
         checked_evidence.append(
             {"expert_id": expert_id, "relevance": relevance}
         )
     questions = arguments.get("open_questions")
     if not isinstance(questions, list) or any(
-        not isinstance(item, str) for item in questions
+        not isinstance(item, str) or not item.strip() for item in questions
     ):
         raise ValueError("Arbitration open_questions must be strings.")
     return {
@@ -139,6 +165,31 @@ def validate_arbitration(
 def _normalize(text: str) -> str:
     """Collapse whitespace for requirement-in-state matching."""
     return " ".join(text.split())
+
+
+def _check_effective_routing(
+    routing: Any, effective: Mapping[str, Any], planned: Mapping[str, Any]
+) -> None:
+    """Check effective routing against recomputed and planned parts.
+
+    Experts, tiers, and thin flags must match the recomputation from
+    usable responses; the scope picture (unsupported, partial,
+    coverage, planned rationale lines) must match the plan, since
+    failures narrow who answered, never what was covered.
+    """
+    if not isinstance(routing, dict):
+        raise ValueError("Assessment routing must be an object")
+    for key in ("scope", "experts", "tiers", "area_tiers", "thin_evidence"):
+        if routing.get(key) != effective.get(key):
+            raise ValueError(
+                "Assessment routing is stale or differs from usable evidence"
+            )
+    for key in ("unsupported", "partial", "coverage"):
+        if routing.get(key) != planned.get(key):
+            raise ValueError("Assessment routing lost its planned coverage")
+    planned_lines = planned.get("rationale", [])
+    if routing.get("rationale", [])[: len(planned_lines)] != planned_lines:
+        raise ValueError("Assessment routing lost its planned rationale")
 
 
 def build_arbitration_input(
@@ -157,7 +208,9 @@ def build_arbitration_input(
     contract, tiers evidence, and claims; anything else stays out.
     Raises ValueError for empty state/requirement or a mismatch.
     """
-    judged_requirement, judged_assumptions, _ = state_sections(state)
+    if not isinstance(state, str) or not isinstance(requirement, str):
+        raise ValueError("Arbitration needs state and requirement text")
+    judged_requirement, judged_assumptions, judged_rtl = state_sections(state)
     if _normalize(requirement) != _normalize(judged_requirement):
         raise ValueError("Requirement differs from the full judged requirement")
     if assumptions is not None and _normalize(assumptions) != _normalize(
@@ -178,11 +231,22 @@ def build_arbitration_input(
     ):
         raise ValueError("Assessment is not bound to this input and scope")
     responses = assessment.get("responses", [])
+    if not isinstance(responses, list):
+        raise ValueError("Assessment responses must be a list")
+    if profiles is not None and not isinstance(profiles, Mapping):
+        raise ValueError("Arbitration profiles must be an object")
     checked_profiles = []
     identities = {}
     contracts = set()
     for response in responses:
-        expert_id = response["expert_id"]
+        if not isinstance(response, dict):
+            raise ValueError("Assessment response must be an object")
+        expert_id = response.get("expert_id")
+        if not isinstance(expert_id, str) or not expert_id:
+            raise ValueError("Assessment response names no expert")
+        label = response.get("label")
+        if not isinstance(label, str) or not label:
+            raise ValueError("Assessment response has no label")
         if expert_id in identities:
             raise ValueError("Duplicate expert response")
         if (
@@ -194,6 +258,8 @@ def build_arbitration_input(
         raw = (profiles or {}).get(expert_id)
         if raw is None:
             raise ValueError("Missing profile for successful expert")
+        if not isinstance(raw, Mapping):
+            raise ValueError("Arbitration profile must be an object")
         profile = validate_capability_profile(
             {**raw, "schema": EXPERT_CAPABILITY_SCHEMA}
         )
@@ -218,12 +284,23 @@ def build_arbitration_input(
     if len(contracts) > 1:
         raise ValueError("Experts used incompatible question contracts")
     effective = route_scope(scope, checked_profiles, identities)
-    if assessment.get("routing") != effective:
+    planned = assessment.get("planned_routing")
+    current = assessment.get("routing")
+    if isinstance(planned, dict):
+        if not isinstance(current, dict):
+            raise ValueError("Assessment has planned routing but no routing")
+        _check_effective_routing(current, effective, planned)
+    elif current != effective:
         raise ValueError(
             "Assessment routing is stale or differs from usable evidence"
         )
+    responder_ids = {profile["id"] for profile in checked_profiles}
     trimmed = {}
     for expert_id, profile_claim in (profiles or {}).items():
+        if expert_id not in responder_ids:
+            continue
+        if not isinstance(profile_claim, Mapping):
+            raise ValueError("Arbitration profile must be an object")
         trimmed[expert_id] = {
             key: profile_claim.get(key)
             for key in (
@@ -249,6 +326,31 @@ def build_arbitration_input(
             trimmed[expert_id]["measurement_status"] = (
                 "unrated for this execution"
             )
+    raw_errors = assessment.get("errors", [])
+    if not isinstance(raw_errors, list):
+        raise ValueError("Assessment errors must be a list")
+    bound_errors = []
+    for item in raw_errors:
+        if not isinstance(item, dict):
+            raise ValueError("Assessment error must be an object")
+        failed_id = item.get("expert_id")
+        stage = item.get("stage")
+        if not isinstance(failed_id, str) or not failed_id:
+            raise ValueError("Assessment error names no expert")
+        if not isinstance(stage, str) or not stage:
+            raise ValueError("Assessment error has no stage")
+        bound_errors.append(
+            {
+                "expert_id": failed_id,
+                "stage": stage,
+                "detail": item.get("detail", ""),
+            }
+        )
+    if structure is None:
+        # No caller supplies its own inspection yet; ground the
+        # arbitration in lexical hints rather than an empty map.
+        # An explicit mapping (even empty) still wins.
+        structure = inspect_structure(judged_rtl, [])
     return {
         "request_id": request_id,
         "state_sha256": state_hash,
@@ -256,12 +358,12 @@ def build_arbitration_input(
         "requirement": requirement,
         "assumptions": assumptions,
         "state": state,
-        "structure": dict(structure or {}),
+        "structure": dict(structure),
         "scope": list(assessment.get("scope", [])),
         "routing": assessment.get("routing", {}),
         "profiles": trimmed,
         "responses": list(assessment.get("responses", [])),
-        "errors": list(assessment.get("errors", [])),
+        "errors": bound_errors,
     }
 
 
@@ -284,9 +386,11 @@ def arbitrate_assessment(
     suitability, RTL evidence, and disagreements; confidence or
     majority voting alone must not decide. With no successful
     responses there is nothing to arbitrate, so unresolved returns
-    directly without calling Muse. Cited experts must come from the
-    successful set. Raises ValueError when inputs mismatch, the CLI
-    is missing, the reply has no tool call, or validation fails.
+    directly without calling Muse. Usable responses are arbitrated
+    even when other experts failed; the failures stay disclosed in
+    the bound errors. Cited experts must come from the successful
+    set. Raises ValueError when inputs mismatch, the CLI is
+    missing, the reply has no tool call, or validation fails.
     """
     bound = build_arbitration_input(
         assessment, state, requirement, profiles, structure, assumptions
@@ -297,18 +401,26 @@ def arbitrate_assessment(
         for key in ("request_id", "state_sha256", "scope_sha256")
     }
     binding["requirement_sha256"] = text_digest(_normalize(requirement))
-    if not responses or (bound["errors"] and bound["routing"]["thin_evidence"]):
+    if not responses:
         return {
             **binding,
             "conclusion": "unresolved",
             "explanation": (
-                "Usable expert evidence is missing or insufficient after an execution failure."
+                "No expert produced a usable response for this assessment."
             ),
-            "evidence": [],
+            "evidence": [
+                {
+                    "expert_id": item["expert_id"],
+                    "relevance": "Consultation failed at stage %s."
+                    % item["stage"],
+                }
+                for item in bound["errors"]
+            ],
             "open_questions": [
                 "Consult a qualified expert or fix the execution errors, "
                 "then arbitrate again."
             ],
+            "agreement": False,
         }
     if client_factory is None:
         import shutil
@@ -348,8 +460,8 @@ def arbitrate_assessment(
                 "confidence or majority voting alone must not decide. "
                 "Quote numerical capability claims only from matched "
                 "routing_evidence. Historical profile claims are not current "
-                "measurements. Use unresolved when evidence conflicts or coverage "
-                "fails, and list what would settle it."
+                "measurements. Use unresolved when evidence conflicts "
+                "or coverage fails, and list what would settle it."
             ),
         },
         {
@@ -363,13 +475,44 @@ def arbitrate_assessment(
     ]
     consulted = [item["expert_id"] for item in responses]
     reply = client.complete(messages, tools=[ARBITRATE_TOOL])
-    calls = reply.get("tool_calls", [])
-    if len(calls) != 1:
-        raise ValueError("Muse must return exactly one arbitration call")
-    function = calls[0].get("function", {})
+    # A malformed model reply must fail as a validation error, not
+    # leak TypeError/AttributeError to callers that only expect
+    # ValueError for bad arbitration output.
+    content = reply.get("content") if isinstance(reply, dict) else reply
+    calls = reply.get("tool_calls", []) if isinstance(reply, dict) else []
+    if not isinstance(calls, list) or len(calls) != 1:
+        raise ValueError(
+            "Arbitration client must return exactly one arbitration "
+            "call; reply content: %r" % (content,)
+        )
+    first = calls[0]
+    function = first.get("function", {}) if isinstance(first, dict) else {}
     if function.get("name") != "experts.arbitrate":
-        raise ValueError("Muse reply contained no experts.arbitrate call.")
-    return {
-        **validate_arbitration(function.get("arguments", {}), consulted),
+        raise ValueError(
+            "Arbitration reply contained no experts.arbitrate call; "
+            "reply content: %r" % (reply.get("content"),)
+        )
+    payload = function.get("arguments", {})
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except ValueError as exc:
+            raise ValueError(
+                "Arbitration payload must be an object: %s" % exc
+            ) from exc
+    verdict = {
+        **validate_arbitration(payload, consulted),
         **binding,
     }
+    labels = [item["label"] for item in responses]
+    if (
+        labels
+        and all(label == "insufficient_context" for label in labels)
+        and verdict["conclusion"] not in ("insufficient_context", "unresolved")
+    ):
+        raise ValueError(
+            "Arbitration overrides unanimous insufficient_context with %r."
+            % (verdict["conclusion"],)
+        )
+    verdict["agreement"] = len(set(labels)) <= 1
+    return verdict

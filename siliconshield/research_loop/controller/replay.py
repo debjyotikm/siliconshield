@@ -1,10 +1,15 @@
-"""Run checkpoint-review tasks and grade the recorded decisions and evidence."""
+"""Run checkpoint-review tasks and grade the recorded decisions and evidence.
+
+Only deliverable.json is byte-stable across replays: trajectory.jsonl
+carries wall-clock timing, so repeated runs differ there by design.
+"""
 
 import argparse
 import json
 import re
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from siliconshield.research_loop.adapters.glimmer_training import load_rows
 from siliconshield.research_loop.controller.client import ChatClient, run_agent
@@ -116,42 +121,94 @@ class OperatorTools:
         raise ValueError("Unknown tool")
 
 
-def execute(row, client, output, system=None):
+def safe_grade(row: Any, delivered: Any) -> dict[str, Any]:
+    """Grade one replay, recording a malformed row instead of aborting.
+
+    Grading isolation matches execution isolation: one malformed row
+    must not void the batch or its report.
+    """
+    try:
+        graded: dict[str, Any] = grade(row, delivered)
+        return graded
+    except Exception as exc:  # noqa: BLE001 - recorded, not raised
+        return {
+            "execution_complete": 0,
+            "analysis_correct": 0,
+            "verified": False,
+            "grade_error": "%s: %s" % (type(exc).__name__, exc),
+        }
+
+
+def safe_episode_dir(output: Path, episode_id: Any) -> Path:
+    """Join one episode directory, refusing path escapes.
+
+    Episode ids come from reviewed episodes files, but a hostile or
+    mistyped id must never write outside the output directory.
+    """
+    if (
+        not isinstance(episode_id, str)
+        or not episode_id
+        or episode_id.startswith(".")
+        or "/" in episode_id
+        or "\\" in episode_id
+        or Path(episode_id).name != episode_id
+    ):
+        raise ValueError("Episode id is not a safe name: %r" % (episode_id,))
+    return Path(output) / episode_id
+
+
+def execute(row, client, output, system=None, max_turns=20):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     if (output / "trajectory.jsonl").exists() or (
         output / "deliverable.json"
     ).exists():
         raise ValueError("Use a fresh replay attempt directory")
-    messages = row["messages"][:2]
-    if system is not None:
-        messages = [{"role": "system", "content": system}, messages[1]]
-    operator = any(
-        t["function"]["name"] == "operator.decide" for t in row["tools"]
-    )
-    tools = OperatorTools(row) if operator else ResearchTools(row["summary"])
+    tools = None
     error = None
+    final = ""
+    system_sha = ""
+    episode_id = row.get("id", "") if isinstance(row, dict) else ""
     try:
+        messages = row["messages"][:2]
+        if system is not None:
+            messages = [{"role": "system", "content": system}, messages[1]]
+        operator = any(
+            t["function"]["name"] == "operator.decide" for t in row["tools"]
+        )
+        tools = (
+            OperatorTools(row) if operator else ResearchTools(row["summary"])
+        )
         history = run_agent(
             client,
             messages,
             row["tools"],
             tools.dispatch,
             output / "trajectory.jsonl",
+            max_turns,
         )
         final = history[-1].get("content", "")
+        if not isinstance(final, str) or not final.strip():
+            raise ValueError("Replay produced no final text")
+        system_sha = digest(messages[0])
     except Exception as exc:
         # Endpoint isolation: a model/transport failure is recorded in the
         # deliverable so one bad episode never aborts the replay batch.
         error, final = f"{type(exc).__name__}: {exc}", ""
     delivered = {
         "schema": REPLAY_SCHEMA,
-        "episode_id": row["id"],
+        "episode_id": episode_id,
         "model": client.model,
-        "system_sha256": digest(messages[0]),
-        "read_evidence": tools.read,
-        "compared_metrics": tools.compared,
-        "decision": tools.recorded,
+        "checkpoint": {
+            "adapter_path": getattr(client, "adapter_path", None),
+            "checkpoint_fingerprint": getattr(
+                client, "checkpoint_fingerprint", None
+            ),
+        },
+        "system_sha256": system_sha,
+        "read_evidence": tools.read if tools else False,
+        "compared_metrics": tools.compared if tools else False,
+        "decision": tools.recorded if tools else None,
         "final": final,
         "error": error,
     }
@@ -583,6 +640,18 @@ def evidence_issues(row, delivered):
 
 
 def grade(row, delivered):
+    if not isinstance(delivered, dict) or (
+        delivered.get("schema") != REPLAY_SCHEMA
+    ):
+        # Zero counters keep the batch report sums total: an
+        # ungradable deliverable scores nothing instead of breaking
+        # the report with a missing key.
+        return {
+            "execution_complete": 0,
+            "analysis_correct": 0,
+            "verified": False,
+            "schema_issue": ("deliverable is not a %s record" % REPLAY_SCHEMA),
+        }
     if any(t["function"]["name"] == "operator.decide" for t in row["tools"]):
         chosen = delivered.get("decision") or {}
         from siliconshield.research_loop.episodes.operator_assessment import (
@@ -753,15 +822,17 @@ def main():
         "--limit", type=int, default=0, help="Maximum episodes to run (0: all)"
     )
     args = parser.parse_args()
+    if args.limit < 0:
+        parser.error("Replay limit cannot be negative")
     rows = load_rows(args.episodes)
     if args.limit:
         rows = rows[: args.limit]
     client = ChatClient(args.endpoint, args.model)
     results = []
     for row in rows:
-        dest = Path(args.output) / row["id"]
+        dest = safe_episode_dir(Path(args.output), row["id"])
         delivered = execute(row, client, dest)
-        result = grade(row, delivered)
+        result = safe_grade(row, delivered)
         atomic_json(dest / "grade.json", result)
         results.append(result)
     report = {

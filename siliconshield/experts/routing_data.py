@@ -1,165 +1,30 @@
-"""Measured routing evidence from the public RTL benchmark (Qt-free).
+"""Benchmark areas and mechanism tags for routing (Qt-free).
 
-Tiers derive from benchmark accuracy with a one-tier demotion when
-the false-safe rate on violations exceeds 15%: a model that misses
-many violations is never strong, however high its accuracy. Counts
-come from the public benchmark revision below, so this table is
-public evidence, not private data. Re-measure (never hand-edit)
-when the benchmark or a checkpoint changes.
+Tiers derive from per-profile routing evidence at route time; this
+module only maps mechanism tags to their benchmark areas. Extend
+the mapping when the benchmark gains mechanisms.
 """
 
-BENCHMARK_SOURCE = (
-    "hf://debjyotikm/siliconshield-rtl-benchmark"
-    "@ab2b7dbee3158a292edc4f7a0127379aab996636:data/benchmark.jsonl"
+BENCHMARK_AREAS = frozenset(
+    {
+        "arbitration",
+        "counter",
+        "fifo",
+        "guard-semantics",
+        "input-filter",
+        "interrupt-wake",
+        "local-safety-cwe",
+        "ot-access-control",
+        "requirement-clarity",
+        "transfer-pairs",
+        "write-paths",
+    }
 )
-
-MODEL_WEIGHTS = {
-    "contract-1": (
-        "f4130223ed19be5cc7e21b3da70cb7aebf944ad6ed4a8a80f11d8f59bcd05ee7"
-    ),
-    "contract-2": (
-        "f916444ff45cfc67bc5a67c81a36a770a20709fcd7a85fbfc0258fb411144ed8"
-    ),
-}
-"""Weights each reliability row was measured on; other weights unrate."""
+"""Benchmark areas scopes and routing evidence may name."""
 
 # Accuracy bands: strong >= 0.80, partial >= 0.60, weak >= 0.40,
 # none below; demote one tier when false-safes/violations > 0.15.
-AREA_RELIABILITY: dict[tuple[str, str], dict[str, object]] = {
-    ("contract-1", "arbitration"): {
-        "tier": "partial",
-        "correct": 14,
-        "total": 18,
-        "false_safe": 0,
-    },
-    ("contract-1", "counter"): {
-        "tier": "none",
-        "correct": 41,
-        "total": 108,
-        "false_safe": 1,
-    },
-    ("contract-1", "fifo"): {
-        "tier": "none",
-        "correct": 36,
-        "total": 108,
-        "false_safe": 0,
-    },
-    ("contract-1", "guard-semantics"): {
-        "tier": "none",
-        "correct": 171,
-        "total": 432,
-        "false_safe": 6,
-    },
-    ("contract-1", "input-filter"): {
-        "tier": "weak",
-        "correct": 91,
-        "total": 162,
-        "false_safe": 3,
-    },
-    ("contract-1", "interrupt-wake"): {
-        "tier": "partial",
-        "correct": 158,
-        "total": 234,
-        "false_safe": 0,
-    },
-    ("contract-1", "local-safety-cwe"): {
-        "tier": "strong",
-        "correct": 2601,
-        "total": 2610,
-        "false_safe": 7,
-    },
-    ("contract-1", "ot-access-control"): {
-        "tier": "strong",
-        "correct": 108,
-        "total": 108,
-        "false_safe": 0,
-    },
-    ("contract-1", "requirement-clarity"): {
-        "tier": "weak",
-        "correct": 346,
-        "total": 756,
-        "false_safe": 22,
-    },
-    ("contract-1", "transfer-pairs"): {
-        "tier": "strong",
-        "correct": 606,
-        "total": 621,
-        "false_safe": 6,
-    },
-    ("contract-1", "write-paths"): {
-        "tier": "weak",
-        "correct": 179,
-        "total": 432,
-        "false_safe": 12,
-    },
-    ("contract-2", "arbitration"): {
-        "tier": "weak",
-        "correct": 14,
-        "total": 18,
-        "false_safe": 1,
-    },
-    ("contract-2", "counter"): {
-        "tier": "partial",
-        "correct": 92,
-        "total": 108,
-        "false_safe": 9,
-    },
-    ("contract-2", "fifo"): {
-        "tier": "partial",
-        "correct": 97,
-        "total": 108,
-        "false_safe": 7,
-    },
-    ("contract-2", "guard-semantics"): {
-        "tier": "weak",
-        "correct": 268,
-        "total": 432,
-        "false_safe": 27,
-    },
-    ("contract-2", "input-filter"): {
-        "tier": "weak",
-        "correct": 94,
-        "total": 162,
-        "false_safe": 2,
-    },
-    ("contract-2", "interrupt-wake"): {
-        "tier": "weak",
-        "correct": 145,
-        "total": 234,
-        "false_safe": 12,
-    },
-    ("contract-2", "local-safety-cwe"): {
-        "tier": "none",
-        "correct": 933,
-        "total": 2610,
-        "false_safe": 281,
-    },
-    ("contract-2", "ot-access-control"): {
-        "tier": "weak",
-        "correct": 77,
-        "total": 108,
-        "false_safe": 31,
-    },
-    ("contract-2", "requirement-clarity"): {
-        "tier": "none",
-        "correct": 271,
-        "total": 756,
-        "false_safe": 32,
-    },
-    ("contract-2", "transfer-pairs"): {
-        "tier": "weak",
-        "correct": 275,
-        "total": 621,
-        "false_safe": 31,
-    },
-    ("contract-2", "write-paths"): {
-        "tier": "weak",
-        "correct": 244,
-        "total": 432,
-        "false_safe": 17,
-    },
-}
-
+# Tiers now derive from per-profile routing evidence at route time.
 MECHANISM_TO_AREA = {
     "arbiter-grant-handshake": "arbitration",
     "arbiter-tree-acceptance": "arbitration",
@@ -292,18 +157,7 @@ for _mech in _CWE_MECHANISMS:
 
 def area_for_tag(tag: str) -> str | None:
     """Resolve a scope tag to a benchmark area, if known."""
-    if tag in {
-        "arbitration",
-        "counter",
-        "fifo",
-        "guard-semantics",
-        "input-filter",
-        "interrupt-wake",
-        "local-safety-cwe",
-        "ot-access-control",
-        "requirement-clarity",
-        "transfer-pairs",
-        "write-paths",
-    }:
+    tag = tag.strip()
+    if tag in BENCHMARK_AREAS:
         return tag
     return MECHANISM_TO_AREA.get(tag)
