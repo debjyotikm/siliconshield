@@ -390,6 +390,170 @@ def test_cli_finding_flags_are_gated_before_consult(tmp_path):
         run_assess(args)
 
 
+def test_cli_assess_design_consults_one_expert(tmp_path):
+    from siliconshield.experts.cli import build_parser, run_assess
+
+    registry_path = _write_cli_registry(tmp_path)
+    design = tmp_path / "fifo.v"
+    design.write_text("module topmodule; endmodule\n")
+
+    def factory():
+        return WorkerPool(
+            worker_module="fake_worker",
+            extra_env={
+                "PYTHONPATH": ":".join(
+                    (
+                        str(tmp_path),
+                        str(Path(__file__).parent),
+                        str(Path(__file__).parents[1]),
+                    )
+                )
+            },
+        )
+
+    args = build_parser().parse_args(
+        [
+            "assess",
+            "--registry",
+            registry_path,
+            "--expert",
+            "expert-a",
+            "--design",
+            str(design),
+            "--requirement",
+            "Outside reset, count must hold.",
+            "--assumptions",
+            "Push and pop are synchronous.",
+        ]
+    )
+    report = run_assess(args, pool_factory=factory)
+    assert report["expert"] == "expert-a"
+    assert report["scope"] == []
+    expected = (
+        "REQUIREMENT\nOutside reset, count must hold.\n"
+        "ASSUMPTIONS\nPush and pop are synchronous.\n"
+        "RTL\nmodule topmodule; endmodule"
+    )
+    assert report["assessment"]["state_sha256"] == text_digest(expected)
+    assert report["assessment"]["routing"]["experts"] == ["expert-a"]
+    assert report["assessment"]["responses"][0]["label"] == (
+        "violates_requirement"
+    )
+
+
+def test_cli_load_state_design_form():
+    from siliconshield.experts.cli import _load_state
+
+    args = build_parser().parse_args(
+        [
+            "assess",
+            "--registry",
+            "unused.json",
+            "--expert",
+            "expert-a",
+            "--design",
+            __file__,
+            "--requirement",
+            "Some requirement.",
+        ]
+    )
+    state = _load_state(args)
+    assert state.startswith("REQUIREMENT\nSome requirement.\nASSUMPTIONS\n")
+    assert "only the stated" in state
+    assert "\nRTL\n" in state
+
+    bad = [
+        (
+            ["--state-file", "x.txt", "--design", __file__],
+            "not both",
+        ),
+        (["--design", __file__], "needs --requirement"),
+        (
+            ["--state-file", "x.txt", "--assumptions", "y"],
+            "used with --design",
+        ),
+        (
+            [
+                "--scope",
+                "fifo",
+                "--expert",
+                "expert-a",
+                "--state-file",
+                __file__,
+            ],
+            "Pass --scope",
+        ),
+        (["--state-file", __file__], "Scope must name"),
+        (
+            ["--design", "/nonexistent/design.v", "--requirement", "r"],
+            "Cannot read design file",
+        ),
+    ]
+    for extra, match in bad:
+        args = build_parser().parse_args(
+            ["assess", "--registry", "unused.json"] + extra
+        )
+        with pytest.raises(ValueError, match=match):
+            run_assess(args)
+
+
+def test_service_assess_expert_direct(tmp_path):
+    registry_path = _write_registry(
+        tmp_path, _profile("expert-a", ["fifo"]), {}
+    )
+    service = InferenceService(registry_path)
+    state = "REQUIREMENT\nr\n\nASSUMPTIONS\na\n\nRTL\nassign q = d;\n"
+
+    def transport(expert_id, judged_state):
+        return _result(state=judged_state, model_id=expert_id)
+
+    result = service.assess_expert("expert-a", state, transport)
+    assert result["responses"][0]["expert_id"] == "expert-a"
+    assert result["routing"]["experts"] == ["expert-a"]
+    assert result["routing"]["tiers"] == {"expert-a": "unrated"}
+    assert result["scope"] == []
+    with pytest.raises(ValueError, match="Unknown expert"):
+        service.assess_expert("expert-missing", state, transport)
+
+
+def test_format_brief_shows_scores_and_elapsed():
+    from siliconshield.experts.cli import format_brief
+
+    report = {
+        "load_seconds": 6.1349,
+        "inference_seconds": 0.02,
+        "assessment": {
+            "responses": [
+                {
+                    "expert_id": "expert-a",
+                    "label": "violates_requirement",
+                    "scores": {
+                        "satisfies_requirement": 0.15,
+                        "violates_requirement": 0.7,
+                        "insufficient_context": 0.15,
+                    },
+                }
+            ],
+            "errors": [
+                {
+                    "expert_id": "expert-b",
+                    "stage": "transport",
+                    "detail": "synthetic failure",
+                }
+            ],
+            "elapsed_seconds": 6.1549,
+        },
+    }
+    text = format_brief(report)
+    assert "expert-a: violates_requirement" in text
+    assert "satisfies_requirement: 0.1500" in text
+    assert "violates_requirement: 0.7000" in text
+    assert "insufficient_context: 0.1500" in text
+    assert "expert-b: transport (synthetic failure)" in text
+    assert "load_seconds: 6.13" in text
+    assert "inference_seconds: 0.02" in text
+
+
 def test_worker_load_rejects_non_object_entries():
     from siliconshield.experts.worker import WorkerLoadError, WorkerPool
 
@@ -2108,3 +2272,351 @@ def test_worker_pool_rejects_malformed_calls(tmp_path):
             pool.load(entry)
     finally:
         pool.close()
+
+
+@pytest.mark.parametrize(
+    "model", ["glimmer-base", "muse-spark-1.3", "muse-spark-1.3-contributor"]
+)
+def test_cli_live_arbitration_uses_selected_backend(
+    tmp_path, monkeypatch, capsys, model
+):
+    from siliconshield.experts import cli
+
+    registry = _write_cli_registry(tmp_path)
+    design = tmp_path / "example.sv"
+    design.write_text("module topmodule; endmodule\n")
+    calls = []
+    construction = []
+
+    class Client:
+        def __init__(self, **kwargs):
+            construction.append(kwargs)
+
+        def complete(self, messages, tools=()):
+            calls.append((messages, tools))
+            return _scripted_client(_arbitration_payload()).complete(
+                messages, tools
+            )
+
+    monkeypatch.setattr(cli, "LocalGlimmerClient", Client)
+    monkeypatch.setattr(cli, "MuseClient", Client)
+    monkeypatch.setattr(cli.shutil, "which", lambda _: "/synthetic/bin/muse")
+    monkeypatch.setattr(
+        cli.arbitration, "default_muse_audit_dir", lambda: tmp_path / "audit"
+    )
+    flags = ["--model", model, "--live", "--brief", "--arbitrate"]
+    if model == "glimmer-base":
+        flags += [
+            "--endpoint",
+            "http://127.0.0.1:18400/v1/chat/completions",
+            "--ssh-host",
+            "synthetic-host",
+        ]
+    args = cli.build_parser().parse_args(
+        [
+            "assess",
+            "--registry",
+            registry,
+            "--scope",
+            "fifo",
+            "--design",
+            str(design),
+            "--requirement",
+            "Count must hold.",
+            "--assumptions",
+            "Reset is exempt.",
+            *flags,
+        ]
+    )
+    report = cli.run_assess(
+        args,
+        pool_factory=lambda: WorkerPool(
+            worker_module="fake_worker",
+            extra_env={
+                "PYTHONPATH": ":".join(
+                    (
+                        str(tmp_path),
+                        str(Path(__file__).parent),
+                        str(Path(__file__).parents[1]),
+                    )
+                )
+            },
+        ),
+    )
+    assert report["assessment"]["responses"], report["assessment"]["errors"]
+    assert "arbitration_error" not in report
+    assert report["arbitration"]["conclusion"] == "violates_requirement"
+    assert len(calls) == len(construction) == 1
+    assert construction[0]["model"] == model
+    if model == "glimmer-base":
+        assert construction[0]["ssh_host"] == "synthetic-host"
+        assert construction[0]["max_calls"] == 1
+        assert construction[0]["decode_arguments"] is True
+    else:
+        assert construction[0]["executable"] == Path("/synthetic/bin/muse")
+        assert "endpoint" not in construction[0]
+    bound = json.loads(calls[0][0][1]["content"])
+    assert "module topmodule; endmodule" in json.dumps(bound)
+    assert "Count must hold." in json.dumps(bound)
+    assert "Reset is exempt." in json.dumps(bound)
+    assert calls[0][1][0]["function"]["name"] == "experts.arbitrate"
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "ROUTER: assessing scope fifo" in captured.err
+    assert "DECISION MODEL: loading expert-a" in captured.err
+    assert "DECISION MODEL: assessing RTL with expert-a" in captured.err
+    assert (
+        "META RESPONSE TOOL: experts.arbitrate (structured output)"
+        in captured.err
+    )
+    assert "ARBITRATION: validated violates_requirement" in captured.err
+    assert "LIVE META CALL: " + model in captured.err
+    assert "LIVE META RESPONSE:" in captured.err
+    assert "synthetic-host" not in captured.err
+    assert str(tmp_path) not in captured.err
+    assert model + ": violates_requirement" in cli.format_brief(report)
+
+
+@pytest.mark.parametrize(
+    "extra, message",
+    [
+        (["--model", "muse-spark-1.3"], "need --arbitrate"),
+        (["--live"], "need --arbitrate"),
+        (["--arbitrate", "--model", "glimmer-base"], "needs --endpoint"),
+        (
+            ["--arbitrate", "--endpoint", "http://localhost/chat/completions"],
+            "only for glimmer-base",
+        ),
+    ],
+)
+def test_cli_backend_flags_fail_before_model_load(tmp_path, extra, message):
+    state = tmp_path / "state.txt"
+    state.write_text("REQUIREMENT\nr\nRTL\nassign q = d;")
+    args = build_parser().parse_args(
+        [
+            "assess",
+            "--registry",
+            "unused.json",
+            "--scope",
+            "fifo",
+            "--state-file",
+            str(state),
+            "--requirement",
+            "r",
+            *extra,
+        ]
+    )
+    with pytest.raises(ValueError, match=message):
+        run_assess(args)
+
+
+def test_cli_brief_hides_local_paths_but_preserves_error_evidence(capsys):
+    from siliconshield.experts import cli
+
+    private = "/tmp/recording-private/design.sv"
+    report = {
+        "assessment": {"responses": [], "errors": []},
+        "load_seconds": 0,
+        "inference_seconds": 0,
+        "arbitration_error": "Cannot read " + private,
+    }
+    brief = cli.format_brief(report)
+    assert "Muse arbitration failed:" in brief
+    assert private not in brief and "[local path]" in brief
+    assert private in report["arbitration_error"]
+
+    class FailingClient:
+        def complete(self, messages, tools=()):
+            raise RuntimeError("Cannot read " + private)
+
+    with pytest.raises(RuntimeError, match="Cannot read"):
+        cli._LiveClient(FailingClient(), "glimmer-base").complete([])
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "META CALL FAILED" in captured.err
+    assert "LIVE META RESPONSE" not in captured.err
+    assert private not in captured.err
+
+
+def test_muse_live_events_are_incremental_and_do_not_print_payloads(
+    tmp_path, capsys
+):
+    from siliconshield.experts import cli
+
+    log = tmp_path / "call-current" / "stdout.jsonl"
+    log.parent.mkdir()
+    first = json.dumps(
+        {"payload": {"kind": "run_started", "prompt": "private prompt"}}
+    )
+    second = json.dumps(
+        {"payload": {"kind": "run_output_delta", "text": "private output"}}
+    )
+    log.write_text(first + "\n" + second[:20])
+    offsets, seen = {}, set()
+    cli._muse_events(tmp_path, offsets, seen)
+    assert capsys.readouterr().err == "META SESSION: running\n"
+    with log.open("a") as handle:
+        handle.write(second[20:] + "\n" + second + "\n")
+    cli._muse_events(tmp_path, offsets, seen)
+    cli._muse_events(tmp_path, offsets, seen)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "META SESSION: receiving response\n"
+    assert offsets[log] == log.stat().st_size
+
+
+def test_muse_status_is_visible_before_completion(
+    tmp_path, monkeypatch, capsys
+):
+    import threading
+
+    from siliconshield.experts import cli
+
+    observed = threading.Event()
+    original = cli._live_status
+
+    def display(enabled, message):
+        original(enabled, message)
+        if message == "META SESSION: running":
+            observed.set()
+
+    monkeypatch.setattr(cli, "_live_status", display)
+
+    class Client:
+        def complete(self, messages, tools=()):
+            log = tmp_path / "call-current" / "stdout.jsonl"
+            log.parent.mkdir()
+            log.write_text(
+                json.dumps({"payload": {"kind": "run_started"}}) + "\n"
+            )
+            assert observed.wait(3), "status was buffered until completion"
+            return _scripted_client(_arbitration_payload()).complete(
+                messages, tools
+            )
+
+    cli._LiveClient(Client(), "muse-spark-1.3", tmp_path).complete([])
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.index("META SESSION: running") < captured.err.index(
+        "LIVE META RESPONSE"
+    )
+    assert (
+        "META RESPONSE TOOL: experts.arbitrate (structured output)"
+        in captured.err
+    )
+    assert str(tmp_path) not in captured.err
+
+
+def test_native_muse_logs_are_compact_and_preserve_audit(tmp_path, capsys):
+    from siliconshield.experts import cli
+
+    events = [
+        {
+            "sequence": 1,
+            "payload": {
+                "kind": "run_started",
+                "prompt": "RTL and requirement",
+                "workspace": "/tmp/private/session",
+            },
+        },
+        {
+            "sequence": 2,
+            "payload": {
+                "kind": "run_output_delta",
+                "text": "Checking the simultaneous push/pop branch.",
+            },
+        },
+        {
+            "sequence": 3,
+            "payload": {
+                "kind": "run_usage",
+                "calls": [{"input_tokens": 100, "output_tokens": 20}],
+            },
+        },
+        {
+            "sequence": 4,
+            "payload": {
+                "kind": "run_terminal",
+                "terminal": "completed",
+                "text": '{"tool_calls": [{"function": {"name": "experts.arbitrate"}}]}',
+            },
+        },
+    ]
+    log = tmp_path / "call-current" / "stdout.jsonl"
+    log.parent.mkdir()
+    native = "\n".join(json.dumps(event) for event in events) + "\n"
+    log.write_text(native)
+    offsets, seen = {}, set()
+    cli._muse_events(tmp_path, offsets, seen, live_logs=True)
+    cli._muse_events(tmp_path, offsets, seen, live_logs=True)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.splitlines() == [
+        "[muse] run_started",
+        "[muse] run_output_delta",
+        "[muse] run_usage",
+        "[muse] run_terminal terminal=completed",
+    ]
+    assert "RTL and requirement" not in captured.err
+    assert "Checking the simultaneous" not in captured.err
+    assert log.read_text() == native
+    assert "/tmp/private/session" not in captured.err
+
+
+def test_native_logs_reject_glimmer_before_any_worker():
+    args = build_parser().parse_args(
+        [
+            "assess",
+            "--registry",
+            "unused.json",
+            "--scope",
+            "fifo",
+            "--design",
+            __file__,
+            "--requirement",
+            "r",
+            "--arbitrate",
+            "--model",
+            "glimmer-base",
+            "--live-logs",
+        ]
+    )
+    with pytest.raises(ValueError, match="requires a Muse Spark CLI model"):
+        run_assess(args)
+
+
+def test_compact_muse_log_line_has_native_metadata_without_body():
+    from siliconshield.experts import cli
+
+    assert (
+        cli._muse_log_line(
+            {
+                "kind": "run_model_configured",
+                "model_id": "muse-spark-1.3",
+                "prompt": "not displayed",
+            }
+        )
+        == "[muse] run_model_configured model_id=muse-spark-1.3"
+    )
+    assert (
+        cli._muse_log_line(
+            {
+                "kind": "run_usage",
+                "completed_calls": 1,
+                "failed_calls": 0,
+            }
+        )
+        == "[muse] run_usage completed_calls=1 failed_calls=0"
+    )
+    assert (
+        cli._muse_log_line({"kind": "turn_input_user", "prompt": "private"})
+        == ""
+    )
+    line = cli._muse_log_line(
+        {
+            "kind": "run_model_configured",
+            "model_id": "/tmp/private/name\nextra",
+        }
+    )
+    assert "\n" not in line and "/tmp/private" not in line
+    assert len(line) <= 160

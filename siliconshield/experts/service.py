@@ -227,6 +227,79 @@ class InferenceService:
             scope, [self._profiles[key] for key in self.expert_ids]
         )
 
+    def assess_expert(
+        self,
+        expert_id: str,
+        state: str,
+        transport: Transport,
+    ) -> Assessment:
+        """Consult exactly one named expert, with no scope routing.
+
+        For per-model testing: the caller names the model instead
+        of a scope. The response is stamped like a routed
+        assessment, and the routing record states that selection
+        was direct so no measured area support is implied.
+        """
+        if not isinstance(expert_id, str) or not expert_id:
+            raise ValueError("Expert id must be text")
+        if expert_id not in self._models:
+            raise ValueError(
+                "Unknown expert %r; registered: %s."
+                % (expert_id, ", ".join(sorted(self._models)) or "none")
+            )
+        if expert_id in self._broken:
+            raise ValueError(
+                "Expert %r has an unusable capability profile: %s"
+                % (expert_id, self._broken[expert_id])
+            )
+        if expert_id not in self._profiles:
+            raise ValueError(
+                "Expert %r has no capability profile; qualify it "
+                "before consulting it." % (expert_id,)
+            )
+        started = time.monotonic()
+        request_id = uuid.uuid4().hex
+        decision: RoutingDecision = {
+            "scope": [],
+            "experts": [expert_id],
+            "unsupported": [],
+            "tiers": {expert_id: "unrated"},
+            "area_tiers": {},
+            "coverage": {},
+            "partial": [],
+            "rationale": [
+                "Direct expert selection; no scope routing or "
+                "measured area support was applied."
+            ],
+            "thin_evidence": True,
+        }
+        responses, errors = consult_experts(
+            [expert_id], self._profiles, state, transport
+        )
+        scope_hash = digest(decision["scope"])
+        for response in responses:
+            response["assessment_id"] = request_id
+            response["scope_sha256"] = scope_hash
+        effective = copy.deepcopy(decision)
+        effective["experts"] = [item["expert_id"] for item in responses]
+        effective["tiers"] = {key: "unrated" for key in effective["experts"]}
+        effective["rationale"] = list(decision["rationale"]) + [
+            "%s failed during consult (%s); direct selection above "
+            "is unchanged." % (item["expert_id"], item["stage"])
+            for item in errors
+        ]
+        return {
+            "request_id": request_id,
+            "state_sha256": text_digest(state),
+            "scope_sha256": scope_hash,
+            "planned_routing": decision,
+            "scope": decision["scope"],
+            "routing": effective,
+            "responses": responses,
+            "errors": errors,
+            "elapsed_seconds": time.monotonic() - started,
+        }
+
     def assess(
         self,
         scope: list[str],

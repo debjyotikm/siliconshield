@@ -211,84 +211,98 @@ study infrastructure, and evaluation controls.
 
 ## Get started
 
-### Assess RTL with the decision models and Muse
+Complete [model and runtime setup](docs/setup.md), including the measured
+registry, then activate the controller environment from the repository root:
 
-Start with a design region and a concrete requirement. SiliconShield routes
-the assessment to the relevant decision models, then Muse examines their
-predictions alongside the RTL to explain the conclusion and any disagreement.
+```bash
+source .venv-controller/bin/activate
+export REGISTRY="$SILICONSHIELD_REGISTRY"
+```
 
-Follow the [setup guide](docs/setup.md) to download the models and configure
-the runtime, then [register measured capability profiles](docs/expert-qualification.md#register-and-measure-the-published-models).
-The [FIFO walkthrough](docs/router.md#run-one-assessment) provides the complete
-input file for this example.
+The first two examples call one decision model directly. The last two use the
+complete infrastructure including the decision models and ask Muse to interpret
+their predictions alongside the RTL.
+
+### 1. Contract-1: register privilege protection
+
+[The design](examples/rtl/privilege-register.sv) updates `cfg_reg` only when
+both the write enable and privilege input are asserted. Reset is exempt.
 
 ```bash
 python -m siliconshield.experts assess \
-  --registry /path/to/models.local.json \
-  --scope fifo \
-  --state-file /path/to/assessment.txt \
-  --arbitrate \
-  --requirement "After reset, a push while full must leave occupancy unchanged."
+  --registry "$REGISTRY" --expert contract-1 \
+  --design examples/rtl/privilege-register.sv \
+  --requirement "Outside reset, cfg_reg may change only when privileged is asserted." \
+  --assumptions "Two-state synchronous logic. Inputs are defined and may vary independently. Reset is exempt from the requirement." \
+  --brief
 ```
 
-The response includes each decision model’s prediction and scores, its measured
-support for the requested scope, and Muse’s assessment with supporting
-reasoning. Disagreements, execution failures, and coverage gaps remain visible.
+### 2. Contract-2: simultaneous push and pop
 
-Arbitration requires the configured Muse CLI and login. To inspect
-decision-model evidence alone, omit `--arbitrate` and `--requirement`, keeping
-the requirement in the input file. Python integrations can retain model
-workers across requests.
-
-### Open the browser demo
-
-The optional browser app brings Contract-1, Contract-2, the expert router,
-and a bounded decision-model training example operated by Muse Glimmer into
-four views. It runs on the same model workers and operator infrastructure as
-the command-line tools.
+[The design](examples/rtl/push-pop-count.sv) increments `count` when push and
+pop are both asserted. This conflicts with the requirement that simultaneous
+requests leave the count unchanged.
 
 ```bash
-python -m siliconshield.web_demo --config /path/to/web.local.json
+python -m siliconshield.experts assess \
+  --registry "$REGISTRY" --expert contract-2 \
+  --design examples/rtl/push-pop-count.sv \
+  --requirement "Outside reset, when push and pop are both asserted, count must remain unchanged." \
+  --assumptions "Two-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently." \
+  --brief
 ```
 
-Open `http://127.0.0.1:8765` in Chrome. The [browser demo guide](docs/web-demo.md)
-covers CPU/GPU model loading, local Glimmer, training configuration, and SSH
-access. Without `--config`, the interface opens with authored examples and no
-model or training work starts.
+Both commands print the prediction, all three scores, and load/inference time.
 
-### Check a repair against the requirement
+### 3. Investigate with local Muse Glimmer
 
-The included `unauthorized-write` example demonstrates a common
-register-protection defect: a write enable updates state without checking
-privilege. The candidate repair restores the missing guard.
+Both Muse examples use [this design](examples/rtl/push-pop-hold.sv), where
+simultaneous push and pop take the default branch and leave `count` unchanged.
 
-```diff
-- else if (wr_en) cfg_reg <= wdata;
-+ else if (wr_en && privileged) cfg_reg <= wdata;
-```
-
-With Python 3.11+, Verilator, a C++ compiler, and `make` installed, run:
+Start Glimmer using [local deployment](docs/inference.md). Set
+`SILICONSHIELD_MUSE_ENDPOINT` to its loopback chat endpoint. This command uses
+the served model name `glimmer-base`. If it runs on another machine, add
+`--ssh-host YOUR_SSH_ALIAS` and use the endpoint on that host.
 
 ```bash
-python -m pip install -e .
-python -m siliconshield.app --case unauthorized-write \
-  --output /tmp/siliconshield-run
+python -m siliconshield.experts assess \
+  --registry "$REGISTRY" --scope fifo \
+  --design examples/rtl/push-pop-hold.sv \
+  --requirement "Outside reset, when push and pop are both asserted, count must remain unchanged." \
+  --assumptions "Two-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently." \
+  --arbitrate --model glimmer-base \
+  --endpoint "$SILICONSHIELD_MUSE_ENDPOINT" --live --brief
 ```
 
-Open `/tmp/siliconshield-run/report.md` to inspect the original failure,
-candidate change, and executed checks. The repair must reject unprivileged
-writes **and preserve legitimate writes**. Disabling every write does not meet
-the acceptance criteria.
+### 4. Investigate with Muse Spark 1.3
 
-This installation smoke test uses an authored repair and needs no model
-weights or Muse account. Without a configured checkpoint, the report marks
-the model assessment as unavailable. The
-[release guide](docs/releases.md#real-muse-repair) explains how to connect a decision
-model and a live Muse proposer.
+With the Muse CLI installed and signed in, select Spark in the same command.
+This sends the RTL, requirement, assumptions, and specialist evidence to the
+configured Muse backend.
 
-A successful run establishes that the candidate passed the supplied
-requirement and regression checks. Model predictions and executed verification
-results remain separate throughout the report.
+```bash
+python -m siliconshield.experts assess \
+  --registry "$REGISTRY" --scope fifo \
+  --design examples/rtl/push-pop-hold.sv \
+  --requirement "Outside reset, when push and pop are both asserted, count must remain unchanged." \
+  --assumptions "Two-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently." \
+  --arbitrate --model muse-spark-1.3 --live-logs --brief
+```
+
+`--live` shows routing, model loading and inference, Muse session events,
+elapsed waiting time, and the returned structured arbitration response in the
+terminal. For Spark, `--live-logs` shows one compact line per native lifecycle
+event, including the model name, call counts, and completion status. Repeated
+output-chunk events are collapsed. JSON payloads, prompts, and local paths stay
+out of the terminal. Complete audit logs remain unchanged on disk.
+`--brief` displays the specialist scores, coverage gaps, and Muse's conclusion
+and explanation without local absolute paths. Omit `--brief` for the full JSON
+report. Live-call messages go to stderr so JSON output remains readable by
+other tools. Model conclusions remain predictions, with execution errors
+reported separately.
+
+[Browser demo](docs/web-demo.md) · [Router and Python API](docs/router.md) ·
+[Executable repair example](docs/releases.md#real-muse-repair)
 
 ## Research Assets and Deployment Options
 

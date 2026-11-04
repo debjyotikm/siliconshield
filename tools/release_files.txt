@@ -242,3 +242,6 @@ tests/test_campaign_guards.py
 tests/test_checker_ingest.py
 tests/test_owned_job.py
 tests/test_strategy.py
+examples/rtl/privilege-register.sv
+examples/rtl/push-pop-count.sv
+examples/rtl/push-pop-hold.sv
