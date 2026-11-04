@@ -39,12 +39,24 @@ class MuseClient:
         timeout: int = 300,
     ) -> None:
         """Bind the executable and settings; every call gets a fresh workspace."""
-        self.executable = executable.resolve(strict=True)
-        self.audit_dir = audit_dir.resolve()
+        if not isinstance(executable, (str, Path)):
+            raise ValueError("Muse executable must be a path")
+        if not isinstance(audit_dir, (str, Path)):
+            raise ValueError("Muse audit directory must be a path")
+        if not isinstance(model, str) or not model:
+            raise ValueError("Muse model must be a non-empty string")
+        if not isinstance(effort, str) or not effort:
+            raise ValueError("Muse reasoning effort must be a string")
+        if (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or timeout <= 0
+        ):
+            raise ValueError("Muse completion timeout must be positive")
+        self.executable = Path(executable).resolve(strict=True)
+        self.audit_dir = Path(audit_dir).resolve()
         self.audit_dir.mkdir(parents=True, exist_ok=True)
         self.model, self.effort, self.timeout = model, effort, timeout
-        if timeout <= 0:
-            raise ValueError("Muse completion timeout must be positive")
         self.execution_identity: dict[str, Any] = {
             "backend": "muse-exec-empty-preset-v2",
             "model": model,
@@ -196,6 +208,8 @@ class MuseClient:
 
 def closed_object(properties: dict[str, Any]) -> dict[str, Any]:
     """Describe a provider-compatible object with explicit required fields."""
+    if not isinstance(properties, dict):
+        raise ValueError("Replay schema needs a properties object")
     return {
         "type": "object",
         "properties": properties,

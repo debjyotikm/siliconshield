@@ -1389,3 +1389,213 @@ def test_evaluate_refuses_an_empty_selection():
     with pytest.raises(ValueError, match="no episodes"):
         require_episodes([])
     assert require_episodes([{"id": "a"}]) == [{"id": "a"}]
+
+
+def test_router_session_rejects_malformed_arguments(tmp_path):
+    skill = tmp_path / "SKILL.md"
+    skill.write_text("system")
+    with pytest.raises(ValueError, match="must be non-empty"):
+        glimmer_router.run_router_session(
+            None, str(tmp_path), 5, str(tmp_path), skill=str(skill)
+        )
+    with pytest.raises(ValueError, match="must be non-empty"):
+        glimmer_router.run_router_session(
+            None, str(tmp_path), "task", 5, skill=str(skill)
+        )
+    with pytest.raises(ValueError, match="must be a string"):
+        glimmer_router.run_router_session(
+            None, str(tmp_path), "task", str(tmp_path), skill=5
+        )
+
+
+def test_contract_helpers_reject_non_objects():
+    from siliconshield.experts import contracts
+
+    with pytest.raises(ValueError, match="must be an object"):
+        contracts.message_kind(["x"])
+    with pytest.raises(ValueError, match="must be an object"):
+        contracts.validate_result(["x"])
+
+
+def test_inspection_rejects_malformed_inputs():
+    from siliconshield.experts import inspection
+
+    with pytest.raises(ValueError, match="RTL text"):
+        inspection.inspect_structure(5, [])
+    with pytest.raises(ValueError, match="string list"):
+        inspection.inspect_structure("module m; endmodule", "ab")
+
+
+def test_procedure_paths_reject_malformed_arguments(tmp_path):
+    from siliconshield.research_loop.procedures import (
+        bundles,
+        campaign_learning,
+    )
+
+    with pytest.raises(ValueError, match="path arguments"):
+        campaign_learning.queue_report(5, tmp_path / "r.json")
+    with pytest.raises(ValueError, match="must be a path"):
+        campaign_learning.load_request(5)
+    with pytest.raises(ValueError, match="must be a path"):
+        bundles.read_bundle(5, "model")
+
+
+def test_muse_client_rejects_malformed_arguments(tmp_path):
+    from siliconshield.research_loop.procedures import muse_client
+
+    exe = tmp_path / "muse"
+    exe.write_text("x")
+    audit = tmp_path / "audit"
+    with pytest.raises(ValueError, match="must be a path"):
+        muse_client.MuseClient(5, audit)
+    with pytest.raises(ValueError, match="must be a path"):
+        muse_client.MuseClient(exe, 5)
+    with pytest.raises(ValueError, match="non-empty string"):
+        muse_client.MuseClient(exe, audit, model=5)
+    with pytest.raises(ValueError, match="must be positive"):
+        muse_client.MuseClient(exe, audit, timeout="x")
+    with pytest.raises(ValueError, match="properties object"):
+        muse_client.closed_object(5)
+    client = muse_client.MuseClient(str(exe), str(audit))
+    assert client.executable == exe.resolve()
+
+
+def test_process_queue_rejects_malformed_arguments(tmp_path):
+    from siliconshield.research_loop.procedures import muse_harness2
+
+    with pytest.raises(ValueError, match="queue path"):
+        muse_harness2.process_queue(5, [], None, tmp_path, tmp_path)
+    with pytest.raises(ValueError, match="check rows"):
+        muse_harness2.process_queue(tmp_path, [5], None, tmp_path, tmp_path)
+
+
+def test_serve_helpers_reject_malformed_inputs():
+    from siliconshield.research_loop.controller import (
+        evaluate,
+        serve,
+        serve_fast,
+    )
+
+    tools = [
+        {
+            "function": {
+                "name": "t",
+                "parameters": {"properties": {}, "required": []},
+            }
+        }
+    ]
+    text = "assistant to=user<|message|>hi<|eot|>"
+    assert serve.parse_completion(text, tools)["content"] == "hi"
+    with pytest.raises(ValueError, match="must be a string"):
+        serve.parse_completion(5, tools)
+    with pytest.raises(ValueError, match="tool schemas"):
+        serve.parse_completion(text, 5)
+    with pytest.raises(ValueError, match="tool schemas"):
+        serve.parse_completion(text, [5])
+    with pytest.raises(ValueError, match="properties object"):
+        serve.parse_completion(
+            text + '<atem:invoke name="t"></atem:invoke>',
+            [
+                {
+                    "function": {
+                        "name": "t",
+                        "parameters": {"properties": [1], "required": []},
+                    }
+                }
+            ],
+        )
+    with pytest.raises(ValueError, match="must be an integer"):
+        serve_fast.ServerConfig(model="m", port="x")
+    with pytest.raises(ValueError, match="must be a number"):
+        serve_fast.ServerConfig(model="m", memory_fraction="x")
+    with pytest.raises(ValueError, match="model name"):
+        serve_fast.ServerConfig(model=5)
+    with pytest.raises(ValueError, match="adapter"):
+        serve_fast.ServerConfig(model="m", adapters=(("a", 5),))
+    assert serve_fast.ServerConfig(model="m").command()[0] == "vllm"
+    with pytest.raises(ValueError, match="no episodes"):
+        evaluate.require_episodes(5)
+    with pytest.raises(ValueError, match="no episodes"):
+        evaluate.require_episodes([])
+
+
+def test_episode_helpers_reject_malformed_inputs():
+    from siliconshield.research_loop.episodes import (
+        laya_results,
+        operator_assessment,
+    )
+
+    with pytest.raises(ValueError, match="must be an object"):
+        laya_results.adapt_report(["x"])
+    with pytest.raises(ValueError, match="needs a summary object"):
+        operator_assessment.checkpoint_review(5)
+    good = {
+        "checkpoint_candidates": [{"id": "a", "views": {"v": {"m": 1.0}}}],
+        "checkpoint_constraints": [
+            {"view": "v", "metric": "m", "relation": "min", "limit": 0.5}
+        ],
+    }
+    assert operator_assessment.checkpoint_review(dict(good))[
+        "feasible_ids"
+    ] == ["a"]
+    with pytest.raises(ValueError, match="must be objects"):
+        operator_assessment.checkpoint_review(
+            dict(good, checkpoint_candidates=[5])
+        )
+    with pytest.raises(ValueError, match="Invalid checkpoint constraint"):
+        operator_assessment.checkpoint_review(
+            dict(good, checkpoint_constraints=[5])
+        )
+    with pytest.raises(ValueError, match="must be an object"):
+        operator_assessment.checkpoint_review(
+            {
+                "checkpoint_candidates": [{"id": "a", "views": 5}],
+                "checkpoint_constraints": good["checkpoint_constraints"],
+            }
+        )
+    with pytest.raises(ValueError, match="summary object"):
+        operator_assessment.assessment(5)
+    with pytest.raises(ValueError, match="must be an object"):
+        operator_assessment.assessment({"acceptance": 5})
+    with pytest.raises(ValueError, match="must be a list"):
+        operator_assessment.assessment({"development_history": {"entries": 5}})
+    with pytest.raises(ValueError, match="row and decision"):
+        operator_assessment.parameter_issues(5, {})
+    with pytest.raises(ValueError, match="summary object"):
+        operator_assessment.parameter_issues({"summary": 5}, {})
+    with pytest.raises(ValueError, match="two numbers"):
+        operator_assessment.parameter_issues(
+            {"summary": {"lr_bounds": 5}, "resources": {}, "target": {}},
+            {"action": "adjust_lr", "lr": 1.0},
+        )
+
+
+def test_transfer_and_dataset_helpers_reject_malformed_inputs(tmp_path):
+    from siliconshield.research_loop.episodes import dataset, transfer_episodes
+
+    with pytest.raises(ValueError, match="must be a path"):
+        transfer_episodes.load_catalog(5)
+    with pytest.raises(ValueError, match="must be a path"):
+        transfer_episodes.build_transfer(5)
+    with pytest.raises(ValueError, match="must be a path"):
+        transfer_episodes.load_transfer(5)
+    bad = tmp_path / "transfer.jsonl"
+    bad.write_text("[1]\n")
+    with pytest.raises(ValueError, match="must be objects"):
+        transfer_episodes.load_transfer(bad)
+    with pytest.raises(ValueError, match="run and output paths"):
+        dataset.build(5, tmp_path)
+    with pytest.raises(ValueError, match="must be a path"):
+        dataset.write_manifest(5, {})
+    with pytest.raises(ValueError, match="must be an object"):
+        dataset.write_manifest(tmp_path, [1])
+    with pytest.raises(ValueError, match="sequence of objects"):
+        dataset.verify_split_membership(5, tmp_path / "e.jsonl")
+    with pytest.raises(ValueError, match="sequence of objects"):
+        dataset.verify_split_membership([5], tmp_path / "e.jsonl")
+    with pytest.raises(ValueError, match="Allowed splits"):
+        dataset.verify_split_membership(
+            [], tmp_path / "e.jsonl", allowed_splits=5
+        )
+    with pytest.raises(ValueError, match="Episodes path must be a path"):
+        dataset.verify_split_membership([], 5)

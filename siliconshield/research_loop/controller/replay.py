@@ -145,6 +145,8 @@ def safe_episode_dir(output: Path, episode_id: Any) -> Path:
     Episode ids come from reviewed episodes files, but a hostile or
     mistyped id must never write outside the output directory.
     """
+    if not isinstance(output, (str, Path)):
+        raise ValueError("Episode output must be a path")
     if (
         not isinstance(episode_id, str)
         or not episode_id
@@ -198,7 +200,7 @@ def execute(row, client, output, system=None, max_turns=20):
     delivered = {
         "schema": REPLAY_SCHEMA,
         "episode_id": episode_id,
-        "model": client.model,
+        "model": getattr(client, "model", None),
         "checkpoint": {
             "adapter_path": getattr(client, "adapter_path", None),
             "checkpoint_fingerprint": getattr(

@@ -48,6 +48,14 @@ class BenchmarkRunner:
         voids a benchmark. Raises ValueError for unknown areas or
         an empty selection.
         """
+        if not callable(consult):
+            raise ValueError("Benchmark consult must be callable.")
+        if progress is not None and not callable(progress):
+            raise ValueError("Benchmark progress must be callable.")
+        if limit is not None and (
+            isinstance(limit, bool) or not isinstance(limit, int)
+        ):
+            raise ValueError("Benchmark limit must be an integer.")
         wanted = set(areas) if areas is not None else None
         if wanted is not None:
             unknown = wanted - set(self.areas)

@@ -22,7 +22,11 @@ def queue_report(queue: Path, report_path: Path) -> Path:
     This is a retrospective checkpoint-review task. It is not a reconstructed
     decision at an earlier time, nor a label about intervention effectiveness.
     """
-    raw = report_path.read_bytes()
+    if not isinstance(report_path, (str, Path)) or not isinstance(
+        queue, (str, Path)
+    ):
+        raise ValueError("Procedure queue needs path arguments")
+    raw = Path(report_path).read_bytes()
     summary, provenance, group = adapt_report(
         json.loads(raw), source_sha256=hashlib.sha256(raw).hexdigest()
     )
@@ -30,7 +34,7 @@ def queue_report(queue: Path, report_path: Path) -> Path:
     validate_episode(row)
     body: dict[str, Any] = {"schema": PROCEDURE_REQUEST_SCHEMA, "episode": row}
     identifier = digest(body)
-    path = queue / (identifier + ".json")
+    path = Path(queue) / (identifier + ".json")
     if path.exists():
         load_request(path)
     else:
@@ -40,6 +44,9 @@ def queue_report(queue: Path, report_path: Path) -> Path:
 
 def load_request(path: Path) -> dict[str, Any]:
     """Refuse damaged requests and observations outside development scope."""
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Procedure request path must be a path")
+    path = Path(path)
     request = read_json(path)
     if not isinstance(request, dict):
         raise ValueError("Procedure request must be an object")

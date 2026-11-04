@@ -283,6 +283,8 @@ def validate_pair(pair: Mapping[str, JsonValue]) -> list[str]:
     Malformed inputs yield issues, never exceptions.
     """
     issues: list[str] = []
+    if not isinstance(pair, Mapping):
+        return ["pair schema incomplete"]
     if set(pair) < {
         "id",
         "action",
@@ -307,6 +309,8 @@ def validate_pair(pair: Mapping[str, JsonValue]) -> list[str]:
         if not isinstance(content, str):
             raise ValueError("inspect observation has no text content")
         state = json.loads(content)
+        if not isinstance(state, dict):
+            raise ValueError("inspect observation is not an object")
     except (StopIteration, ValueError) as exc:
         return ["prompt lacks a parseable inspect observation: %s" % exc]
     for side in ("chosen", "rejected"):
@@ -383,15 +387,21 @@ def write_pairs(
     being silently replaced. Returns the pair count, SHA-256, and path.
     Raises ValueError naming the first invalid pair.
     """
+    if not isinstance(path, (str, os.PathLike)):
+        raise ValueError("Pair file path must be a path")
+    if not isinstance(pairs, list):
+        raise ValueError("Pair file needs a list of pairs")
+    for pair in pairs:
+        issues = validate_pair(pair)
+        if issues:
+            identifier = (
+                pair.get("id") if isinstance(pair, Mapping) else repr(pair)
+            )
+            raise ValueError("Pair %s invalid: %s" % (identifier, issues))
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("x") as stream:
         for pair in pairs:
-            issues = validate_pair(pair)
-            if issues:
-                raise ValueError(
-                    "Pair %s invalid: %s" % (pair.get("id"), issues)
-                )
             stream.write(json.dumps(pair, allow_nan=False) + "\n")
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     return {"pairs": len(pairs), "sha256": digest, "path": str(path)}

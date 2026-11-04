@@ -620,7 +620,11 @@ def verify_study_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
         for key, value in manifest.items()
         if key != "manifest_sha256"
     }
-    if digest != _sha_text(_canonical(unsigned)):
+    try:
+        canonical = _canonical(unsigned)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Study manifest is not JSON-canonical") from exc
+    if digest != _sha_text(canonical):
         raise ValueError("Study manifest digest mismatch")
     parent = manifest["parent"]
     _check_tree(Path(parent["path"]), parent["files"], "Parent export")

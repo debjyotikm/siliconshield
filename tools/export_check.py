@@ -67,6 +67,10 @@ def _image_magic(suffix, content):
 
 
 def check(name, content, private_words=(), reviewed=None):
+    if not isinstance(name, str) or not name:
+        raise ValueError("Export check needs a file name")
+    if not isinstance(content, (bytes, bytearray)):
+        raise ValueError("Export check needs file bytes for " + name)
     p = Path(name)
     issues = []
     if reviewed is not None and name not in reviewed:

@@ -23,6 +23,8 @@ TARGETS = r"model\.language_model\.layers\.\d+\.(self_attn\.(q|k|v|o)_proj|mlp\.
 
 
 def load_rows(path, allowed_splits=("train", "dev"), require_signed=False):
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Episode file path must be a path")
     rows = [
         json.loads(line)
         for line in Path(path).read_text().splitlines()
@@ -198,6 +200,12 @@ def rotate_checkpoint(stage, destination):
 
 
 def dev_subset(rows, count):
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) for row in rows
+    ):
+        raise ValueError("Dev subset needs a list of episode rows")
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        raise ValueError("Dev subset count must be a nonnegative integer")
     by_action = {}
     for row in sorted(rows, key=lambda r: r["id"]):
         target = row.get("target")
@@ -232,6 +240,8 @@ def train(args):
 
 def training_rows(data):
     """Only authenticated TRAIN/DEV populations may enter adapter training."""
+    if not isinstance(data, (str, Path)):
+        raise ValueError("Training data directory must be a path")
     rows = load_rows(
         Path(data) / "train.jsonl",
         allowed_splits=("train",),

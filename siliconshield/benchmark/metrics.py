@@ -206,8 +206,14 @@ def compare(reports: list[ModelReport]) -> dict[str, Any]:
     a model missing an area shows null there instead of silently
     dropping the comparison.
     """
-    if not reports:
+    if not isinstance(reports, list) or not reports:
         raise ValueError("Comparison needs at least one report.")
+    for report in reports:
+        if not isinstance(report, dict):
+            raise ValueError("Comparison needs report objects.")
+        for key in ("benchmark_sha256", "model_id", "by_area", "overall"):
+            if key not in report:
+                raise ValueError("Comparison report is missing %r." % key)
     digests = {report["benchmark_sha256"] for report in reports}
     if len(digests) != 1:
         raise ValueError(

@@ -24,10 +24,11 @@ INDEX_FILES = (
     "chat_template.jinja",
 )
 
-# Pinned base-model revision shared by training and DPO. Kept with the
-# snapshot-identity helpers (not the training entry point) so both trainers
-# reference one definition; verify_snapshot() enforces it against download
-# provenance.
+# Pinned base-model revision shared by training and DPO: commit
+# cec94fcfd6512f2cfe708138c32533b346ea4f69 of meta-models/Muse-Glimmer-30B.
+# Kept with the snapshot-identity helpers (not the training entry point) so
+# both trainers reference one definition; verify_snapshot() enforces it
+# against download provenance.
 MODEL_REVISION = "cec94fcfd6512f2cfe708138c32533b346ea4f69"
 
 
@@ -66,6 +67,8 @@ def checkpoint_fingerprint(
     """
     files: dict[str, str] = {}
     if adapter_path is not None:
+        if not isinstance(adapter_path, (str, os.PathLike)):
+            raise ValueError("Adapter checkpoint path must be a path")
         root = Path(adapter_path)
         if not root.exists():
             raise ValueError("Adapter checkpoint does not exist: " + str(root))
@@ -106,6 +109,8 @@ def snapshot_manifest(
     is false (partial hashing proves nothing), or when ``revision`` download
     provenance disagrees with the recorded commit.
     """
+    if not isinstance(model_dir, (str, os.PathLike)):
+        raise ValueError("Model snapshot path must be a path")
     root = Path(model_dir)
     if not root.is_dir():
         raise ValueError("Model snapshot does not exist: " + str(root))
@@ -220,6 +225,8 @@ def adapter_manifest(
 
     Raises ValueError when the directory holds no files.
     """
+    if not isinstance(adapter_dir, (str, os.PathLike)):
+        raise ValueError("Adapter checkpoint path must be a path")
     root = Path(adapter_dir)
     files: dict[str, str] = {}
     for path in sorted(root.rglob("*")):

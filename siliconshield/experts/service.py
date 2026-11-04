@@ -65,6 +65,8 @@ class InferenceService:
             for entry in registry.load_registry(registry_path)
         }
         self._broken: dict[str, str] = {}
+        if profiles is not None and not isinstance(profiles, Mapping):
+            raise ValueError("Injected profiles must be a mapping")
         injected = set(profiles) if profiles is not None else set()
         resolved: dict[str, CapabilityProfile] = {}
         if profiles is not None:

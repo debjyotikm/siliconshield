@@ -139,6 +139,37 @@ capacity before starting the server.
 Quantization is a separate change. This launcher retains BF16 target
 weights and does not convert or overwrite any checkpoint.
 
+## Demonstrated deployment
+
+The validated router sessions ran against one Glimmer server with this
+configuration:
+
+- Host: DGX Spark (NVIDIA GB10), Ubuntu 24.04, driver 580.173.02.
+- Server: vLLM in a container, loopback port 18400, served model
+  `glimmer-base`. See [Served model identity](router.md#served-model-identity)
+  for the weight revision and snapshot fingerprint.
+- Decoding: BF16, 8,192-token context, up to eight concurrent requests,
+  8,192-token scheduler budget, 0.65 GPU memory fraction.
+- Parsers: `muse_glimmer` tool-call and reasoning parsers.
+- Speculation: DFlash assistant, 15 proposed tokens.
+
+Measured at concurrency one, after one discarded warm-up request, with a
+short fixed prompt (73 input tokens, 128 generated tokens per request):
+
+| Run | Time to first token | Total time | Overall | Decode |
+| --- | --- | --- | --- | --- |
+| 1 | 0.61 s | 10.0 s | 12.8 tok/s | 13.6 tok/s |
+| 2 | 0.64 s | 10.0 s | 12.8 tok/s | 13.7 tok/s |
+| 3 | 0.64 s | 10.0 s | 12.8 tok/s | 13.7 tok/s |
+
+Decode throughput is generated tokens divided by total time minus time
+to first token. Lifetime speculation acceptance on that server is
+23.3% (107,252 accepted of 459,675 proposed draft tokens), measured
+across all requests since the server started rather than on this
+probe alone. These figures describe one short-prompt probe at server
+defaults, not operator-prompt throughput; remeasure on the intended
+workload before quoting them elsewhere.
+
 ## Timing
 
 Report time to first token, generated-token count, total generation time,

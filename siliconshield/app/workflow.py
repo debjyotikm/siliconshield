@@ -247,6 +247,8 @@ def run_verilator_check(rtl, check, workdir, label):
 
 def apply_patch(rtl, replacements):
     """Apply string replacements whose nonempty anchors each have one exact match."""
+    if not isinstance(rtl, str):
+        raise ValueError("Patch needs RTL text to rewrite")
     if not isinstance(replacements, (list, tuple)) or not replacements:
         raise ValueError("Patch requires a nonempty list of replacement pairs")
     patched = rtl
@@ -298,8 +300,38 @@ def _normalize_proposal(result, rtl):
     )  # validates every anchor before application
 
 
+def _validate_case(case):
+    """Reject malformed cases before any tool runs."""
+    if not isinstance(case, dict):
+        raise ValueError("Investigation case must be an object")
+    for key in ("name", "rtl", "requirement"):
+        value = case.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("Investigation case needs non-empty text " + key)
+    if "assumptions" in case and not isinstance(case["assumptions"], str):
+        raise ValueError("Investigation assumptions must be text")
+    for key in ("protected_signals", "control_signals"):
+        signals = case.get(key, [])
+        if not isinstance(signals, list) or any(
+            not isinstance(entry, str) for entry in signals
+        ):
+            raise ValueError("Investigation %s must be a string list" % key)
+    checks = case.get("checks", [])
+    if not isinstance(checks, list):
+        raise ValueError("Investigation checks must be a list")
+    for check in checks:
+        if not isinstance(check, dict):
+            raise ValueError("Each investigation check must be an object")
+        for key in ("name", "kind", "testbench"):
+            if not isinstance(check.get(key), str) or not check[key].strip():
+                raise ValueError("Each investigation check needs text " + key)
+
+
 def investigate(case, output, assessor=None, proposer=None):
     """Run the full investigation for one case dict; write report.json/report.md."""
+    _validate_case(case)
+    if not isinstance(output, (str, Path)) or not str(output).strip():
+        raise ValueError("Investigation output must be a path")
     output = Path(output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     # A rerun must not present the previous run's checks, candidate,
@@ -315,7 +347,13 @@ def investigate(case, output, assessor=None, proposer=None):
     assessor = (
         assessor or SecurityAssessor.from_environment() or UnavailableAssessor()
     )
+    if assessor is not None and not callable(getattr(assessor, "assess", None)):
+        raise ValueError("Investigation assessor must provide assess()")
+    if proposer is not None and not callable(proposer):
+        raise ValueError("Investigation proposer must be callable")
     assessment = assessor.assess(requirement, assumptions, rtl)
+    if not isinstance(assessment, dict):
+        raise ValueError("Security assessor must return an object")
     findings = relevant_statements(
         rtl, case.get("protected_signals", []), case.get("control_signals", [])
     )
@@ -541,6 +579,8 @@ def _conclude(case, original, patched, assessment):
 
 def report_assessment(report):
     """Security assessment, accepting reports written before the rename."""
+    if not isinstance(report, dict):
+        raise ValueError("Investigation report must be an object")
     return (
         report.get("security_assessment") or report.get("laya_assessment") or {}
     )

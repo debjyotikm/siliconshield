@@ -77,6 +77,8 @@ def read_bundle(path: Path, model: str) -> dict[str, Any]:
     The digest detects damage; it is not a signature against a malicious writer.
     The bundle directory must have the same owner as the campaign configuration.
     """
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Procedure bundle path must be a path")
     bundle = read_json(path)
     if not isinstance(bundle, dict):
         raise ValueError("Procedure bundle must be an object")

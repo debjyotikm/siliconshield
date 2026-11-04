@@ -59,6 +59,8 @@ def model_status(status, manifest=None, schedule=None):
     the best / selected / latest checkpoint steps, so a controller can tell
     a transfer gain with a failed gate apart from an all-green run.
     """
+    if not isinstance(status, dict):
+        raise ValueError("Run status must be an object")
     result = {}
     for name in ("job.json", "execution.json", "status.json"):
         record = status.get(name)
@@ -96,9 +98,14 @@ def model_status(status, manifest=None, schedule=None):
             }
     report = status.get("report.json")
     if isinstance(report, dict):
+        selected = report.get("selected_checkpoint", {})
+        if selected is None:
+            selected = {}
+        if not isinstance(selected, dict):
+            raise ValueError("Report checkpoint reference is malformed")
         result["report"] = {
             "evaluation_role": report.get("evaluation_role", "development"),
-            "selected_step": report.get("selected_checkpoint", {}).get("step"),
+            "selected_step": selected.get("step"),
             "test_evaluated": report.get("test_evaluated"),
         }
         for field in (
@@ -123,9 +130,12 @@ def model_status(status, manifest=None, schedule=None):
                 }
         acceptance = report.get("development_acceptance")
         if isinstance(acceptance, dict):
+            reasons = acceptance.get("reasons", [])
+            if not isinstance(reasons, list):
+                raise ValueError("Acceptance reasons are malformed")
             result["report"]["acceptance"] = {
                 "accepted": bool(acceptance.get("accepted")),
-                "reasons": list(acceptance.get("reasons", [])),
+                "reasons": list(reasons),
             }
         progress = report.get("progress", {})
         if isinstance(progress, dict):
@@ -142,9 +152,9 @@ def model_status(status, manifest=None, schedule=None):
                 )
                 if key in progress
             }
-            result["report"]["selection"]["selected_step"] = (
-                report.get("selected_checkpoint") or {}
-            ).get("step")
+            result["report"]["selection"]["selected_step"] = selected.get(
+                "step"
+            )
         if manifest is not None:
             views, retention_passed = _latest_view_metrics(manifest)
             if views:
@@ -161,7 +171,9 @@ def _latest_view_metrics(manifest):
 
     Returns (views_dict_or_None, retention_passed_or_None).
     """
-    output = (manifest or {}).get("output")
+    if not isinstance(manifest, dict):
+        raise ValueError("Run manifest must be an object")
+    output = manifest.get("output")
     if not output:
         return None, None
     events = Path(output) / "events.jsonl"
@@ -172,6 +184,8 @@ def _latest_view_metrics(manifest):
         try:
             record = json.loads(line)
         except ValueError:
+            continue
+        if not isinstance(record, dict):
             continue
         if record.get("event") not in ("initial_development", "development"):
             continue
@@ -211,6 +225,8 @@ def development_history(manifest):
     measurements behind the flag must be visible. Histories longer than the
     limit keep the most recent entries and report truncation explicitly.
     """
+    if not isinstance(manifest, dict):
+        raise ValueError("Run manifest must be an object")
     output = manifest.get("output")
     if not output:
         return {"entries": [], "complete": True, "total": 0}
@@ -222,6 +238,8 @@ def development_history(manifest):
         try:
             record = json.loads(line)
         except ValueError:
+            continue
+        if not isinstance(record, dict):
             continue
         if record.get("event") not in ("initial_development", "development"):
             continue
@@ -288,10 +306,12 @@ def schedule_status(manifest, status):
     The controller must be able to distinguish a cosine-schedule LR movement
     from a plateau intervention (lr_scale change) and from an operator action.
     """
-    manifest = manifest or {}
-    status = status or {}
+    if not isinstance(manifest, dict) or not isinstance(status, dict):
+        raise ValueError("Schedule status needs a manifest and run status")
     report = status.get("report.json", {})
     signature = report.get("signature", {}) if isinstance(report, dict) else {}
+    if not isinstance(signature, dict):
+        signature = {}
     schedule = {
         key: signature.get(key)
         for key in (
@@ -319,6 +339,8 @@ def schedule_status(manifest, status):
                 try:
                     record = json.loads(line)
                 except ValueError:
+                    continue
+                if not isinstance(record, dict):
                     continue
                 if record.get("event") == "learning_rate_reduced":
                     reductions.append(
@@ -348,10 +370,12 @@ def stop_evidence(manifest, status):
     Regression is checked on the pooled metrics and on each transfer/retention
     view, so a view-specific regression cannot hide behind a pooled average.
     """
-    execution, latest = (
-        status.get("execution.json", {}),
-        status.get("status.json", {}),
-    )
+    if not isinstance(status, dict):
+        raise ValueError("Run status must be an object")
+    execution = status.get("execution.json", {})
+    latest = status.get("status.json", {})
+    if not isinstance(execution, dict) or not isinstance(latest, dict):
+        raise ValueError("Run status records are malformed")
     if execution.get("phase") == "failed" or latest.get("error"):
         return True
     for name in ("loss", "gradient_norm_before_clip"):
@@ -382,6 +406,12 @@ class OperatorTools:
         self.inspected = False
 
     def dispatch(self, name, args):
+        if not isinstance(self.manifest, dict) or not isinstance(
+            self.manifest.get("experiment_id"), str
+        ):
+            raise ValueError("Bound run manifest is malformed")
+        if not isinstance(args, dict):
+            raise ValueError("Tool arguments must be an object")
         run_id = self.manifest["experiment_id"]
         if args.get("run_id") != run_id:
             raise ValueError(
@@ -397,6 +427,14 @@ class OperatorTools:
                 else "unknown"
             )
             latest = status.get("status.json", {})
+            if not isinstance(latest, dict):
+                raise ValueError("Run status records are malformed")
+            progress = latest.get("progress", {})
+            if not isinstance(progress, dict):
+                raise ValueError("Run status records are malformed")
+            execution = status.get("execution.json", {})
+            if not isinstance(execution, dict):
+                raise ValueError("Run status records are malformed")
             return {
                 "run_id": run_id,
                 "phase": "training"
@@ -404,13 +442,8 @@ class OperatorTools:
                 else self.manifest.get("phase"),
                 "operator_phase": self.manifest.get("phase"),
                 "systemd": live,
-                "step": latest.get(
-                    "step", latest.get("progress", {}).get("step", 0)
-                ),
-                "execution_failed": status.get("execution.json", {}).get(
-                    "phase"
-                )
-                == "failed",
+                "step": latest.get("step", progress.get("step", 0)),
+                "execution_failed": execution.get("phase") == "failed",
                 "development_history": development_history(self.manifest),
                 "stop_evidence_present": stop_evidence(self.manifest, status)
                 if self.manifest.get("output")
@@ -435,7 +468,9 @@ class OperatorTools:
                     self.operator.reservation.path.parent / "owner.json"
                 )
                 if owner_path.exists():
-                    owner = json.loads(owner_path.read_text()).get("identity")
+                    record = json.loads(owner_path.read_text())
+                    if isinstance(record, dict):
+                        owner = record.get("identity")
             return {
                 "run_id": run_id,
                 "gpus": self.manifest.get("gpus", [0, 1, 2]),
@@ -492,7 +527,12 @@ def run_cycle(operator, manifest, client, output, max_turns=12):
     if decision is None:
         return manifest, None
     action = decision["action"]
-    final = json.loads(history[-1].get("content", ""))
+    try:
+        final = json.loads(history[-1].get("content", ""))
+    except (ValueError, TypeError, IndexError, AttributeError) as exc:
+        raise ValueError(
+            "Final response must match the recorded action and run"
+        ) from exc
     if final != final_payload(action, run_id=run_id):
         raise ValueError(
             "Final response must match the recorded action and run"
@@ -528,6 +568,10 @@ def run_cycle(operator, manifest, client, output, max_turns=12):
 
 
 def run_operator(config, client=None, operator=None, sleep=None):
+    if not isinstance(config, dict):
+        raise ValueError("Operator config must be an object")
+    if not config.get("output") or not isinstance(config["output"], str):
+        raise ValueError("Operator config needs output")
     output = Path(config["output"])
     output.mkdir(parents=True, exist_ok=True)
     with (output / ".operator.lock").open("a") as lock:
@@ -537,6 +581,9 @@ def run_operator(config, client=None, operator=None, sleep=None):
 
 def _run_operator(config, client=None, operator=None, sleep=None):
     """Bounded unattended loop over one preauthorized experiment."""
+    for key in ("profile", "experiment_id"):
+        if not config.get(key) or not isinstance(config[key], str):
+            raise ValueError("Operator config needs " + key)
     profile = config["profile"]
     operator = operator or Operator(profile)
     client = client or ChatClient(
@@ -560,12 +607,20 @@ def _run_operator(config, client=None, operator=None, sleep=None):
     # The CLI never passes sleep, so the default must honor poll_seconds.
     sleep = sleep or time.sleep
     poll = config.get("poll_seconds", 60)
+    if not isinstance(poll, (int, float)) or isinstance(poll, bool) or poll < 0:
+        raise ValueError("Operator config needs poll_seconds")
+    budget = config.get("max_cycles", 8)
+    if not isinstance(budget, int) or isinstance(budget, bool) or budget < 0:
+        raise ValueError("Operator config needs max_cycles")
     status_path = output / "operator-status.json"
-    cycles = (
-        json.loads(status_path.read_text()).get("cycles", [])
-        if status_path.exists()
-        else []
-    )
+    cycles = []
+    if status_path.exists():
+        record = json.loads(status_path.read_text())
+        if not isinstance(record, dict) or not isinstance(
+            record.get("cycles", []), list
+        ):
+            raise ValueError("Operator status is unreadable")
+        cycles = record.get("cycles", [])
 
     def persist(status_manifest, job_running):
         atomic_json(
@@ -580,11 +635,14 @@ def _run_operator(config, client=None, operator=None, sleep=None):
             },
         )
 
-    for _ in range(config.get("max_cycles", 8)):
+    for _ in range(budget):
         if hasattr(operator, "manifest_path"):
             path = operator.manifest_path(config["experiment_id"])
             if path.exists():
-                manifest = json.loads(path.read_text())
+                reread = json.loads(path.read_text())
+                if not isinstance(reread, dict):
+                    raise ValueError("Run manifest is unreadable")
+                manifest = reread
         if (
             manifest["phase"] == "report"
             and manifest.get("terminal") == "complete"
@@ -622,9 +680,16 @@ def _run_operator(config, client=None, operator=None, sleep=None):
             manifest, executed = run_cycle(operator, manifest, client, output)
         except Exception as exc:  # endpoint/tunnel failure: job stays owned by systemd; keep observing
             if hasattr(operator, "manifest_path"):
-                manifest = json.loads(
-                    operator.manifest_path(config["experiment_id"]).read_text()
-                )
+                try:
+                    reread = json.loads(
+                        operator.manifest_path(
+                            config["experiment_id"]
+                        ).read_text()
+                    )
+                except (OSError, ValueError):
+                    reread = None
+                if isinstance(reread, dict):
+                    manifest = reread
             job_running = (
                 systemd_state(manifest["unit"], operator.runner)["state"]
                 == "running"

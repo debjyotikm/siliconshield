@@ -37,6 +37,8 @@ def load_pairs(path, include_regression_only=False):
         validate_pair,
     )
 
+    if not isinstance(path, (str, os.PathLike)):
+        raise ValueError("Pair file path must be a path")
     pairs = [
         json.loads(line)
         for line in Path(path).read_text().splitlines()
@@ -47,7 +49,10 @@ def load_pairs(path, include_regression_only=False):
     for pair in pairs:
         issues = validate_pair(pair)
         if issues:
-            raise ValueError("Pair %s invalid: %s" % (pair.get("id"), issues))
+            identifier = (
+                pair.get("id") if isinstance(pair, dict) else repr(pair)
+            )
+            raise ValueError("Pair %s invalid: %s" % (identifier, issues))
     if len({p["id"] for p in pairs}) != len(pairs):
         raise ValueError("Duplicate pair IDs")
     if not include_regression_only:

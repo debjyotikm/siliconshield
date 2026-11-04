@@ -83,3 +83,10 @@ def test_existing_output_is_preserved(population, tmp_path):
     with pytest.raises(FileExistsError):
         preparation.prepare(str(source), output)
     assert {p.name: p.read_bytes() for p in output.iterdir()} == before
+
+
+def test_prepare_rejects_malformed_arguments(tmp_path):
+    with pytest.raises(ValueError, match="non-empty string"):
+        preparation.prepare(5, tmp_path / "a")
+    with pytest.raises(ValueError, match="must be a path"):
+        preparation.prepare("hf://example", str(tmp_path / "b"))

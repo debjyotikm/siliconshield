@@ -33,12 +33,22 @@ def max_calls_for_cycles(cycles: Any) -> int:
 
 def execute(campaign_path: Path) -> None:
     """Reconcile the real operator and preserve its final status on disk."""
+    if not isinstance(campaign_path, (str, Path)):
+        raise ValueError("Toy campaign path must be a path")
+    campaign_path = Path(campaign_path)
     folder = campaign_path.resolve().parent
     campaign = json.loads(campaign_path.read_text())
+    if not isinstance(campaign, dict) or not isinstance(
+        campaign.get("operator"), dict
+    ):
+        raise ValueError("Toy campaign needs an operator object")
     cfg = campaign["operator"]
-    transport = {
-        key: cfg[key] for key in ("endpoint", "model", "ssh_host") if key in cfg
-    }
+    transport = {}
+    for key in ("endpoint", "model", "ssh_host"):
+        if key in cfg:
+            if not isinstance(cfg[key], str):
+                raise ValueError("Toy operator transport needs text " + key)
+            transport[key] = cfg[key]
 
     def run(spec: dict[str, Any]) -> dict[str, Any]:
         if (folder / "cancel.request").exists():

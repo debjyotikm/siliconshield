@@ -3,6 +3,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location(
     "export_check", ROOT / "tools" / "export_check.py"
@@ -25,3 +27,10 @@ def test_reviewed_public_files_pass():
         )
         == []
     )
+
+
+def test_check_rejects_malformed_inputs():
+    with pytest.raises(ValueError, match="file name"):
+        checker.check(5, b"x")
+    with pytest.raises(ValueError, match="file bytes"):
+        checker.check("a.py", "x")

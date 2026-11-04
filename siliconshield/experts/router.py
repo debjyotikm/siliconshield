@@ -57,19 +57,38 @@ def _area_tier(
     device, precision, or runtime build does not describe this
     run, so it stays unrated rather than mislabeled.
     """
+    if not isinstance(profile, dict):
+        raise ValueError("Capability profile must be an object")
     evidence = profile.get("routing_evidence")
     if not evidence:
         return "unrated"
-    identity = evidence["execution_identity"]
-    if any(
-        identity[key] != dict(profile)[key]
-        for key in ("checkpoint_sha256", "question_contract")
-    ):
-        return "unrated"
+    if not isinstance(evidence, dict):
+        raise ValueError("Routing evidence must be an object")
+    identity = evidence.get("execution_identity")
+    if not isinstance(identity, dict):
+        raise ValueError("Routing evidence needs an execution identity")
+    for key in ("checkpoint_sha256", "question_contract"):
+        if identity.get(key) != profile.get(key):
+            return "unrated"
     if execution is not None and identity != execution:
         return "unrated"
-    counts = evidence["areas"].get(area)
-    if counts is None or counts["errors"]:
+    areas = evidence.get("areas")
+    if not isinstance(areas, dict):
+        raise ValueError("Routing evidence needs area counts")
+    counts = areas.get(area)
+    if counts is None:
+        return "unrated"
+    if not isinstance(counts, dict):
+        raise ValueError("Routing area counts must be an object")
+    for key in ("correct", "total", "errors", "violations", "false_safe"):
+        value = counts.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("Routing area counts must be counts")
+    if counts["correct"] > counts["total"]:
+        raise ValueError("Routing area counts are inconsistent")
+    if counts["false_safe"] > counts["violations"]:
+        raise ValueError("Routing area counts are inconsistent")
+    if counts["errors"]:
         return "unrated"
     if not counts["violations"]:
         return "unrated"
@@ -127,6 +146,22 @@ def route_scope(
         not isinstance(tag, str) or not tag.strip() for tag in scope
     ):
         raise ValueError("Scope must be a list of nonempty mechanism tags")
+    if not isinstance(profiles, list):
+        raise ValueError("Routing needs a profile list")
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            raise ValueError("Capability profile must be an object")
+        if not profile.get("id") or not isinstance(profile["id"], str):
+            raise ValueError("Capability profile needs an id")
+        supported = profile.get("supported_mechanisms")
+        if not isinstance(supported, list) or any(
+            not isinstance(tag, str) for tag in supported
+        ):
+            raise ValueError("Supported mechanisms must be a string list")
+    if execution_identities is not None and not isinstance(
+        execution_identities, Mapping
+    ):
+        raise ValueError("Execution identities must be a mapping")
     tags = list(dict.fromkeys(tag.strip() for tag in scope))
     covered_tags: dict[str, list[str]] = {tag: [] for tag in tags}
     full: list[CapabilityProfile] = []

@@ -27,6 +27,25 @@ def follow(args):
         return _follow(args)
 
 
+def _inspect_record(stdout):
+    """Parse one docker-inspect record or refuse the container state."""
+    try:
+        record = json.loads(stdout)[0]
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(
+            "Cannot read the evaluation container record"
+        ) from exc
+    if not isinstance(record, dict):
+        raise RuntimeError("Cannot read the evaluation container record")
+    for key in ("Config", "State"):
+        if not isinstance(record.get(key), dict):
+            raise RuntimeError("Cannot read the evaluation container record")
+    labels = record["Config"].get("Labels", {})
+    if not isinstance(labels, dict):
+        raise RuntimeError("Cannot read the evaluation container record")
+    return record
+
+
 def _follow(args):
     root = Path(args.root).resolve()
     status = root / "campaign-status.json"
@@ -42,6 +61,8 @@ def _follow(args):
         raise RuntimeError("Training container exited with code " + finished)
     run = root / "runs" / args.run
     state = read_json(run / "status.json")
+    if not isinstance(state, dict):
+        raise RuntimeError("Training status is unreadable")
     if state.get("phase") != "training_complete":
         raise RuntimeError(
             "Training exited without a complete training result: "
@@ -53,7 +74,7 @@ def _follow(args):
         ["docker", "inspect", container], capture_output=True, text=True
     )
     if existing.returncode == 0:
-        record = json.loads(existing.stdout)[0]
+        record = _inspect_record(existing.stdout)
         if (
             record["Config"].get("Labels", {}).get("laya.glimmer.run")
             != args.run
@@ -61,7 +82,10 @@ def _follow(args):
             raise RuntimeError(
                 "Evaluation container name is owned by another run"
             )
-        if not record["State"]["Running"] and record["State"]["ExitCode"] != 0:
+        if (
+            not record["State"].get("Running")
+            and record["State"].get("ExitCode") != 0
+        ):
             raise RuntimeError(
                 "Existing evaluation failed; inspect its saved evidence before retrying"
             )
@@ -80,16 +104,21 @@ def _follow(args):
         )
         key_args = []
         manifest = run.parent.parent / "data" / args.run / "manifest.json"
-        if (
-            manifest.exists()
-            and read_json(manifest).get("signature")
-            and not key
-        ):
-            raise ValueError(
-                "Authenticated dataset requires --dataset-key for evaluation"
-            )
+        if manifest.exists():
+            record = read_json(manifest)
+            if not isinstance(record, dict):
+                raise ValueError("Dataset manifest is unreadable")
+            if record.get("signature") and not key:
+                raise ValueError(
+                    "Authenticated dataset requires --dataset-key for evaluation"
+                )
         if key:
-            key = Path(key).resolve(strict=True)
+            try:
+                key = Path(key).resolve(strict=True)
+            except OSError as exc:
+                raise ValueError(
+                    "Dataset key file is missing: " + str(key)
+                ) from exc
             key_args = [
                 "-v",
                 f"{key}:/workspace/dataset-key:ro",

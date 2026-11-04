@@ -423,6 +423,14 @@ def verify(
 def compile_rtl(
     code: str, evidence_id: str, iverilog: str, directory: Any
 ) -> dict[str, Any]:
+    if (
+        not isinstance(evidence_id, str)
+        or not evidence_id
+        or "/" in evidence_id
+        or "\\" in evidence_id
+        or ".." in evidence_id
+    ):
+        raise ValueError("compile evidence id escapes its folder")
     folder = Path(directory) / "compiled" / evidence_id
     folder.mkdir(parents=True, exist_ok=True)
     source = folder / "design.v"
@@ -897,6 +905,8 @@ def process_case(case, yosys, verification):
 
 
 def validate_dataset(splits):
+    if not splits:
+        raise ValueError("dataset has no splits")
     owners, ids, states = {}, set(), set()
     for split, rows in splits.items():
         labels = Counter()

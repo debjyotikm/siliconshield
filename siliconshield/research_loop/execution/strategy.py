@@ -27,13 +27,26 @@ FITTING_SCHEDULE_KEYS = (
 
 
 def fitting_plan(experiment_prefix, base_overrides=None, *, arms):
+    if not experiment_prefix or not isinstance(experiment_prefix, str):
+        raise ValueError("Fitting plans need an experiment prefix")
+    if base_overrides is not None and not isinstance(base_overrides, dict):
+        raise ValueError("Fitting common overrides must be an object")
+    if not isinstance(arms, list) or not arms:
+        raise ValueError("Fitting plans need at least one arm")
     plan = []
     for index, arm in enumerate(arms):
+        if not isinstance(arm, dict):
+            raise ValueError("Fitting arm must be an object")
+        if not arm.get("name") or not isinstance(arm["name"], str):
+            raise ValueError("Fitting arm needs a name")
+        if not isinstance(arm.get("overrides"), dict):
+            raise ValueError("Fitting arm needs overrides")
         overrides = {
             **(base_overrides or {}),
             **copy.deepcopy(arm["overrides"]),
         }
-        if not overrides.get("limit_train_rows"):
+        limit = overrides.get("limit_train_rows")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
             raise ValueError(
                 "Fitting plans require a positive TRAIN-only row limit"
             )
@@ -50,11 +63,21 @@ def fitting_plan(experiment_prefix, base_overrides=None, *, arms):
 
 
 def assess_fitting(results, min_gain=0.05):
+    if (
+        isinstance(min_gain, bool)
+        or not isinstance(min_gain, (int, float))
+        or not math.isfinite(min_gain)
+    ):
+        raise ValueError("Fitting needs a finite gain threshold")
+    if not isinstance(results, list):
+        raise ValueError("Fitting assessment needs a result list")
     assessed = []
     for result in results:
+        if not isinstance(result, dict):
+            raise ValueError("Fitting result must be an object")
         initial, final = (
-            result["initial_train_accuracy"],
-            result["train_accuracy"],
+            result.get("initial_train_accuracy"),
+            result.get("train_accuracy"),
         )
         if any(
             isinstance(v, bool)
@@ -64,6 +87,13 @@ def assess_fitting(results, min_gain=0.05):
             for v in (initial, final)
         ):
             raise ValueError("Fitting requires finite measured accuracies")
+        nll = result.get("nll")
+        if (
+            isinstance(nll, bool)
+            or not isinstance(nll, (int, float))
+            or not math.isfinite(nll)
+        ):
+            raise ValueError("Fitting requires a finite measured NLL")
         gain = final - initial
         assessed.append(
             {**result, "gain": gain, "promotable": gain >= min_gain}

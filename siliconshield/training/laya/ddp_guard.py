@@ -21,10 +21,15 @@ def count_backward_calls(source_path: Path) -> int:
     comments, docstrings, and string literals cannot inflate
     the count or mask a second call site.
     """
-    tree = ast.parse(
-        Path(source_path).read_text(encoding="utf-8"),
-        filename=str(source_path),
-    )
+    if not isinstance(source_path, (str, Path)):
+        raise ValueError("DDP gate needs a trainer source path")
+    try:
+        tree = ast.parse(
+            Path(source_path).read_text(encoding="utf-8"),
+            filename=str(source_path),
+        )
+    except SyntaxError as exc:
+        raise ValueError("Trainer source does not parse: %s" % exc) from exc
     return sum(
         1
         for node in ast.walk(tree)
@@ -51,6 +56,8 @@ def require_single_backward(source_path: Path) -> int:
 
 def training_loop_uses_no_sync(source_path: Path) -> bool:
     """Check the accumulation loop guards non-final reductions."""
+    if not isinstance(source_path, (str, Path)):
+        raise ValueError("DDP gate needs a trainer source path")
     text = Path(source_path).read_text(encoding="utf-8")
     return "ddp.no_sync()" in text and "gradient_as_bucket_view" in text
 

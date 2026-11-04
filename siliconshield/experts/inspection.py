@@ -176,6 +176,12 @@ def inspect_structure(rtl: str, known_symbols: list[str]) -> StructureMap:
     hierarchy and procedural dataflow are deliberately left to a
     real SystemVerilog tool.
     """
+    if not isinstance(rtl, str):
+        raise ValueError("Structure inspection needs RTL text")
+    if not isinstance(known_symbols, list) or any(
+        not isinstance(name, str) for name in known_symbols
+    ):
+        raise ValueError("Known symbols must be a string list")
     code = _mask(rtl)
     declared, state = _declarations(code)
     guards = []

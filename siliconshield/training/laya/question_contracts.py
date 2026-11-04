@@ -109,8 +109,10 @@ def match_version(questions):
 
 def validate_rows(rows, version):
     """Fail closed unless every row carries the pinned contract."""
-    if version not in _CONTRACTS:
+    if not isinstance(version, str) or version not in _CONTRACTS:
         raise ValueError("unknown question contract: %r" % (version,))
+    if not isinstance(rows, list):
+        raise ValueError("contract validation needs a list of rows")
     for row in rows:
         if not isinstance(row, dict) or "questions" not in row:
             raise ValueError(
@@ -128,6 +130,8 @@ def validate_rows(rows, version):
 
 def write_export_record(export_dir, version):
     """Persist the contract record alongside exported weights."""
+    if not isinstance(export_dir, (str, Path)):
+        raise ValueError("export directory must be a path")
     record = {
         "version": version,
         "digest": digest_for(version),

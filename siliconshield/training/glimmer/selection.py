@@ -22,6 +22,8 @@ IDENTITIES = (
 
 def _rows(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """Validate recorded outcomes before deriving selection statistics."""
+    if not isinstance(report, dict):
+        raise ValueError("Replay selection requires a report object")
     values = report.get("results")
     if not isinstance(values, list) or not values:
         raise ValueError("Replay selection requires nonempty results")
@@ -29,6 +31,8 @@ def _rows(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
         raise ValueError("Replay population count differs")
     rows = {}
     for row in values:
+        if not isinstance(row, dict):
+            raise ValueError("Replay rows must be objects")
         identity = row.get("episode_id")
         if not isinstance(identity, str) or not identity or identity in rows:
             raise ValueError("Replay IDs must be unique nonempty strings")
@@ -42,6 +46,8 @@ def _rows(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
                 raise ValueError("Replay metric must be boolean: " + key)
         rows[identity] = row
     totals = report.get("totals", {})
+    if not isinstance(totals, dict):
+        raise ValueError("Replay totals must be an object")
     for key in METRICS:
         if totals.get(key) != sum(row[key] for row in values):
             raise ValueError("Replay totals differ: " + key)
@@ -124,8 +130,10 @@ def select_replay_candidate(
     verified total. This permits using the serving adapter and a newer research
     adapter together without trading one adapter's strengths for the other's.
     """
-    if not references:
+    if not isinstance(references, dict) or not references:
         raise ValueError("At least one reference is required")
+    if not isinstance(candidates, dict):
+        raise ValueError("Replay selection needs candidate reports")
     checks = {}
     eligible = []
     for name, report in candidates.items():

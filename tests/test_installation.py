@@ -205,3 +205,31 @@ def test_release_fingerprints_match_worker_identity_contract():
     manifest = tomllib.loads(MANIFEST.read_text())
     for record in manifest["models"].values():
         assert record["export_sha256"] == digest(record["files"])
+
+
+def test_pinned_download_rejects_malformed_records(tmp_path):
+    """Malformed manifests fail before any file is touched."""
+    import pytest
+
+    from tools.download_models import prepare_model
+
+    record = {
+        "repo_id": "example/synthetic",
+        "revision": "a" * 40,
+        "files": {},
+        "export_sha256": "0" * 64,
+    }
+    with pytest.raises(ValueError, match="pinned files"):
+        prepare_model(["x"], tmp_path / "a")
+    with pytest.raises(ValueError, match="pinned files"):
+        prepare_model(dict(record, files=["x"]), tmp_path / "b")
+    with pytest.raises(ValueError, match="must be a path"):
+        prepare_model(record, str(tmp_path / "c"))
+    with pytest.raises(ValueError, match="missing revision"):
+        prepare_model(
+            {k: v for k, v in record.items() if k != "revision"},
+            tmp_path / "d",
+        )
+    evil = dict(record, files={"../escape.safetensors": "0" * 64})
+    with pytest.raises(ValueError, match="escapes its destination"):
+        prepare_model(evil, tmp_path / "e")

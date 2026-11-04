@@ -61,6 +61,10 @@ def prepare(source: str, output: Path) -> PreparationReceipt:
         ValueError: The source or reviewed population fails validation.
         OSError: The source cannot be read or output cannot be published.
     """
+    if not isinstance(source, str) or not source:
+        raise ValueError("Benchmark source must be a non-empty string")
+    if not isinstance(output, Path):
+        raise ValueError("Benchmark output must be a path")
     output = output.absolute()
     if os.path.lexists(output):
         raise FileExistsError(f"Use a new output directory: {output}")

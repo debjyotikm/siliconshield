@@ -20,6 +20,8 @@ def digest(value: Any) -> str:
 
 def text_digest(text: str) -> str:
     """Hash exact input bytes, without whitespace normalization."""
+    if not isinstance(text, str):
+        raise ValueError("State digest needs text")
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
@@ -138,6 +140,8 @@ def state_sections(state: str) -> tuple[str, str, str]:
     Headers are exact complete lines. Only the pre-RTL headers are parsed,
     so comments in the RTL cannot replace the judged requirement.
     """
+    if not isinstance(state, str):
+        raise ValueError("State sections need text")
     lines = state.splitlines()
     if not lines or lines[0] != "REQUIREMENT" or "RTL" not in lines:
         raise ValueError(

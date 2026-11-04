@@ -26,7 +26,11 @@ RANKINGS = (RANKING_V1_TRANSFER, RANKING_V2_RETENTION)
 
 
 def attach_views(result, rows, logits, config, summarize):
-    definitions = config["views"]
+    if not isinstance(config, dict):
+        raise ValueError("Development views need a config object")
+    definitions = config.get("views")
+    if not isinstance(definitions, dict) or not definitions:
+        raise ValueError("Development views need named populations")
     memberships = {
         name: population_indices(rows, definition)
         for name, definition in definitions.items()
@@ -39,12 +43,12 @@ def attach_views(result, rows, logits, config, summarize):
     views = {}
     for name, indices in memberships.items():
         if not indices:
-            raise ValueError("Empty development view: " + name)
+            raise ValueError("Empty development view: " + str(name))
         views[name] = summarize(
             [rows[i] for i in indices], [logits[i] for i in indices]
         )
-    selected = config["selection_view"]
-    if selected not in views:
+    selected = config.get("selection_view")
+    if not isinstance(selected, str) or selected not in views:
         raise ValueError("Missing selection view")
     if not config.get("single_view_study"):
         if config.get("retention_view") not in views:
@@ -66,20 +70,40 @@ def config_from_views_manifest(manifest: dict) -> dict:
     if manifest.get("schema") != "siliconshield-dev-views-v3":
         raise ValueError("Unsupported development views manifest")
     row_ids = []
-    for template in manifest.get("views", []):
+    templates = manifest.get("views", [])
+    if not isinstance(templates, list):
+        raise ValueError("Selection views manifest needs a views list")
+    for template in templates:
+        if not isinstance(template, dict):
+            raise ValueError("Selection views template is not an object")
         if template.get("review") != "agree":
             raise ValueError(
                 "Unreviewed template in selection views: "
                 + str(template.get("record_id"))
             )
-        for triplet in template.get("triplets", []):
-            row_ids.extend(
-                [
-                    triplet["satisfies"],
-                    triplet["violates"],
-                    triplet["insufficient"],
-                ]
+        triplets = template.get("triplets", [])
+        if not isinstance(triplets, list):
+            raise ValueError(
+                "Selection views triplets need a list: "
+                + str(template.get("record_id"))
             )
+        for triplet in triplets:
+            if not isinstance(triplet, dict):
+                raise ValueError("Selection views triplet is not an object")
+            try:
+                row_ids.extend(
+                    [
+                        triplet["satisfies"],
+                        triplet["violates"],
+                        triplet["insufficient"],
+                    ]
+                )
+            except KeyError as exc:
+                raise ValueError(
+                    "Selection views triplet lacks %s" % exc
+                ) from exc
+    if not all(isinstance(name, str) and name for name in row_ids):
+        raise ValueError("Selection views row ids must be strings")
     if not row_ids:
         raise ValueError("Selection views manifest names no rows")
     if len(set(row_ids)) != len(row_ids):
@@ -136,20 +160,30 @@ def new_coverage_gain_ok(new_accuracy, old_accuracy, min_gain_pp):
     return (new_accuracy - old_accuracy) * 100 >= min_gain_pp
 
 
+def _confusion_counts(matrix, what):
+    """Return a validated 3x3 count matrix or raise ValueError."""
+    if (
+        not isinstance(matrix, list)
+        or len(matrix) != 3
+        or any(not isinstance(row, list) or len(row) != 3 for row in matrix)
+    ):
+        raise ValueError(what + " needs a 3x3 confusion matrix")
+    for row in matrix:
+        for cell in row:
+            if not isinstance(cell, int) or isinstance(cell, bool) or cell < 0:
+                raise ValueError(what + " holds invalid confusion counts")
+    return matrix
+
+
 def mc_recall_from_confusion(matrix):
     """Missing-context recall from a 3x3 confusion matrix.
 
     Class 2 is insufficient_context; recall is its diagonal over
     its support. An unsupported class recalls vacuously.
     """
-    if (
-        not isinstance(matrix, list)
-        or len(matrix) != 3
-        or any(not isinstance(row, list) or len(row) != 3 for row in matrix)
-    ):
-        raise ValueError("MC recall needs a 3x3 confusion matrix")
+    matrix = _confusion_counts(matrix, "MC recall")
     support = sum(matrix[2])
-    if support <= 0:
+    if support == 0:
         return 1.0
     return matrix[2][2] / support
 
@@ -175,16 +209,14 @@ def _count(block, key):
 
 def _reference_view(block):
     """Freeze one raw trainer view block for selection comparison."""
-    matrix = block.get("confusion")
-    if not isinstance(matrix, list) or len(matrix) != 3:
-        raise ValueError("Reference view needs a confusion matrix")
+    matrix = _confusion_counts(block.get("confusion"), "Reference view")
     families = block.get("per_family")
     if not isinstance(families, dict) or not families:
         raise ValueError("Reference view needs a per-family breakdown")
     table = {}
     for name, entry in families.items():
         if not isinstance(entry, dict):
-            raise ValueError("Reference family entry is invalid: " + name)
+            raise ValueError("Reference family entry is invalid: " + str(name))
         table[name] = {
             "false_safe_count": _count(entry, "false_safe_count"),
             "violation_count": _count(entry, "violation_count"),
@@ -276,7 +308,7 @@ def check_selection_reference(reference):
         for name, entry in families.items():
             if not isinstance(entry, dict):
                 raise ValueError(
-                    "Selection reference family is invalid: " + name
+                    "Selection reference family is invalid: " + str(name)
                 )
             _count(entry, "false_safe_count")
             _count(entry, "violation_count")
@@ -378,7 +410,9 @@ def _reference_view_from_counts(view, role):
             or family_violations <= 0
             or not 0 <= family_fs <= family_violations
         ):
-            raise ValueError("Reference results family is invalid: " + name)
+            raise ValueError(
+                "Reference results family is invalid: " + str(name)
+            )
         table[name] = {
             "false_safe_count": family_fs,
             "violation_count": family_violations,

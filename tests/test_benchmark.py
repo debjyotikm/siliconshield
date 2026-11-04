@@ -605,3 +605,49 @@ def test_per_mechanism_triplets_are_counted():
     _, _, by_mech = metrics.score_predictions(rows, labels, probabilities)
     assert by_mech["synthetic-mech"]["triplets_total"] == 2
     assert by_mech["synthetic-mech"]["triplets_correct"] == 2
+
+
+def test_runner_rejects_malformed_arguments():
+    from siliconshield.benchmark.runner import BenchmarkRunner
+
+    runner = BenchmarkRunner(_runner_data(_rows()))
+    with pytest.raises(ValueError, match="must be callable"):
+        runner.run_model("m", "c", 5)
+    with pytest.raises(ValueError, match="must be callable"):
+        runner.run_model("m", "c", lambda state: None, progress=5)
+    with pytest.raises(ValueError, match="must be an integer"):
+        runner.run_model("m", "c", lambda state: None, limit="x")
+    with pytest.raises(ValueError, match="must be an integer"):
+        runner.run_model("m", "c", lambda state: None, limit=True)
+
+
+def test_sampler_rejects_malformed_arguments():
+    with pytest.raises(ValueError, match="list of row objects"):
+        sample_triplets(5, 0, 7)
+    with pytest.raises(ValueError, match="per_area must be an integer"):
+        sample_triplets(_rows(), "x", 7)
+    with pytest.raises(ValueError, match="must be seedable"):
+        sample_triplets(_rows(), 0, [7])
+
+
+def test_router_eval_rejects_malformed_arguments():
+    from siliconshield.benchmark.router_eval import evaluate_routing
+
+    data = _runner_data(_rows())
+    with pytest.raises(ValueError, match="arbitrate must be callable"):
+        evaluate_routing(data, None, None, 0, 1, arbitrate=5)
+    with pytest.raises(ValueError, match="progress must be callable"):
+        evaluate_routing(data, None, None, 0, 1, progress=5)
+    with pytest.raises(ValueError, match="arbitrate count"):
+        evaluate_routing(data, None, None, 0, 1, arbitrate_per_area="x")
+
+
+def test_compare_rejects_malformed_reports():
+    with pytest.raises(ValueError, match="at least one report"):
+        metrics.compare(5)
+    with pytest.raises(ValueError, match="report objects"):
+        metrics.compare([5])
+    with pytest.raises(ValueError, match="missing 'overall'"):
+        metrics.compare(
+            [{"benchmark_sha256": "d", "model_id": "m", "by_area": {}}]
+        )

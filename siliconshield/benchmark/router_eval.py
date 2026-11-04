@@ -51,6 +51,14 @@ def sample_triplets(
     Raises ValueError when an area holds fewer triplets than asked:
     silent undersampling would skew the area comparison.
     """
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) for row in rows
+    ):
+        raise ValueError("Router evaluation needs a list of row objects.")
+    if isinstance(per_area, bool) or not isinstance(per_area, int):
+        raise ValueError("Router evaluation per_area must be an integer.")
+    if not isinstance(seed, (int, str, bytes, bytearray)):
+        raise ValueError("Router evaluation seed must be seedable.")
     by_area: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for row in rows:
         trips = by_area.setdefault(row["benchmark_area"], {})
@@ -96,6 +104,14 @@ def evaluate_routing(
     progress: Any | None = None,
 ) -> RouterEvalReport:
     """Route and consult sampled rows; score against known labels."""
+    if arbitrate is not None and not callable(arbitrate):
+        raise ValueError("Router evaluation arbitrate must be callable.")
+    if progress is not None and not callable(progress):
+        raise ValueError("Router evaluation progress must be callable.")
+    if isinstance(arbitrate_per_area, bool) or not isinstance(
+        arbitrate_per_area, int
+    ):
+        raise ValueError("Router evaluation arbitrate count must be an int.")
     sampled = sample_triplets(data["rows"], per_area, seed)
     total = len(sampled)
     by_area: dict[str, AreaEval] = {}

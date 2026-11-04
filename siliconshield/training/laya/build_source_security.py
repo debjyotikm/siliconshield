@@ -120,6 +120,13 @@ def checked_rows(case, yosys, iverilog, directory):
 
 
 def materialize(cases, output, verification, yosys, iverilog, workers=8):
+    cases = list(cases)
+    for case in cases:
+        if not isinstance(case, dict):
+            raise ValueError("catalog cases must be objects")
+        for key in ("uid", "split"):
+            if not case.get(key) or not isinstance(case[key], str):
+                raise ValueError("catalog case needs " + key)
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     if (output / "manifest.json").exists():

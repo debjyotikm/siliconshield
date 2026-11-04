@@ -83,7 +83,14 @@ def preservation_teacher_files(profile: dict) -> list[Path]:
     """
     if not profile.get("recipe"):
         return []
-    recipe = read_json(profile["recipe"])
+    if not isinstance(profile["recipe"], str):
+        raise ValueError("Training recipe must name a path")
+    try:
+        recipe = read_json(profile["recipe"])
+    except OSError as exc:
+        raise ValueError(
+            "Missing training recipe file: " + profile["recipe"]
+        ) from exc
     if not isinstance(recipe, dict):
         raise ValueError("Training recipe must be a JSON object")
     config = recipe.get("replay_preservation")
@@ -101,8 +108,14 @@ def preservation_teacher_files(profile: dict) -> list[Path]:
 
 
 def command_for(profile, experiment_id, overrides):
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", experiment_id):
+    if not isinstance(profile, dict):
+        raise ValueError("Job profile must be an object")
+    if not isinstance(experiment_id, str) or not re.fullmatch(
+        r"[a-z0-9][a-z0-9-]{0,63}", experiment_id
+    ):
         raise ValueError("Experiment ID must be a simple stable identifier")
+    if not isinstance(overrides, dict):
+        raise ValueError("Training overrides must be an object")
     if (
         set(overrides)
         - set(FLAGS)
@@ -111,7 +124,10 @@ def command_for(profile, experiment_id, overrides):
         - set(CHOICE_FLAGS)
     ):
         raise ValueError("Unknown training override")
-    values = {**profile.get("defaults", {}), **overrides}
+    defaults = profile.get("defaults", {})
+    if not isinstance(defaults, dict):
+        raise ValueError("Profile defaults must be an object")
+    values = {**defaults, **overrides}
     for key, value in values.items():
         if key in BOOL_FLAGS:
             if not isinstance(value, bool):
@@ -174,12 +190,17 @@ def command_for(profile, experiment_id, overrides):
             "Specify an optimizer-update budget for the experiment"
         )
     gpus = profile.get("gpus", [0, 1, 2])
+    if not isinstance(gpus, list):
+        raise ValueError("GPU profiles are one device or all three devices")
     if len(gpus) == 1:
         (device,) = gpus
         if isinstance(device, bool) or type(device) is not int or device < 0:
             raise ValueError("Single-GPU profiles need one device index")
     elif gpus != [0, 1, 2]:
         raise ValueError("GPU profiles are one device or all three devices")
+    for key in ("source", "runs", "python", "model", "data"):
+        if not profile.get(key) or not isinstance(profile[key], str):
+            raise ValueError("Job profile needs " + key)
     trainer = (
         Path(profile["source"])
         / "siliconshield/training/laya/security_train.py"
@@ -255,6 +276,12 @@ def verify_laya(profile, laya_root):
 
 def service_command(profile, experiment_id, command, laya_root=None):
     """Full systemd-run argv; carries CUDA_VISIBLE_DEVICES and LAYA_ROOT explicitly."""
+    if not isinstance(profile, dict):
+        raise ValueError("Job profile must be an object")
+    if not isinstance(experiment_id, str) or not experiment_id:
+        raise ValueError("Experiment ID must be a simple stable identifier")
+    if not profile.get("source") or not isinstance(profile["source"], str):
+        raise ValueError("Job profile needs source")
     argv = [
         "systemd-run",
         "--user",
@@ -275,6 +302,12 @@ def service_command(profile, experiment_id, command, laya_root=None):
 class SecurityJobs:
     def __init__(self, profile_path):
         self.profile = read_json(profile_path)
+        if not isinstance(self.profile, dict):
+            raise ValueError("Job profile must be an object")
+        if not self.profile.get("runs") or not isinstance(
+            self.profile["runs"], str
+        ):
+            raise ValueError("Job profile needs runs")
         self.root = Path(self.profile["runs"])
         self.root.mkdir(parents=True, exist_ok=True)
 
@@ -314,7 +347,12 @@ class SecurityJobs:
         bound.extend(preservation_teacher_files(self.profile))
         for key in ("recipe", "reporting_contract"):
             if self.profile.get(key):
-                bound.append(Path(self.profile[key]))
+                if not isinstance(self.profile[key], str):
+                    raise ValueError("Job profile path must be a string")
+                candidate = Path(self.profile[key])
+                if not candidate.is_file():
+                    raise ValueError("Missing %s file: %s" % (key, candidate))
+                bound.append(candidate)
         configured_paths = {
             **(self.profile.get("defaults", {})),
             **(overrides or {}),
@@ -418,7 +456,7 @@ class SecurityJobs:
 
 def process_identity(pid: str, proc: Path = Path("/proc")) -> dict:
     """Identify an explicitly approved resident process without using its name."""
-    if not pid.isdecimal():
+    if not isinstance(pid, str) or not pid.isdecimal():
         raise ValueError("Invalid process identifier")
     root = proc / pid
     # comm may contain spaces and parentheses. Fields after its last ')' start
@@ -441,6 +479,8 @@ def qualified_coexistence(
     process. Unknown processes and reused PIDs fail closed. It never stops or
     adopts an existing process. The training launcher must also cap its memory.
     """
+    if not isinstance(sharing, dict):
+        return False
     try:
         allowed = sharing["processes"]
         if not isinstance(allowed, dict) or not allowed:

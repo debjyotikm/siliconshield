@@ -19,9 +19,23 @@ def triplet_integrity(rows, assignment, seen):
     of drawn row indices. Returns split triplets (members across
     pools), triplets with an undrawn member, and the triplet count.
     """
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) for row in rows
+    ):
+        raise ValueError("Triplet audit needs a list of row objects")
+    if not isinstance(assignment, dict) or any(
+        index not in assignment for index in range(len(rows))
+    ):
+        raise ValueError("Triplet audit needs a pool for every row")
+    if not isinstance(seen, (set, frozenset, list, tuple)):
+        raise ValueError("Triplet audit needs a collection of drawn rows")
+    seen_set = set(seen)
     triplets = defaultdict(list)
     for index, row in enumerate(rows):
-        triplets[row["pair_id"]].append(index)
+        pair = row.get("pair_id")
+        if not isinstance(pair, str):
+            raise ValueError("Triplet audit needs string pair ids")
+        triplets[pair].append(index)
     split = sorted(
         pair
         for pair, members in triplets.items()
@@ -30,7 +44,7 @@ def triplet_integrity(rows, assignment, seen):
     broken = sorted(
         pair
         for pair, members in triplets.items()
-        if any(i not in seen for i in members)
+        if any(i not in seen_set for i in members)
     )
     return {"triplets": len(triplets), "split": split, "broken": broken}
 
@@ -62,6 +76,8 @@ def quotas_for_round(schedule, round_index):
             ):
                 raise ValueError("Pool quotas must be positive integers")
         entries[index] = dict(quotas)
+    if isinstance(round_index, bool) or not isinstance(round_index, int):
+        raise ValueError("Quota round index must be an integer")
     earlier = [i for i in entries if i <= round_index]
     if not earlier:
         raise ValueError("No quota entry covers round %d" % round_index)
@@ -86,10 +102,26 @@ def simulate_coverage(
     order exactly like the trainer loop. Returns per-row draw
     counts, epochs consumed, and per-update pool quotas.
     """
-    if grouped_epoch_indices is None:
+    if not callable(grouped_epoch_indices):
         raise ValueError("A sampler callable is required")
+    for name, value in (
+        ("Horizon", horizon_updates),
+        ("World size", world),
+        ("Global batch", global_batch),
+        ("Per-rank batch", per_rank),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(name + " must be an integer")
     if horizon_updates <= 0:
         raise ValueError("Horizon must be positive")
+    if world <= 0 or global_batch <= 0 or per_rank <= 0:
+        raise ValueError("World and batch sizes must be positive")
+    if (
+        not isinstance(pool_plan, (tuple, list))
+        or not pool_plan
+        or not isinstance(pool_plan[0], dict)
+    ):
+        raise ValueError("Coverage simulation needs a pool plan object")
     assignment = pool_plan[0]
     seen = Counter()
     states = [{} for _ in range(world)]
@@ -154,10 +186,20 @@ def reconstruct_seen(
     rebuild queues after resume. Every rank computes identical
     results with no communication. Returns per-row draw counts.
     """
-    if grouped_epoch_indices is None:
+    if not callable(grouped_epoch_indices):
         raise ValueError("A sampler callable is required")
+    for name, value in (
+        ("Epoch", epoch),
+        ("Consumed prefix", consumed),
+        ("World size", world),
+        ("Global batch", global_batch),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(name + " must be an integer")
     if epoch < 0 or consumed < 0:
         raise ValueError("Replay needs a nonnegative epoch and prefix")
+    if world <= 0 or global_batch <= 0:
+        raise ValueError("World and batch sizes must be positive")
     seen = Counter()
     states = [{} for _ in range(world)]
     for prior in list(range(epoch)) + [epoch]:
@@ -189,6 +231,16 @@ def exposure_gate_passed(exposure: dict) -> bool:
     Requires every row drawn at least once with no undrawn
     triplet member and no triplet split across pools.
     """
+    if not isinstance(exposure, dict) or any(
+        key not in exposure
+        for key in (
+            "unique_rows",
+            "total_rows",
+            "broken_triplets",
+            "split_triplets",
+        )
+    ):
+        raise ValueError("Exposure gate needs a delivered exposure object")
     return bool(
         exposure["unique_rows"] == exposure["total_rows"]
         and not exposure["broken_triplets"]
@@ -206,6 +258,17 @@ def delivered_exposure(seen, rows, assignment, checkpoint_step=None):
     recorded for receipts when the caller slices ``seen`` to that
     horizon.
     """
+    if not isinstance(seen, dict) or any(
+        not isinstance(index, int)
+        or isinstance(index, bool)
+        or not isinstance(count, int)
+        or isinstance(count, bool)
+        or count < 0
+        for index, count in seen.items()
+    ):
+        raise ValueError("Delivered exposure needs row draw counts")
+    if not isinstance(assignment, dict):
+        raise ValueError("Delivered exposure needs a pool assignment")
     total = len(rows)
     unique = len(seen)
     triplets = triplet_integrity(rows, assignment, set(seen))

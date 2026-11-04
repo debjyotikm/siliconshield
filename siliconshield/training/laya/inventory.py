@@ -51,6 +51,15 @@ def summarize(
     dev_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Count origins, groups, and mechanisms for a proposed corpus."""
+    if not isinstance(train_rows, list) or any(
+        not isinstance(row, dict) for row in train_rows
+    ):
+        raise ValueError("TRAIN inventory needs a list of row objects")
+    if dev_rows is not None and (
+        not isinstance(dev_rows, list)
+        or any(not isinstance(row, dict) for row in dev_rows)
+    ):
+        raise ValueError("DEV inventory needs a list of row objects")
     if not train_rows:
         raise ValueError("TRAIN inventory is empty")
     origins = Counter(_origin(row) for row in train_rows)
@@ -85,6 +94,16 @@ def feasibility(
     pilot with its missing coverage disclosed, not by inflating
     group counts with renames or wrappers.
     """
+    if not isinstance(report, dict):
+        raise ValueError("Feasibility check needs an inventory report")
+    if targets is not None and (
+        not isinstance(targets, dict)
+        or any(
+            not isinstance(value, int) or isinstance(value, bool)
+            for value in targets.values()
+        )
+    ):
+        raise ValueError("Feasibility targets must map names to integers")
     goals = dict(BROAD_TARGETS)
     if targets:
         goals.update(targets)

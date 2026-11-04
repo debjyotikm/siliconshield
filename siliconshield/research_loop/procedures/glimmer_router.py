@@ -276,14 +276,16 @@ def run_router_session(
     ValueError: no verdict is ever returned without evidence
     behind it.
     """
+    if skill is not None and not isinstance(skill, str):
+        raise ValueError("The skill path must be a string")
     skill_path = Path(skill) if skill else DEFAULT_SKILL
     try:
         system = skill_path.read_text(encoding="utf-8")
     except OSError as exc:
         raise ValueError("Cannot read skill file: %s" % exc) from exc
-    if not task.strip():
+    if not isinstance(task, str) or not task.strip():
         raise ValueError("The session task must be non-empty")
-    if not output or not str(output).strip():
+    if not isinstance(output, (str, Path)) or not str(output).strip():
         raise ValueError("The session output dir must be non-empty")
     InferenceService(registry)
     try:

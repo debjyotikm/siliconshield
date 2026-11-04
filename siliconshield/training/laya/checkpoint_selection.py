@@ -37,26 +37,36 @@ def population_indices(rows: list[dict], definition: list | dict) -> list[int]:
         ):
             raise ValueError("Development selector values must be strings")
     wanted = set(definition["row_ids"]) if "row_ids" in definition else None
-    return [
-        index
-        for index, row in enumerate(rows)
-        if (
-            "source_names" not in definition
-            or row["source"]["name"] in definition["source_names"]
-        )
-        and (
-            "split_groups" not in definition
-            or row.get("split_group_id") in definition["split_groups"]
-        )
-        and row.get("split_group_id")
-        not in definition.get("exclude_split_groups", [])
-        and (wanted is None or row.get("id") in wanted)
-    ]
+    indices = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError("Development row %d is not an object" % index)
+        if "source_names" in definition:
+            source = row.get("source")
+            name = source.get("name") if isinstance(source, dict) else None
+            if not isinstance(name, str) or not name:
+                raise ValueError(
+                    "Development row %d has no source name" % index
+                )
+            if name not in definition["source_names"]:
+                continue
+        if "split_groups" in definition and (
+            row.get("split_group_id") not in definition["split_groups"]
+        ):
+            continue
+        if row.get("split_group_id") in definition.get(
+            "exclude_split_groups", []
+        ):
+            continue
+        if wanted is not None and row.get("id") not in wanted:
+            continue
+        indices.append(index)
+    return indices
 
 
 def _count(value: object, name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise ValueError("Expected nonnegative integer: " + name)
+        raise ValueError("Expected nonnegative integer: " + str(name))
     return value
 
 
@@ -76,6 +86,10 @@ def triplet_counts(
         raise ValueError("Triplet scoring needs three distinct labels")
     groups: dict[str, list[int]] = {}
     for position, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(
+                "Triplet scoring needs objects, not row %d" % position
+            )
         pair = row.get("pair_id")
         if not isinstance(pair, str) or not pair:
             raise ValueError("Triplet scoring needs pair_id on every row")
@@ -84,7 +98,15 @@ def triplet_counts(
     for pair, members in groups.items():
         if len(members) != 3:
             raise ValueError("Triplet %s does not hold three rows" % pair)
-        expected = [rows[i]["expected"]["security"] for i in members]
+        expected = []
+        for i in members:
+            block = rows[i].get("expected")
+            label = block.get("security") if isinstance(block, dict) else None
+            if not isinstance(label, str):
+                raise ValueError(
+                    "Triplet %s member %d has no expected label" % (pair, i)
+                )
+            expected.append(label)
         if set(expected) != set(labels):
             raise ValueError("Triplet %s lacks one row per label" % pair)
         if all(
@@ -115,18 +137,23 @@ def view_counts(view: dict) -> dict:
     if view.get("n") != n or view.get("false_safe_count") != matrix[1][0]:
         raise ValueError("Development counts disagree with confusion matrix")
     accuracy = view.get("accuracy")
-    if not isinstance(accuracy, (int, float)) or not math.isclose(
-        accuracy, sum(correct) / n, rel_tol=0.0, abs_tol=1e-12
+    if (
+        not isinstance(accuracy, (int, float))
+        or isinstance(accuracy, bool)
+        or not math.isclose(
+            accuracy, sum(correct) / n, rel_tol=0.0, abs_tol=1e-12
+        )
     ):
         raise ValueError("Development accuracy disagrees with counts")
     total_pairs = _count(view.get("complete_pairs"), "complete_pairs")
+    if total_pairs == 0:
+        raise ValueError("Development view needs complete pairs")
     fraction = view.get("both_pair_members_correct")
     if (
         not isinstance(fraction, (int, float))
         or isinstance(fraction, bool)
         or not math.isfinite(fraction)
         or not 0 <= fraction <= 1
-        or total_pairs == 0
     ):
         raise ValueError("Development view needs finite pair accuracy")
     pairs = round(fraction * total_pairs)
@@ -224,7 +251,7 @@ def source_counts(entry: dict, name: str) -> dict:
     the trainer's by_source summary, not from caller arithmetic.
     """
     if not isinstance(entry, dict):
-        raise ValueError("Per-source entry must be an object: " + name)
+        raise ValueError("Per-source entry must be an object: " + str(name))
     support = entry.get("class_support")
     correct = entry.get("class_correct")
     if (
@@ -233,20 +260,22 @@ def source_counts(entry: dict, name: str) -> dict:
         or not isinstance(correct, list)
         or len(correct) != 3
     ):
-        raise ValueError("Per-source entry needs three-class vectors: " + name)
+        raise ValueError(
+            "Per-source entry needs three-class vectors: " + str(name)
+        )
     support = [_count(value, name) for value in support]
     correct = [_count(value, name) for value in correct]
     if any(done > total for done, total in zip(correct, support)):
-        raise ValueError("Per-source correct exceeds support: " + name)
+        raise ValueError("Per-source correct exceeds support: " + str(name))
     size = _count(entry.get("n"), name)
     if size != sum(support):
-        raise ValueError("Per-source size disagrees with support: " + name)
+        raise ValueError("Per-source size disagrees with support: " + str(name))
     if _count(entry.get("correct"), name) != sum(correct):
-        raise ValueError("Per-source correct disagrees by class: " + name)
+        raise ValueError("Per-source correct disagrees by class: " + str(name))
     triplets = _count(entry.get("triplets"), name)
     triplets_correct = _count(entry.get("triplets_correct"), name)
     if triplets_correct > triplets:
-        raise ValueError("Per-source triplets are inconsistent: " + name)
+        raise ValueError("Per-source triplets are inconsistent: " + str(name))
     return {
         "rows": size,
         "correct": sum(correct),
@@ -289,7 +318,14 @@ def objective_selection(result: dict, objective: dict) -> tuple:
         raise ValueError(
             "Development objective fields are incomplete or unknown"
         )
-    views = result["development_views"]
+    if not isinstance(result, dict):
+        raise ValueError("Selection needs a result object")
+    views = result.get("development_views")
+    if not isinstance(views, dict) or not views:
+        raise ValueError("Selection needs named development views")
+    for name, view in views.items():
+        if not isinstance(view, dict):
+            raise ValueError("Development view is not an object: " + str(name))
     protected = objective["protected"]
     if not isinstance(protected, dict) or set(protected) != set(views):
         raise ValueError("Every development view needs explicit protection")

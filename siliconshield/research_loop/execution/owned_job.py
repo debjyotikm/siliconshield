@@ -69,8 +69,34 @@ def root_cause(log):
 
 def run(manifest_path, resource_root, action):
     manifest = read_json(manifest_path)
+    if not isinstance(manifest, dict):
+        raise ValueError("Execution manifest must be an object")
+    command = manifest.get("command")
+    if (
+        not isinstance(command, list)
+        or not command
+        or any(not isinstance(part, str) for part in command)
+    ):
+        raise ValueError("Execution manifest needs a command list")
+    command = list(command)
+    for key in ("output", "idempotency_key", "unit"):
+        if not manifest.get(key) or not isinstance(manifest[key], str):
+            raise ValueError("Execution manifest needs " + key)
+    for key in ("timeout_seconds", "output_quota_bytes"):
+        value = manifest.get(key)
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value < 0
+        ):
+            raise ValueError("Execution manifest needs " + key)
+    hashes = manifest.get("input_hashes", {})
+    if not isinstance(hashes, dict) or any(
+        not isinstance(name, str) or not isinstance(expected, str)
+        for name, expected in hashes.items()
+    ):
+        raise ValueError("Execution manifest input hashes are malformed")
     output = Path(manifest["output"])
-    command = list(manifest["command"])
     if action in ("resume", "finalize_retry"):
         command.append("--resume")
     if action == "finalize_retry":
@@ -146,7 +172,10 @@ def run(manifest_path, resource_root, action):
 
             def terminate(signum, frame):
                 if child.poll() is None:
-                    os.killpg(child.pid, signum)
+                    try:
+                        os.killpg(child.pid, signum)
+                    except (ProcessLookupError, PermissionError):
+                        pass
 
             old = {
                 sig: signal.signal(sig, terminate)
@@ -172,7 +201,10 @@ def run(manifest_path, resource_root, action):
                 for sig, previous in old.items():
                     signal.signal(sig, previous)
                 if child.poll() is None:
-                    os.killpg(child.pid, signal.SIGKILL)
+                    try:
+                        os.killpg(child.pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        pass
                     child.wait()
         if failure is None and code != 0:
             failure = root_cause(log) or "exit_code=%d" % code

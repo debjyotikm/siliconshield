@@ -309,6 +309,8 @@ def code_manifest():
 
 
 def canonical_input(state):
+    if not isinstance(state, str):
+        raise ValueError("Canonical input needs state text")
     text = re.sub(r"\b([A-Za-z_]\w*)_[12]\b", r"\1", state)
     return re.sub(r"\s+", "", text)
 
@@ -481,6 +483,8 @@ def load_splits(
     validation, and — when ``question_contract`` is given — exact
     question-bytes agreement on every row.
     """
+    if not isinstance(directory, (str, Path)):
+        raise ValueError("Dataset directory must be a path")
     directory = Path(directory)
     names = (
         ["train", "dev", "calibration", "test"] if final else ["train", "dev"]
@@ -503,6 +507,12 @@ def load_splits(
             raise ValueError("empty split: " + split)
         pairs = defaultdict(set)
         for row in rows:
+            if not isinstance(row, dict):
+                raise ValueError("split %s has a non-object row" % split)
+            if not isinstance(row.get("id"), str):
+                raise ValueError(
+                    "split %s has a row without a string id" % split
+                )
             family = row["family_id"]
             group = row.get("split_group_id", family)
             if owners.setdefault(group, split) != split:
@@ -679,6 +689,28 @@ def grouped_epoch_indices(
     a caller-owned dict the queues persist across epochs exactly as
     the trainer loop carries them.
     """
+    for name, value in (
+        ("world", world),
+        ("rank", rank),
+        ("seed", seed),
+        ("epoch", epoch),
+        ("global batch", global_batch),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError("grouped sampling needs an integer " + name)
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) for row in rows
+    ):
+        raise ValueError("grouped sampling needs a list of row objects")
+    if pool_plan is not None and (
+        not isinstance(pool_plan, (tuple, list))
+        or len(pool_plan) != 3
+        or not isinstance(pool_plan[0], dict)
+        or not isinstance(pool_plan[1], dict)
+    ):
+        raise ValueError("grouped sampling needs a pool plan triple")
+    if _queue_state is not None and not isinstance(_queue_state, dict):
+        raise ValueError("grouped sampling queue state must be an object")
     if global_batch % 3 or global_batch % world or not 0 <= rank < world:
         raise ValueError(
             "grouped batch must contain whole triplets and equal rank shards"

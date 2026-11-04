@@ -29,6 +29,34 @@ class ServerConfig:
     memory_fraction: float = 0.65
     max_batched_tokens: int = 8192
 
+    def __post_init__(self) -> None:
+        """Reject malformed server settings before any GPU work."""
+        if not isinstance(self.model, str) or not self.model:
+            raise ValueError("Server needs a model name")
+        for field in (
+            "port",
+            "max_context",
+            "max_sequences",
+            "speculative_tokens",
+            "max_batched_tokens",
+        ):
+            value = getattr(self, field)
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError("Server %s must be an integer" % field)
+        if isinstance(self.memory_fraction, bool) or not isinstance(
+            self.memory_fraction, (int, float)
+        ):
+            raise ValueError("Server memory fraction must be a number")
+        if self.draft is not None and not isinstance(self.draft, str):
+            raise ValueError("Server draft model must be a string")
+        if not isinstance(self.adapters, tuple) or any(
+            not isinstance(item, tuple)
+            or len(item) != 2
+            or not all(isinstance(part, str) for part in item)
+            for item in self.adapters
+        ):
+            raise ValueError("Server adapters must be (name, path) pairs")
+
     def command(self) -> list[str]:
         """Build an argv list, without shell evaluation or model mutation."""
         if not math.isfinite(self.memory_fraction) or not (

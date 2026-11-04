@@ -37,7 +37,7 @@ def read_json(path: Path, fallback: Any = None) -> Any:
     """Read an optional report which may not yet have been published."""
     try:
         return json.loads(Path(path).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, TypeError):
         return fallback
 
 
@@ -45,6 +45,22 @@ def run_command(
     argv: list[str], timeout: int = 20, env: dict[str, str] | None = None
 ) -> str:
     """Run a bounded, administrator-configured command without a shell."""
+    if (
+        not isinstance(argv, list)
+        or not argv
+        or any(not isinstance(part, str) for part in argv)
+    ):
+        raise ValueError("Demo commands need a non-empty argument list")
+    if (
+        isinstance(timeout, bool)
+        or not isinstance(timeout, (int, float))
+        or timeout <= 0
+    ):
+        raise ValueError("Demo command timeout must be positive")
+    if env is not None and (
+        not isinstance(env, dict) or any(not isinstance(k, str) for k in env)
+    ):
+        raise ValueError("Demo command environment must be a string map")
     result = subprocess.run(
         argv,
         capture_output=True,
@@ -69,15 +85,23 @@ def gpu_status() -> list[dict[str, str]]:
             "--format=csv,noheader,nounits",
         ]
     )
-    return [
-        dict(
-            zip(
-                ["index", "name", "memory_used", "memory_total", "utilization"],
-                [x.strip() for x in row.split(",")],
-            )
+    cards = []
+    for row in text.strip().splitlines():
+        fields = [field.strip() for field in row.split(",")]
+        if len(fields) < 5:
+            raise RuntimeError("Unreadable nvidia-smi row: %r" % row)
+        # The card name itself may contain commas; only the first
+        # and last three columns have fixed positions.
+        cards.append(
+            {
+                "index": fields[0],
+                "name": ",".join(fields[1:-3]),
+                "memory_used": fields[-3],
+                "memory_total": fields[-2],
+                "utilization": fields[-1],
+            }
         )
-        for row in text.strip().splitlines()
-    ]
+    return cards
 
 
 def state_text(body: dict[str, Any]) -> str:
@@ -88,6 +112,8 @@ def state_text(body: dict[str, Any]) -> str:
     first RTL header, so a smuggled header would truncate the
     judged requirement and pollute the judged RTL.
     """
+    if not isinstance(body, dict):
+        raise ValueError("Demo request must be an object.")
     fields = {}
     for field, limit in [
         ("rtl", 50000),
@@ -114,10 +140,25 @@ class Demo:
     def __init__(
         self, config: dict[str, Any], *, health_poll: bool = True
     ) -> None:
+        if not isinstance(config, dict):
+            raise ValueError("Demo configuration must be an object.")
+        if (
+            not isinstance(config.get("state_dir"), str)
+            or not config["state_dir"]
+        ):
+            raise ValueError("Demo configuration needs a state directory.")
+        entries = config.get("entries")
+        if not isinstance(entries, list) or any(
+            not isinstance(entry, dict)
+            or not isinstance(entry.get("id"), str)
+            or not entry["id"]
+            for entry in entries
+        ):
+            raise ValueError("Demo configuration needs entries with ids.")
         self.config = config
         self.state = Path(config["state_dir"])
         self.state.mkdir(parents=True, exist_ok=True, mode=448)
-        self.entries = {entry["id"]: entry for entry in config["entries"]}
+        self.entries = {entry["id"]: entry for entry in entries}
         self.pools: dict[str, WorkerPool] = {}
         self.loaded: dict[str, dict[str, Any]] = {}
         self.jobs: dict[str, dict[str, Any]] = {}
@@ -169,7 +210,7 @@ class Demo:
 
     def inference_device(self, value: str | None = None) -> str:
         """Select only CPU or the explicitly configured CUDA device."""
-        gpu = self.config["gpu"]
+        gpu = self.config.get("gpu")
         selected = (
             ("cpu" if gpu is None else f"cuda:{gpu}")
             if value is None
@@ -182,16 +223,31 @@ class Demo:
 
     def device_name(self, device: str) -> str:
         """Name the server-side execution device."""
-        return "CPU" if device == "cpu" else "GPU " + device.split(":")[1]
+        if device == "cpu":
+            return "CPU"
+        if not isinstance(device, str) or not re.fullmatch(r"cuda:\d+", device):
+            raise ValueError("Unknown execution device: %r" % (device,))
+        return "GPU " + device.split(":")[1]
 
     def glimmer_health(self) -> dict[str, Any]:
         """Check an explicitly configured local service without generation."""
-        cfg = self.config["glimmer"]
+        cfg = self.config.get("glimmer")
         if not cfg:
             return {"status": "not configured"}
+        if not isinstance(cfg, dict) or not isinstance(cfg.get("model"), str):
+            raise ValueError("Glimmer configuration needs a model id.")
         client = LocalGlimmerClient(**cfg, timeout=8)
         reply = client.models()
-        if cfg["model"] not in [model["id"] for model in reply["data"]]:
+        if not isinstance(reply, dict) or not isinstance(
+            reply.get("data"), list
+        ):
+            raise RuntimeError("Glimmer service returned a malformed reply.")
+        served = [
+            model["id"]
+            for model in reply["data"]
+            if isinstance(model, dict) and isinstance(model.get("id"), str)
+        ]
+        if cfg["model"] not in served:
             raise RuntimeError("Configured Glimmer model is not served.")
         return {
             "status": "ready",
@@ -316,6 +372,10 @@ class Demo:
         """Keep a live child job visible even after controller failure."""
         for path in (folder / "runs").glob("*/run-manifest.json"):
             manifest = read_json(path, {})
+            if not isinstance(manifest, dict) or not isinstance(
+                manifest.get("unit"), str
+            ):
+                continue
             try:
                 state = run_command(
                     [
@@ -810,10 +870,19 @@ class Demo:
                 "status": "stop_requested",
                 "messages": ["Preparation will stop before launch."],
             }
-        op = Operator(str(folder / "profile.json"))
+        try:
+            op = Operator(str(folder / "profile.json"))
+        except Exception as exc:
+            return {
+                "status": "stop_requested",
+                "messages": ["Unreadable launch profile: %s" % exc],
+            }
         messages = []
         for file in (folder / "runs").glob("*/run-manifest.json"):
             manifest = read_json(file, {})
+            if not isinstance(manifest, dict):
+                messages.append("Unreadable run manifest: " + file.name)
+                continue
             if manifest.get("phase") in [
                 "submit",
                 "observe",
@@ -843,11 +912,19 @@ class Demo:
         value = copy.deepcopy(self.training)
         folder = Path(value["directory"])
         terminal = read_json(folder / "controller-result.json")
+        if not isinstance(terminal, dict):
+            terminal = None
         campaign = read_json(folder / "campaign/campaign-status.json", {})
-        value["updates_per_phase"] = (
-            read_json(folder / "profile.json", {})
-            .get("defaults", {})
-            .get("max_updates", self.config.get("toy_updates", 3))
+        if not isinstance(campaign, dict):
+            campaign = {}
+        profile = read_json(folder / "profile.json", {})
+        defaults = (
+            profile.get("defaults", {}) if isinstance(profile, dict) else {}
+        )
+        if not isinstance(defaults, dict):
+            defaults = {}
+        value["updates_per_phase"] = defaults.get(
+            "max_updates", self.config.get("toy_updates", 3)
         )
         value["active"] = active
         value["phase"] = campaign.get("phase", "preparing")
@@ -866,12 +943,16 @@ class Demo:
             key=lambda p: ("-fit-" not in p.parent.name, p.parent.name),
         ):
             manifest = read_json(manifest_path, {})
+            if not isinstance(manifest, dict):
+                manifest = {}
             path = manifest_path.parent
             events = []
             try:
                 for line in (path / "events.jsonl").read_text().splitlines():
                     try:
                         row = json.loads(line)
+                        if not isinstance(row, dict):
+                            continue
                         event = row.get("event", "")
                         if event == "train":
                             events.append(
@@ -894,6 +975,8 @@ class Demo:
                             metrics = row.get(
                                 "metrics", row.get("development", {})
                             )
+                            if not isinstance(metrics, dict):
+                                continue
                             events.append(
                                 {
                                     "event": event,
@@ -926,7 +1009,14 @@ class Demo:
             key=lambda p: ("-fit-" not in p.parent.name, p.parent.name),
         ):
             record = read_json(path, {})
-            for cycle in record.get("cycles", []):
+            if not isinstance(record, dict):
+                continue
+            cycles = record.get("cycles", [])
+            if not isinstance(cycles, list):
+                continue
+            for cycle in cycles:
+                if not isinstance(cycle, dict):
+                    continue
                 value["operator_cycles"].append(
                     {"experiment": record.get("experiment"), **cycle}
                 )

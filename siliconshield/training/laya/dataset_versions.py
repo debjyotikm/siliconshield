@@ -35,12 +35,25 @@ def _sha(path: Path) -> str:
     return value.hexdigest()
 
 
+def _require_version(version: str) -> str:
+    """Return a version name confined to its own directory."""
+    if (
+        not isinstance(version, str)
+        or not version
+        or "/" in version
+        or "\\" in version
+        or ".." in version
+    ):
+        raise ValueError("Dataset version escapes its folder")
+    return version
+
+
 def _version_file(root: Path, version: str) -> Path:
-    return Path(root) / "versions" / version / "manifest.json"
+    return Path(root) / "versions" / _require_version(version) / "manifest.json"
 
 
 def _accepted_file(root: Path, version: str) -> Path:
-    return Path(root) / "versions" / version / "accepted.json"
+    return Path(root) / "versions" / _require_version(version) / "accepted.json"
 
 
 def write_version(
@@ -56,7 +69,7 @@ def write_version(
     path = _version_file(root, version)
     if path.exists():
         raise ValueError("Dataset version exists: " + version)
-    if not splits:
+    if not isinstance(splits, dict) or not splits:
         raise ValueError("Dataset version needs at least one split")
     seen = set()
     manifest: dict[str, Any] = {
@@ -65,6 +78,10 @@ def write_version(
         "splits": {},
     }
     for role, rows in splits.items():
+        if not role or not isinstance(role, str):
+            raise ValueError("Dataset split needs a role name")
+        if not isinstance(rows, str):
+            raise ValueError("Dataset split needs a path: " + role)
         resolved = str(Path(rows).resolve())
         if resolved in seen:
             raise ValueError("Two roles share one split file: " + role)
@@ -79,7 +96,7 @@ def write_version(
             "rows": count,
         }
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    atomic_json(path, manifest)
     return manifest
 
 
@@ -92,14 +109,34 @@ def verify_version(root: Path, version: str) -> dict[str, Any]:
     manifest: dict[str, Any] = json.loads(
         _version_file(root, version).read_text(encoding="utf-8")
     )
+    if not isinstance(manifest, dict):
+        raise ValueError("Dataset-version manifest must be an object")
     if manifest.get("schema") != DATASET_VERSION_SCHEMA:
         raise ValueError("Unknown dataset-version schema")
-    for role, entry in manifest["splits"].items():
+    splits = manifest.get("splits")
+    if not isinstance(splits, dict) or not splits:
+        raise ValueError("Dataset-version manifest needs splits")
+    for role, entry in splits.items():
+        if not role or not isinstance(role, str):
+            raise ValueError("Dataset-version manifest needs role names")
+        if not isinstance(entry, dict):
+            raise ValueError("Dataset-version split is invalid: " + role)
+        for key in ("path", "sha256"):
+            if not entry.get(key) or not isinstance(entry[key], str):
+                raise ValueError(
+                    "Dataset-version split needs %s: %s" % (key, role)
+                )
         if _sha(Path(entry["path"])) != entry["sha256"]:
             raise ValueError("Dataset drift in %s split" % role)
     pools = manifest.get("pools")
-    if pools and _sha(Path(pools["path"])) != pools["sha256"]:
-        raise ValueError("Sampling pools changed under the version")
+    if pools is not None:
+        if not isinstance(pools, dict):
+            raise ValueError("Bound pools must be an object")
+        for key in ("path", "sha256"):
+            if not pools.get(key) or not isinstance(pools[key], str):
+                raise ValueError("Bound pools need " + key)
+        if _sha(Path(pools["path"])) != pools["sha256"]:
+            raise ValueError("Sampling pools changed under the version")
     return manifest
 
 
@@ -143,9 +180,12 @@ def _audit_ok(manifest: dict[str, Any], audit: Any) -> None:
     """
     if not isinstance(audit, dict):
         raise ValueError("Audit is missing")
+    covered = audit.get("splits", {})
+    if not isinstance(covered, dict):
+        raise ValueError("Audit splits are malformed")
     for role, entry in manifest["splits"].items():
-        if audit.get("splits", {}).get(role) != entry["sha256"]:
-            raise ValueError("Audit does not cover split: " + role)
+        if covered.get(role) != entry.get("sha256"):
+            raise ValueError("Audit does not cover split: " + str(role))
     for key in (
         "cross_split_exact_rtl_overlap",
         "retired_rtl_overlap",
@@ -290,23 +330,32 @@ def is_accepted(root: Path, version: str) -> bool:
 
 def _row_ids(rows_path: Path) -> list[str]:
     """Row ids in file order; ids must be unique strings."""
-    ids = [
-        json.loads(line)["id"]
-        for line in Path(rows_path).read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    if any(not isinstance(i, str) for i in ids) or len(set(ids)) != len(ids):
+    ids = []
+    for lineno, line in enumerate(
+        Path(rows_path).read_text(encoding="utf-8").splitlines(), 1
+    ):
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        if not isinstance(row, dict):
+            raise ValueError("Row %d is not an object" % lineno)
+        if not isinstance(row.get("id"), str):
+            raise ValueError("Row %d needs a string id" % lineno)
+        ids.append(row["id"])
+    if len(set(ids)) != len(ids):
         raise ValueError("Rows need unique string ids")
     return ids
 
 
-def _check_partition(
-    ids: list[str], pools: dict[str, Any]
-) -> dict[str, dict[str, Any]]:
+def _check_partition(ids: list[str], pools: Any) -> dict[str, dict[str, Any]]:
     """Validate that pools partition row ids exactly once each."""
+    if not isinstance(pools, dict):
+        raise ValueError("Pools must be an object")
     seen: set[str] = set()
     checked = {}
     for name, spec in pools.items():
+        if not isinstance(spec, dict):
+            raise ValueError("Pool spec must be an object: " + str(name))
         weight = spec.get("weight")
         if (
             not isinstance(weight, (int, float))
@@ -314,10 +363,14 @@ def _check_partition(
             or not math.isfinite(weight)
             or weight <= 0
         ):
-            raise ValueError("Pool weight must be positive: " + name)
+            raise ValueError("Pool weight must be positive: " + str(name))
         members = spec.get("rows", [])
+        if not isinstance(members, list) or any(
+            not isinstance(member, str) for member in members
+        ):
+            raise ValueError("Pool rows must be a string list: " + str(name))
         if len(set(members)) != len(members):
-            raise ValueError("Pool repeats a row: " + name)
+            raise ValueError("Pool repeats a row: " + str(name))
         overlap = seen & set(members)
         if overlap:
             raise ValueError("Row assigned to two pools: " + sorted(overlap)[0])
@@ -338,14 +391,14 @@ def assign_pools(
     positive and finite. Returns the manifest.
     """
     rows_path = Path(rows_path)
-    manifest = {
+    manifest: dict[str, Any] = {
         "rows": str(rows_path.resolve()),
         "rows_sha256": _sha(rows_path),
         "pools": _check_partition(_row_ids(rows_path), pools),
     }
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    atomic_json(output, manifest)
     return manifest
 
 
@@ -354,10 +407,14 @@ def verify_pools(rows_path: Path, pools_path: Path) -> dict[str, Any]:
     manifest: dict[str, Any] = json.loads(
         Path(pools_path).read_text(encoding="utf-8")
     )
+    if not isinstance(manifest, dict):
+        raise ValueError("Pool manifest must be an object")
     rows_path = Path(rows_path)
-    if _sha(rows_path) != manifest["rows_sha256"]:
+    if _sha(rows_path) != manifest.get("rows_sha256"):
         raise ValueError("Rows file changed under its pool manifest")
-    manifest["pools"] = _check_partition(_row_ids(rows_path), manifest["pools"])
+    manifest["pools"] = _check_partition(
+        _row_ids(rows_path), manifest.get("pools")
+    )
     return manifest
 
 
@@ -380,7 +437,7 @@ def bind_pools(root: Path, version: str, pools_path: Path) -> dict[str, Any]:
         "sha256": _sha(Path(pools_path)),
     }
     path = _version_file(root, version)
-    path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    atomic_json(path, manifest)
     return manifest
 
 
@@ -395,15 +452,28 @@ def pool_assignment(
     mismatch so a stale manifest can never silently skew batches.
     """
     manifest = json.loads(Path(pools_path).read_text(encoding="utf-8"))
-    pools = manifest["pools"]
+    if not isinstance(manifest, dict):
+        raise ValueError("Pool manifest must be an object")
+    pools = manifest.get("pools")
+    if not isinstance(pools, dict):
+        raise ValueError("Pool manifest needs pools")
     owner = {}
     for name, spec in pools.items():
-        for row_id in spec["rows"]:
+        if not isinstance(spec, dict):
+            raise ValueError("Pool spec must be an object: " + str(name))
+        members = spec.get("rows")
+        if not isinstance(members, list):
+            raise ValueError("Pool rows must be a list: " + str(name))
+        for row_id in members:
+            if not isinstance(row_id, str):
+                raise ValueError("Pool rows must be strings: " + str(name))
             if row_id in owner:
                 raise ValueError("Pool manifest assigns twice: " + row_id)
             owner[row_id] = name
     assignment = {}
     for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError("Training row must be an object")
         row_id = row.get("id")
         if row_id not in owner:
             raise ValueError("Row outside every pool: " + repr(row_id))
@@ -411,18 +481,18 @@ def pool_assignment(
     weights = {}
     modes: dict[str, str] = {}
     for name, spec in pools.items():
-        weight = spec["weight"]
+        weight = spec.get("weight")
         if (
             not isinstance(weight, (int, float))
             or isinstance(weight, bool)
             or not math.isfinite(weight)
             or weight <= 0
         ):
-            raise ValueError("Pool weight must be positive: " + name)
+            raise ValueError("Pool weight must be positive: " + str(name))
         weights[name] = float(weight)
         mode = spec.get("mode", "cycle")
         if mode not in ("cycle", "flat"):
-            raise ValueError("Pool mode must be cycle or flat: " + name)
+            raise ValueError("Pool mode must be cycle or flat: " + str(name))
         modes[name] = mode
     return assignment, weights, modes
 
@@ -459,6 +529,15 @@ def rtl_overlap_key(row: dict[str, Any]) -> str:
     return hashlib.sha256(re.sub(r"\s+", "", rtl).encode()).hexdigest()
 
 
+def _ordered_roles(splits: dict[str, Path], train_role: str) -> list[str]:
+    """Order audit roles with the training role first, or refuse."""
+    if not isinstance(splits, dict) or not splits:
+        raise ValueError("Overlap audit needs a split map")
+    if train_role not in splits:
+        raise ValueError("Overlap audit needs role: " + str(train_role))
+    return [train_role] + sorted(r for r in splits if r != train_role)
+
+
 def audit_partition_overlap(
     splits: dict[str, Path],
     retired: list[Path],
@@ -475,7 +554,7 @@ def audit_partition_overlap(
     groups: dict[str, str] = {}
     cross = 0
     train_keys: list[str] = []
-    roles = [train_role] + sorted(r for r in splits if r != train_role)
+    roles = _ordered_roles(splits, train_role)
     for role in roles:
         for row in _overlap_rows(splits[role]):
             key = rtl_overlap_key(row)
@@ -572,7 +651,7 @@ def audit_lineage_overlap(
     """
     owners: dict[str, str] = {}
     overlap = 0
-    roles = [train_role] + sorted(r for r in splits if r != train_role)
+    roles = _ordered_roles(splits, train_role)
     for role in roles:
         for row in _overlap_rows(splits[role]):
             group = lineage_key(row)
@@ -592,7 +671,7 @@ def audit_canonical_overlap(
     """
     owners: dict[str, str] = {}
     cross = 0
-    roles = [train_role] + sorted(r for r in splits if r != train_role)
+    roles = _ordered_roles(splits, train_role)
     for role in roles:
         for row in _overlap_rows(splits[role]):
             key = canonical_rtl_key(row)
@@ -624,8 +703,13 @@ def audit_concentration(train_path: Path) -> dict[str, Any]:
     groups: dict[str, int] = {}
     mechanisms: dict[str, int] = {}
     for row in rows:
-        groups[dependency_group(row)] = groups.get(dependency_group(row), 0) + 1
+        group = dependency_group(row)
+        groups[group] = groups.get(group, 0) + 1
         mechanism = row.get("mechanism_id", "unknown")
+        if not isinstance(mechanism, str):
+            raise ValueError(
+                "Row mechanism is malformed: " + repr(row.get("id"))
+            )
         mechanisms[mechanism] = mechanisms.get(mechanism, 0) + 1
     total = len(rows)
     return {
@@ -639,6 +723,8 @@ def audit_concentration(train_path: Path) -> dict[str, Any]:
 
 def audit_split_groups(splits: dict[str, Path]) -> dict[str, int]:
     """Count distinct lineage groups per split role."""
+    if not isinstance(splits, dict):
+        raise ValueError("Split-group audit needs a split map")
     counts: dict[str, int] = {}
     for role, path in splits.items():
         counts[role] = len({lineage_key(row) for row in _overlap_rows(path)})

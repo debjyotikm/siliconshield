@@ -101,3 +101,39 @@ def test_overrides_cannot_bypass_study(tree):
     _, _, profile = bound_study(tree)
     with pytest.raises(ValueError, match="settings"):
         study_contract.verify_job(profile, "demo-r1", {"adapter_lr": 9e-2})
+
+
+def test_study_contract_rejects_malformed_shapes(tree):
+    spec, manifest, profile = bound_study(tree)
+    probe, resources = receipts(manifest, tree["code"].parent)
+    with pytest.raises(ValueError, match="must be an object"):
+        study_contract.load(["x"])
+    with pytest.raises(ValueError, match="manifest path"):
+        study_contract.load({"decision_study_manifest": 5})
+    with pytest.raises(ValueError, match="overrides must be an object"):
+        study_contract.verify_job(profile, "e", ["x"])
+    with pytest.raises(ValueError, match="must be an object"):
+        study_contract.verify_job(["x"], "e", {})
+    bad = {k: v for k, v in profile.items() if k != "model"}
+    with pytest.raises(ValueError, match="needs model"):
+        study_contract.verify_job(bad, "e", {})
+    with pytest.raises(ValueError, match="must be objects"):
+        study_contract.verify_receipts(manifest, ["x"], resources)
+    bad_resources = {k: v for k, v in resources.items() if k != "requirement"}
+    with pytest.raises(ValueError, match="measured requirements"):
+        study_contract.verify_receipts(manifest, probe, bad_resources)
+    job = {
+        "idempotency_key": "k",
+        "attempts": 0,
+        "timeout_seconds": 60,
+        "experiment_id": "r1",
+    }
+    with pytest.raises(ValueError, match="must be an object"):
+        study_contract.reserve_budget(profile, ["x"])
+    bad_job = {k: v for k, v in job.items() if k != "attempts"}
+    with pytest.raises(ValueError, match="attempt count"):
+        study_contract.reserve_budget(profile, bad_job)
+    base = tree["code"].parent
+    (base / "budget.json").write_text("[1, 2]")
+    with pytest.raises(ValueError, match="unreadable"):
+        study_contract.reserve_budget(profile, dict(job, idempotency_key="k"))

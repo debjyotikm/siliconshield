@@ -113,6 +113,28 @@ def load_handoff(home: Path) -> dict[str, Any]:
         raise ValueError("Unknown handoff schema")
     merged = default_handoff()
     merged.update(handoff)
+    for key in (
+        "prep_attempts",
+        "plan_attempts",
+        "consecutive_agent_failures",
+    ):
+        value = merged.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise ValueError("Handoff needs " + key)
+    if not isinstance(merged.get("observed_terminal"), list):
+        raise ValueError("Handoff needs observed_terminal")
+    if not isinstance(merged.get("mode"), str):
+        raise ValueError("Handoff needs mode")
+    pending = merged.get("pending_proposal")
+    if pending is not None and not isinstance(pending, dict):
+        raise ValueError("Handoff pending proposal is malformed")
+    analysis = merged.get("last_analysis")
+    if analysis is not None and not isinstance(analysis, dict):
+        raise ValueError("Handoff analysis is malformed")
+    for key in ("parked_reason", "stopped_reason"):
+        value = merged.get(key)
+        if value is not None and not isinstance(value, str):
+            raise ValueError("Handoff needs " + key)
     return merged
 
 
@@ -166,10 +188,17 @@ def _study_max_rounds(home: Path, study_id: str) -> int:
     recommendation re-verifies the manifest bytes first.
     """
     path = study_dir(Path(home)) / study_id / "study.json"
-    manifest = read_json(path)
+    try:
+        manifest = read_json(path)
+    except OSError as exc:
+        raise ValueError("Study manifest is missing") from exc
     if not isinstance(manifest, dict):
         raise ValueError("Study manifest is not an object")
-    return int(manifest["budget"]["max_rounds"])
+    try:
+        rounds = int(manifest["budget"]["max_rounds"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Study manifest needs a round budget") from exc
+    return rounds
 
 
 def study_exhausted(home: Path, study_id: str) -> bool:
@@ -231,7 +260,7 @@ def recommend_new_model(
         raise ValueError("Study budget is not exhausted yet")
     diagnoses: dict[str, dict[str, Any]] = {}
     for round_id in rounds:
-        phase = laya_campaign.read_round(campaign, round_id)["phase"]
+        phase = laya_campaign.round_phase(campaign, round_id)
         if phase not in TERMINAL_PHASES:
             raise ValueError("Study still has an active round: " + round_id)
         files = _round_files(home, round_id)
@@ -298,13 +327,16 @@ def recommend_new_model(
         )
     if not isinstance(proposal, dict):
         raise ValueError("New-model proposal must be an object")
+    incumbent = laya_campaign.load_incumbent(campaign)
+    if not isinstance(incumbent.get("export"), dict):
+        raise ValueError("Incumbent export is missing")
     record = {
         "schema": NEW_MODEL_PROPOSAL_SCHEMA,
         "study_id": study_id,
         "domain": _require_text(proposal, "domain", "A proposal"),
         "dataset_plan": _require_text(proposal, "dataset_plan", "A proposal"),
         "eval_plan": _require_text(proposal, "eval_plan", "A proposal"),
-        "preserved_incumbent": laya_campaign.load_incumbent(campaign)["export"],
+        "preserved_incumbent": incumbent["export"],
         "diagnoses": diagnoses,
         "qualified_rounds": qualified,
     }
@@ -565,7 +597,9 @@ def parse_exec_jsonl(text: str) -> dict[str, Any]:
         if not isinstance(stream, dict):
             continue
         if stream.get("kind") == "session" and session is None:
-            session = stream.get("id")
+            candidate = stream.get("id")
+            if isinstance(candidate, str):
+                session = candidate
         payload = record.get("payload") or {}
         if not isinstance(payload, dict):
             continue
@@ -606,8 +640,24 @@ def agent_argv(config: dict[str, Any], kind: str, prompt: str) -> list[str]:
     ``allow_unsandboxed_agent``: unattended sessions must not silently
     gain full workspace access.
     """
+    if not isinstance(config, dict):
+        raise ValueError("Agent config must be an object")
+    if kind not in DEFAULT_STEPS:
+        raise ValueError("Unknown agent session kind: " + str(kind))
+    for key in ("muse_bin", "model", "repo"):
+        if not config.get(key) or not isinstance(config[key], str):
+            raise ValueError("Agent config needs " + key)
     steps = config.get("max_model_steps", {})
     efforts = config.get("reasoning_effort", {})
+    if not isinstance(steps, dict) or not isinstance(efforts, dict):
+        raise ValueError("Agent step/effort maps must be objects")
+    extra = config.get("extra_args", [])
+    if not isinstance(extra, list) or any(
+        not isinstance(arg, str) for arg in extra
+    ):
+        raise ValueError("Agent extra_args must be a string list")
+    if not isinstance(prompt, str):
+        raise ValueError("Agent prompt must be a string")
     argv = [
         config["muse_bin"],
         "exec",
@@ -650,8 +700,19 @@ def run_muse_session(
         restricted_env,
     )
 
+    if not isinstance(config, dict):
+        raise ValueError("Agent config must be an object")
+    if kind not in DEFAULT_TIMEOUTS:
+        raise ValueError("Unknown agent session kind: " + str(kind))
     timeouts = config.get("session_timeout_s", {})
-    timeout = int(timeouts.get(kind, DEFAULT_TIMEOUTS[kind]))
+    if not isinstance(timeouts, dict):
+        raise ValueError("Agent timeout map must be an object")
+    raw = timeouts.get(kind, DEFAULT_TIMEOUTS[kind])
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ValueError("Agent session timeout must be a number")
+    timeout = int(raw)
+    if timeout <= 0:
+        raise ValueError("Agent session timeout must be positive")
     try:
         run = subprocess.run(
             agent_argv(config, kind, prompt),
@@ -843,6 +904,14 @@ def commit_prep(
     """
     home = Path(home)
     campaign = campaign_dir(home)
+    if not isinstance(config, dict):
+        raise PrepCommitError("Supervisor config must be an object")
+    for key in ("audit_extra_splits", "retired_paths"):
+        value = config.get(key, [])
+        if not isinstance(value, list) or any(
+            not isinstance(item, str) for item in value
+        ):
+            raise PrepCommitError("Supervisor config needs " + key)
     proposal = handoff.get("pending_proposal") or {}
     if proposal.get("round_id") != prep["round_id"]:
         raise PrepCommitError("Prep receipt targets another proposal")
@@ -855,10 +924,13 @@ def commit_prep(
     ) != json_digest(prep["selection"]):
         raise PrepCommitError("Prep selection differs from the proposal")
     for round_id in laya_campaign.list_rounds(campaign):
-        if (
-            laya_campaign.read_round(campaign, round_id)["phase"]
-            not in TERMINAL_PHASES
-        ):
+        try:
+            phase = laya_campaign.round_phase(campaign, round_id)
+        except ValueError as exc:
+            raise PrepCommitError(
+                "Round receipt is unreadable: " + round_id
+            ) from exc
+        if phase not in TERMINAL_PHASES:
             raise PrepCommitError("A round is still active: " + round_id)
     study_manifest = None
     if config.get("study_id"):
@@ -881,7 +953,9 @@ def commit_prep(
                 "Study round budget exhausted: %d of %d spent"
                 % (spent, manifest["budget"]["max_rounds"])
             )
-        live_policy = laya_campaign.load_campaign(campaign)["selection"]
+        live_policy = laya_campaign.load_campaign(campaign).get("selection")
+        if not isinstance(live_policy, dict):
+            raise PrepCommitError("Campaign has no registered selection")
         if (
             decision_study.policy_digest(live_policy)
             != manifest["evaluation"]["selection_policy_sha256"]
@@ -900,9 +974,12 @@ def commit_prep(
                 "Proposed selection differs from the frozen study"
             )
     if study_manifest is not None:
-        profile_path = Path(
-            laya_campaign.load_campaign(campaign)["operator_profile"]
+        operator_profile = laya_campaign.load_campaign(campaign).get(
+            "operator_profile"
         )
+        if not isinstance(operator_profile, str):
+            raise PrepCommitError("Campaign has no operator profile")
+        profile_path = Path(operator_profile)
         raw_profile = read_json(profile_path)
         if not isinstance(raw_profile, dict):
             raise PrepCommitError("Operator profile must be an object")
@@ -925,11 +1002,10 @@ def commit_prep(
             raise PrepCommitError(
                 "Prepared dataset differs from the frozen study"
             )
-        experiment = (
-            laya_campaign.load_campaign(campaign)["campaign_id"]
-            + "-"
-            + prep["round_id"]
-        )
+        campaign_id = laya_campaign.load_campaign(campaign).get("campaign_id")
+        if not isinstance(campaign_id, str):
+            raise PrepCommitError("Campaign has no campaign id")
+        experiment = campaign_id + "-" + prep["round_id"]
         try:
             study_contract.verify_job(
                 proposed, experiment, proposal.get("overrides") or {}
@@ -968,19 +1044,31 @@ def commit_prep(
         str(manifest_path),
         _sha_file(manifest_path),
     )
-    profile_path = Path(
-        laya_campaign.load_campaign(campaign)["operator_profile"]
-    )
+    registered = laya_campaign.load_campaign(campaign)
+    operator_profile = registered.get("operator_profile")
+    if not isinstance(operator_profile, str):
+        raise PrepCommitError("Campaign has no operator profile")
+    profile_path = Path(operator_profile)
     profile = read_json(profile_path)
     if not isinstance(profile, dict):
         raise PrepCommitError("Operator profile is not an object")
-    incumbent_export = laya_campaign.load_incumbent(campaign)["export"]
-    campaign_id = laya_campaign.load_campaign(campaign)["campaign_id"]
+    incumbent = laya_campaign.load_incumbent(campaign)
+    if not isinstance(incumbent.get("export"), dict):
+        raise PrepCommitError("Incumbent export is missing")
+    incumbent_export = incumbent["export"]
+    campaign_id = registered.get("campaign_id")
+    if not isinstance(campaign_id, str):
+        raise PrepCommitError("Campaign has no campaign id")
+    train_entry = manifest["splits"].get("train")
+    if not isinstance(train_entry, dict):
+        raise PrepCommitError("Dataset version needs a train split")
+    if not isinstance(profile.get("runs"), str):
+        raise PrepCommitError("Operator profile needs runs")
     try:
         new_study.verify_new_study(
             prep["study_path"],
             incumbent_export,
-            str(Path(manifest["splits"]["train"]["path"]).parent),
+            str(Path(train_entry["path"]).parent),
             str(Path(profile["runs"]) / (campaign_id + "-" + prep["round_id"])),
             campaign_id + "-" + prep["round_id"],
         )
@@ -1090,7 +1178,7 @@ def _job_report_path(home: Path, round_id: str) -> Optional[Path]:
     except (OSError, ValueError):
         return None
     profile_path = campaign.get("operator_profile")
-    if not profile_path:
+    if not isinstance(profile_path, str) or not profile_path:
         return None
     try:
         profile = read_json(Path(profile_path))
@@ -1098,8 +1186,12 @@ def _job_report_path(home: Path, round_id: str) -> Optional[Path]:
         return None
     if not isinstance(profile, dict):
         return None
-    experiment = "%s-%s" % (campaign["campaign_id"], round_id)
-    report = Path(profile["runs"]) / experiment / "report.json"
+    campaign_id = campaign.get("campaign_id")
+    runs = profile.get("runs")
+    if not isinstance(campaign_id, str) or not isinstance(runs, str):
+        return None
+    experiment = "%s-%s" % (campaign_id, round_id)
+    report = Path(runs) / experiment / "report.json"
     return report if report.is_file() else None
 
 
@@ -1131,7 +1223,12 @@ def _run_agent_event(
             # Optional learning failures must not stall an owned GPU job.
             procedure = {"status": "unavailable", "error": str(exc)}
     try:
-        result = agent_runner(config, kind, prompt, Path(config["repo"]))
+        repo = config.get("repo")
+        if not isinstance(repo, str) or not repo:
+            raise ValueError("Agent config needs repo")
+        result = agent_runner(config, kind, prompt, Path(repo))
+        if not isinstance(result, dict):
+            raise ValueError("Agent runner returned no result")
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
         result = {
             "session": None,
@@ -1168,6 +1265,9 @@ def _analyze_event(
     campaign = campaign_dir(home)
     files = _round_files(home, round_id)
     receipt = laya_campaign.read_round(campaign, round_id)
+    phase = receipt.get("phase")
+    if not isinstance(phase, str):
+        raise ValueError("Round receipt needs a phase: " + str(round_id))
     report = _job_report_path(home, round_id)
     prompt = build_prompt(
         "analyze",
@@ -1175,7 +1275,7 @@ def _analyze_event(
             "home": str(home),
             "repo": config["repo"],
             "round_id": round_id,
-            "phase": receipt["phase"],
+            "phase": phase,
             "receipt": str(files["receipt"]),
             "incumbent": str(campaign / "incumbent.json"),
             "report": str(report) if report else "(no trainer report)",
@@ -1456,9 +1556,13 @@ def _plan_event(
 
 def _summarize_counts(summary: dict[str, Any]) -> str:
     """One-line development counts for the status record."""
+    if not isinstance(summary, dict):
+        return "(no candidate)"
     parts = []
     for role in ("new_coverage", "retention"):
         view = summary.get(role) or {}
+        if not isinstance(view, dict):
+            continue
         if view.get("n") is None:
             continue
         parts.append(
@@ -1537,7 +1641,8 @@ def build_status(
     if active:
         try:
             record = laya_campaign.read_round(campaign, active)
-            candidate = (record.get("candidate") or {}).get("export")
+            held = record.get("candidate") or {}
+            candidate = held.get("export") if isinstance(held, dict) else None
         except (OSError, ValueError):
             candidate = None
     analysis = handoff.get("last_analysis") or {}
@@ -1662,16 +1767,27 @@ def supervise_once(
     home = Path(home)
     campaign = campaign_dir(home)
     runner = agent_runner or run_muse_session
+    if not isinstance(config, dict):
+        raise ValueError("Supervisor config must be an object")
     if config.get("study_id") and not config.get("procedure_bundle"):
         try:
             frozen = study_procedure(home, config["study_id"])
+            if frozen.get("enabled"):
+                bundle = frozen.get("bundle")
+                if not isinstance(bundle, dict) or not isinstance(
+                    bundle.get("path"), str
+                ):
+                    raise ValueError("Study procedure bundle is malformed")
+                if not isinstance(frozen.get("queue"), str):
+                    raise ValueError("Study procedure queue is malformed")
+                if not isinstance(frozen.get("model"), str):
+                    raise ValueError("Study procedure model is malformed")
+                config = dict(config)
+                config.setdefault("procedure_bundle", bundle["path"])
+                config.setdefault("procedure_queue", frozen["queue"])
+                config.setdefault("model", frozen["model"])
         except (OSError, ValueError):
             frozen = {"enabled": False}
-        if frozen.get("enabled"):
-            config = dict(config)
-            config.setdefault("procedure_bundle", frozen["bundle"]["path"])
-            config.setdefault("procedure_queue", frozen["queue"])
-            config.setdefault("model", frozen["model"])
     handoff = load_handoff(home)
     try:
         reference = load_reference(home)
@@ -1685,6 +1801,9 @@ def supervise_once(
             receipt = laya_campaign.read_round(campaign, round_id)
         except (OSError, ValueError) as exc:
             errors[round_id] = "unreadable round receipt: %s" % exc
+            continue
+        if not isinstance(receipt.get("phase"), str):
+            errors[round_id] = "round receipt needs a phase"
             continue
         if receipt["phase"] in TERMINAL_PHASES:
             phases[round_id] = receipt["phase"]
@@ -1701,9 +1820,7 @@ def supervise_once(
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught
             errors[round_id] = repr(exc)
             try:
-                phases[round_id] = laya_campaign.read_round(campaign, round_id)[
-                    "phase"
-                ]
+                phases[round_id] = laya_campaign.round_phase(campaign, round_id)
             except (OSError, ValueError):
                 phases[round_id] = "unknown"
     active = sorted(
@@ -1712,7 +1829,10 @@ def supervise_once(
     handoff["active_round"] = active[0] if active else None
     for round_id, phase in sorted(phases.items()):
         if phase in TERMINAL_PHASES:
-            laya_campaign.record_leaderboard_entry(campaign, round_id)
+            try:
+                laya_campaign.record_leaderboard_entry(campaign, round_id)
+            except (OSError, ValueError) as exc:
+                errors[round_id] = "leaderboard refused: %s" % exc
     unanalyzed = sorted(
         rid
         for rid, phase in phases.items()
@@ -1727,11 +1847,17 @@ def supervise_once(
     elif unanalyzed and not halted:
         action = _analyze_event(home, config, handoff, unanalyzed[0], runner)
     elif handoff.get("pending_proposal") and not halted:
-        files = _round_files(home, handoff["proposal_round"])
-        if files["prep"].is_file():
-            action = _commit_attempt(home, handoff, config)
+        target = handoff.get("proposal_round")
+        if not isinstance(target, str) or not target:
+            handoff["pending_proposal"] = None
+            handoff["last_error"] = "pending proposal round is malformed"
+            action = "proposal_invalid"
         else:
-            action = _prepare_event(home, config, handoff, runner)
+            files = _round_files(home, target)
+            if files["prep"].is_file():
+                action = _commit_attempt(home, handoff, config)
+            else:
+                action = _prepare_event(home, config, handoff, runner)
     elif not active and not handoff.get("pending_proposal") and not halted:
         action = _plan_event(home, config, handoff, runner)
     committed = handoff.get("active_round")

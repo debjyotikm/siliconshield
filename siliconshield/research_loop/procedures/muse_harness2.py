@@ -26,6 +26,18 @@ def process_queue(
     Use a fresh output directory to retry failed trials. This prevents a bad
     input or endpoint outage from consuming requests in an endless retry loop.
     """
+    for name, value in (
+        ("queue", queue),
+        ("output", output),
+        ("bundle", bundle),
+    ):
+        if not isinstance(value, (str, Path)):
+            raise ValueError("Procedure queue needs a %s path" % name)
+    queue, output, bundle = Path(queue), Path(output), Path(bundle)
+    if not isinstance(checks, list) or any(
+        not isinstance(item, dict) for item in checks
+    ):
+        raise ValueError("Procedure queue needs a list of check rows")
     from siliconshield.research_loop.procedures.muse_trials import learn
 
     output.mkdir(parents=True, exist_ok=True)

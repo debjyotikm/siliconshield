@@ -30,6 +30,20 @@ from siliconshield.research_loop.episodes.operator_episodes import (
 
 def episode(spec):
     """Render a catalog observation and its reviewed target into the tool contract."""
+    if not isinstance(spec, dict):
+        raise ValueError("Curriculum episode needs a spec object")
+    for key in (
+        "state",
+        "resources",
+        "scenario",
+        "action",
+        "reason",
+        "family",
+        "index",
+        "split",
+    ):
+        if key not in spec:
+            raise ValueError("Curriculum spec is missing " + key)
     state = copy.deepcopy(spec["state"])
     resources = copy.deepcopy(spec["resources"])
     row = episode_for(
@@ -84,6 +98,8 @@ def episode(spec):
 
 def fixture_verify(row):
     """Exercise the actual replay dispatcher and grader with the authored trace."""
+    if not isinstance(row, dict):
+        raise ValueError("Fixture verification needs an episode object")
     from siliconshield.research_loop.controller.replay import execute, grade
 
     class TraceClient:
@@ -103,6 +119,12 @@ def fixture_verify(row):
 
 def build(catalog, output, replay_train=None):
     """Validate complete situations, isolate families, and sign the dataset."""
+    if not isinstance(catalog, (str, Path)) or not isinstance(
+        output, (str, Path)
+    ):
+        raise ValueError("Curriculum build needs catalog and output paths")
+    if replay_train is not None and not isinstance(replay_train, (str, Path)):
+        raise ValueError("Curriculum retention path must be a path")
     if not os.environ.get("SILICONSHIELD_DATASET_KEY"):
         raise ValueError(
             "Set SILICONSHIELD_DATASET_KEY before building a training dataset"

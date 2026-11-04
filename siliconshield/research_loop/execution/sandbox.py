@@ -9,6 +9,7 @@ or separate host) before it may touch private files. Filesystem
 access itself is unchanged here.
 """
 
+import math
 import os
 
 # Variables a toolchain or login-based CLI needs. Everything else in
@@ -40,6 +41,8 @@ def restricted_env(extra=None):
     """
     keep = set(BASE_ENV_KEEP)
     if extra:
+        if isinstance(extra, str):
+            raise ValueError("Sandbox env extras must be a name list")
         keep.update(extra)
     return {key: value for key, value in os.environ.items() if key in keep}
 
@@ -51,6 +54,17 @@ def limited_preexec(timeout_seconds, address_gb=16):
     pass the result straight to ``subprocess.run``. Limits are a
     backstop behind the caller's own timeout, not a replacement.
     """
+    for name, value, minimum in (
+        ("timeout_seconds", timeout_seconds, 0),
+        ("address_gb", address_gb, 1),
+    ):
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            or value < minimum
+        ):
+            raise ValueError("Sandbox limit needs %s" % name)
     if os.name != "posix":
         return None
 

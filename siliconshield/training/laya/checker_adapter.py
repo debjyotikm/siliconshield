@@ -75,6 +75,10 @@ def load_contracts(contracts_path: Path) -> dict[str, dict[str, Any]]:
         raise ValueError("Contract registry must be a non-empty object")
     seen = set()
     for contract_id, contract in registry.items():
+        if not contract_id or not isinstance(contract_id, str):
+            raise ValueError("Contract registry names an empty id")
+        if not isinstance(contract, dict):
+            raise ValueError("Contract %s must be an object" % contract_id)
         for key in ("requirement", "assertion", "scope"):
             if not contract.get(key) or not isinstance(contract[key], str):
                 raise ValueError("Contract %s needs %s" % (contract_id, key))
@@ -201,7 +205,8 @@ class FixedChecker:
 
     def check(self, proposal: dict[str, Any]) -> dict[str, Any]:
         """Establish one proposal's label with solver evidence."""
-        yosys, iverilog = self._tools()
+        if not isinstance(proposal, dict):
+            raise ProposalError("Proposal must be an object")
         contract_id = proposal.get("contract_id", "")
         contract = self.contracts.get(contract_id)
         if contract is None:
@@ -217,10 +222,17 @@ class FixedChecker:
                 "Assumptions are not the registered %s scope"
                 % contract["scope"]
             )
-        rtl = proposal["rtl"]
-        self._compile(rtl, "proposal-%s" % proposal["id"], iverilog)
+        rtl = proposal.get("rtl")
+        if not rtl or not isinstance(rtl, str):
+            raise ProposalError("Proposal carries no RTL text")
+        if not proposal.get("id") or not isinstance(proposal["id"], str):
+            raise ProposalError("Proposal carries no evidence id")
         completions = proposal.get("completions") or []
+        if not isinstance(completions, list):
+            raise ProposalError("Completions must be a list")
         hole = proposal.get("hole")
+        yosys, iverilog = self._tools()
+        self._compile(rtl, "proposal-%s" % proposal["id"], iverilog)
         if completions:
             return self._check_completions(
                 proposal,
@@ -362,6 +374,8 @@ class FixedChecker:
         compile, verify, and oppose. Programs that are not hole
         fills of this fragment cannot reach the solver.
         """
+        if not isinstance(completions, list):
+            raise ProposalError("Completions must be a list")
         if len(completions) < 2:
             raise ProposalError("Missing context needs two completions")
         name, width = self._hole(proposal)

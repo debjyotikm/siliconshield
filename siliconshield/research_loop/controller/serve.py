@@ -13,6 +13,16 @@ from siliconshield.research_loop.controller.inference_metrics import (
 
 
 def parse_completion(text, tools):
+    if not isinstance(text, str):
+        raise ValueError("Completion text must be a string")
+    if not isinstance(tools, list) or any(
+        not isinstance(item, dict)
+        or not isinstance(item.get("function"), dict)
+        or not isinstance(item["function"].get("name"), str)
+        or not isinstance(item["function"].get("parameters"), dict)
+        for item in tools
+    ):
+        raise ValueError("Completion tools must be a list of tool schemas")
     schemas = {
         t["function"]["name"]: t["function"]["parameters"] for t in tools
     }
@@ -24,6 +34,11 @@ def parse_completion(text, tools):
             raise ValueError("Model requested an unknown tool: " + name)
         parameters = {}
         properties = schemas[name].get("properties", {})
+        if not isinstance(properties, dict):
+            raise ValueError("Tool schema needs a properties object")
+        for spec in properties.values():
+            if not isinstance(spec, dict):
+                raise ValueError("Tool schema needs property objects")
         for key, value in re.findall(
             r'<atem:parameter name="([^"]+)">(.*?)</atem:parameter>',
             body,

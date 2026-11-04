@@ -237,3 +237,8 @@ siliconshield/web_demo/toy_runner.py
 tests/test_web_demo.py
 tools/prepare_benchmark.py
 tests/test_prepare_benchmark.py
+
+tests/test_campaign_guards.py
+tests/test_checker_ingest.py
+tests/test_owned_job.py
+tests/test_strategy.py

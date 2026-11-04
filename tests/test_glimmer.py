@@ -262,3 +262,193 @@ def _schedule_campaign(
     }
     config.update(extra)
     return run_campaign(config, run=execute)
+
+
+def test_model_status_rejects_malformed_records():
+    import pytest
+
+    from siliconshield.research_loop.execution import glimmer_operator as gop
+
+    with pytest.raises(ValueError, match="must be an object"):
+        gop.model_status(["x"])
+    bad = {"evaluation_role": "development", "selected_checkpoint": "s7"}
+    with pytest.raises(ValueError, match="checkpoint reference"):
+        gop.model_status({"report.json": bad})
+    bad = dict(
+        bad,
+        selected_checkpoint={"step": 1},
+        development_acceptance={"accepted": True, "reasons": 5},
+    )
+    with pytest.raises(ValueError, match="reasons are malformed"):
+        gop.model_status({"report.json": bad})
+    bad["development_acceptance"] = {"accepted": True, "reasons": "ok"}
+    with pytest.raises(ValueError, match="reasons are malformed"):
+        gop.model_status({"report.json": bad})
+
+
+def test_history_helpers_tolerate_bad_lines_reject_bad_shapes(tmp_path):
+    import pytest
+
+    from siliconshield.research_loop.execution import glimmer_operator as gop
+
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        '[1, 2]\n{"event": "development", "step": 1, "metrics": {}}\n'
+    )
+    manifest = {"output": str(tmp_path)}
+    assert gop.development_history(manifest)["total"] == 1
+    assert gop._latest_view_metrics(manifest) == (None, None)
+    with pytest.raises(ValueError, match="must be an object"):
+        gop.development_history(None)
+    with pytest.raises(ValueError, match="must be an object"):
+        gop._latest_view_metrics(["x"])
+    with pytest.raises(ValueError, match="needs a manifest"):
+        gop.schedule_status(["x"], {})
+    with pytest.raises(ValueError, match="needs a manifest"):
+        gop.schedule_status({}, ["x"])
+    with pytest.raises(ValueError, match="must be an object"):
+        gop.stop_evidence({}, ["x"])
+
+
+def test_dispatch_rejects_malformed_tool_calls(tmp_path):
+    import pytest
+
+    from siliconshield.research_loop.execution import glimmer_operator as gop
+    from siliconshield.research_loop.execution.operator import (
+        ResourceReservation,
+    )
+
+    class Jobs:
+        def __init__(self, status):
+            self._status = status
+
+        def status(self, run_id):
+            return self._status
+
+    class FakeOperator:
+        def __init__(self, status):
+            self.jobs = Jobs(status)
+            self.reservation = ResourceReservation(tmp_path)
+
+    manifest = {"experiment_id": "e1", "output": str(tmp_path)}
+    tools = gop.OperatorTools(FakeOperator({}), manifest)
+    with pytest.raises(ValueError, match="must be an object"):
+        tools.dispatch("operator.decide", ["x"])
+    bad = gop.OperatorTools(
+        FakeOperator({"status.json": ["x"]}), dict(manifest)
+    )
+    with pytest.raises(ValueError, match="records are malformed"):
+        bad.dispatch("operator.inspect_run", {"run_id": "e1"})
+    bad = gop.OperatorTools(
+        FakeOperator({"execution.json": ["x"]}), dict(manifest)
+    )
+    with pytest.raises(ValueError, match="records are malformed"):
+        bad.dispatch("operator.inspect_run", {"run_id": "e1"})
+
+
+def test_glimmer_helpers_reject_malformed_inputs(tmp_path):
+    import pytest
+
+    from siliconshield.training.glimmer import dpo_pairs, identity, selection
+
+    assert dpo_pairs.validate_pair(5) == ["pair schema incomplete"]
+    with pytest.raises(ValueError, match="must be a path"):
+        dpo_pairs.write_pairs([], 5)
+    with pytest.raises(ValueError, match="list of pairs"):
+        dpo_pairs.write_pairs(5, tmp_path / "p.jsonl")
+    target = tmp_path / "p.jsonl"
+    with pytest.raises(ValueError, match="Pair .* invalid"):
+        dpo_pairs.write_pairs([{"id": "bad"}], target)
+    assert not target.exists()
+    with pytest.raises(ValueError, match="report object"):
+        selection.compare_replay(5, {})
+    with pytest.raises(ValueError, match="At least one reference"):
+        selection.select_replay_candidate(5, {})
+    with pytest.raises(ValueError, match="candidate reports"):
+        selection.select_replay_candidate({"r": {}}, 5)
+    with pytest.raises(ValueError, match="must be a path"):
+        identity.adapter_manifest(5)
+    with pytest.raises(ValueError, match="must be a path"):
+        identity.snapshot_manifest(5)
+    with pytest.raises(ValueError, match="must be a path"):
+        identity.checkpoint_fingerprint(5)
+
+
+def test_migrate_operator_row_rejects_malformed_rows():
+    import pytest
+
+    from siliconshield.research_loop.episodes import operator_episodes
+
+    with pytest.raises(ValueError, match="episode object"):
+        operator_episodes.migrate_operator_row(5)
+    with pytest.raises(ValueError, match="message objects"):
+        operator_episodes.migrate_operator_row({"messages": [5]})
+    with pytest.raises(ValueError, match="tool calls"):
+        operator_episodes.migrate_operator_row(
+            {"messages": [{"tool_calls": [5]}]}
+        )
+    migrated, note = operator_episodes.migrate_operator_row(
+        {
+            "messages": [
+                {"tool_calls": [{"function": {"name": "operator.decide"}}]}
+            ]
+        }
+    )
+    assert migrated is None
+    assert note["status"] == "rejected"
+
+
+def test_operator_builders_reject_malformed_inputs():
+    import pytest
+
+    from siliconshield.research_loop.episodes import (
+        operator_curriculum,
+        operator_dev,
+        operator_episodes,
+    )
+
+    with pytest.raises(ValueError, match="for train"):
+        operator_episodes.operator_coverage(5, [], [])
+    with pytest.raises(ValueError, match="needs text lineage"):
+        operator_episodes.episode_for("s", {}, {}, "a", "r", 5, 0)
+    with pytest.raises(ValueError, match="integer index"):
+        operator_episodes.episode_for("s", {}, {}, "a", "r", "l", "x")
+    with pytest.raises(ValueError, match="spec object"):
+        operator_curriculum.episode(5)
+    with pytest.raises(ValueError, match="missing split"):
+        operator_curriculum.episode(
+            {
+                "state": {},
+                "resources": {},
+                "scenario": "s",
+                "action": "stop",
+                "reason": "r",
+                "family": "f",
+                "index": 0,
+            }
+        )
+    with pytest.raises(ValueError, match="episode object"):
+        operator_curriculum.fixture_verify(5)
+    with pytest.raises(ValueError, match="catalog and output paths"):
+        operator_curriculum.build(5, "/tmp/x")
+    with pytest.raises(ValueError, match="output path"):
+        operator_dev.build_dev(5)
+    with pytest.raises(ValueError, match="must be a path"):
+        operator_dev.load_dev(5)
+
+
+def test_training_row_loaders_reject_malformed_inputs():
+    import pytest
+
+    from siliconshield.training.glimmer import tokenization, train
+
+    with pytest.raises(ValueError, match="must be a path"):
+        train.load_rows(5)
+    with pytest.raises(ValueError, match="must be a path"):
+        train.training_rows(5)
+    with pytest.raises(ValueError, match="episode rows"):
+        train.dev_subset(5, 1)
+    with pytest.raises(ValueError, match="nonnegative integer"):
+        train.dev_subset([], -1)
+    with pytest.raises(ValueError, match="integer max length"):
+        tokenization.encode_episode(None, {}, "x")

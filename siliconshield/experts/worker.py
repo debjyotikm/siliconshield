@@ -155,7 +155,7 @@ class WorkerPool:
                 )
                 self._validate_ready(entry, reply)
                 self._ready[expert_id] = reply
-            except (OSError, ValueError, RuntimeError) as exc:
+            except (OSError, ValueError, TypeError, RuntimeError) as exc:
                 self._discard(expert_id)
                 raise WorkerLoadError(
                     "Cannot load %s: %s" % (expert_id, exc)
@@ -216,6 +216,8 @@ class WorkerPool:
         """
         if not isinstance(state, str) or not state.strip():
             raise ValueError("Cannot analyze empty state text")
+        if not isinstance(expert_id, str):
+            raise RuntimeError("No validated worker ready for an expert")
         with self._locks.setdefault(expert_id, threading.RLock()):
             if expert_id not in self._ready:
                 raise RuntimeError("No validated worker ready for " + expert_id)
@@ -372,10 +374,9 @@ class WorkerPool:
                 or not session
             ):
                 raise RuntimeError("Invalid worker protocol/session")
-            if (
-                expert_id in self._ready
-                and session != self._ready[expert_id]["session_id"]
-            ):
+            if expert_id in self._ready and session != self._ready[
+                expert_id
+            ].get("session_id"):
                 raise RuntimeError("Worker session changed during request")
             kind = contracts.message_kind(message)
             if kind == "progress":

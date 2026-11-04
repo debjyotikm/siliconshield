@@ -168,10 +168,20 @@ def list_rounds(root: Path) -> list[str]:
 
 def read_round(root: Path, round_id: str) -> dict[str, Any]:
     """Read and schema-check one round receipt."""
+    if not isinstance(round_id, str) or not round_id:
+        raise ValueError("Round id must be a non-empty string")
     receipt = _record(_round_file(root, round_id))
     if receipt.get("schema") != CAMPAIGN_ROUND_SCHEMA:
         raise ValueError("Unknown round schema: " + round_id)
     return receipt
+
+
+def round_phase(root: Path, round_id: str) -> str:
+    """Return one round's phase, refusing receipts that lack it."""
+    phase = read_round(root, round_id).get("phase")
+    if not isinstance(phase, str):
+        raise ValueError("Round receipt needs a phase: " + str(round_id))
+    return phase
 
 
 def update_campaign_selection(
@@ -196,12 +206,17 @@ def update_campaign_selection(
         raise ValueError("A selection update needs a recorded reason")
     with _campaign_lock(root):
         campaign = load_campaign(root)
-        if not allow_relaxation and selection_relaxes(
-            campaign["selection"], policy
-        ):
+        stored = campaign.get("selection")
+        try:
+            _check_policy(stored)
+        except ValueError as exc:
+            raise ValueError(
+                "Registered selection policy is malformed"
+            ) from exc
+        if not allow_relaxation and selection_relaxes(stored, policy):
             raise ValueError("Selection update relaxes a threshold")
         for round_id in list_rounds(root):
-            if read_round(root, round_id)["phase"] not in TERMINAL:
+            if round_phase(root, round_id) not in TERMINAL:
                 raise ValueError(
                     "Selection is frozen while a round is active: " + round_id
                 )
@@ -212,7 +227,7 @@ def update_campaign_selection(
                     {
                         "time": time.time(),
                         "reason": str(reason),
-                        "previous_digest": digest(campaign["selection"]),
+                        "previous_digest": digest(stored),
                         "policy_digest": digest(policy),
                     },
                     sort_keys=True,
@@ -229,13 +244,23 @@ def check_selection_policy(policy: dict[str, Any]) -> None:
     _check_policy(policy)
 
 
-def selection_relaxes(old: dict[str, Any], new: dict[str, Any]) -> bool:
+def selection_relaxes(old: Any, new: Any) -> bool:
     """True when any known threshold moves toward leniency.
 
     Unknown research or deployment keys fail closed: a policy the
     checker cannot compare is treated as a relaxation until the
     comparison learns it.
     """
+    if not isinstance(old, dict) or not isinstance(new, dict):
+        return True
+    try:
+        return _relaxes_known(old, new)
+    except TypeError:
+        return True
+
+
+def _relaxes_known(old: dict[str, Any], new: dict[str, Any]) -> bool:
+    """Compare thresholds the checker understands."""
     for section in ("research", "deployment"):
         if not isinstance(new.get(section), dict):
             return True
@@ -345,15 +370,26 @@ def update_campaign_recipe(
     root = Path(root)
     if not reason or not str(reason).strip():
         raise ValueError("A recipe update needs a recorded reason")
-    if _sha(Path(path)) != sha256:
+    if not isinstance(path, str) or not isinstance(sha256, str):
+        raise ValueError("A recipe update needs a path and hash")
+    try:
+        actual = _sha(Path(path))
+    except OSError as exc:
+        raise ValueError("Recipe file is missing: " + path) from exc
+    if actual != sha256:
         raise ValueError("Recipe bytes mismatch: " + path)
     with _campaign_lock(root):
         campaign = load_campaign(root)
         for round_id in list_rounds(root):
-            if read_round(root, round_id)["phase"] not in TERMINAL:
+            if round_phase(root, round_id) not in TERMINAL:
                 raise ValueError(
                     "Recipe is frozen while a round is active: " + round_id
                 )
+        recipe = campaign.get("recipe")
+        if not isinstance(recipe, dict) or not isinstance(
+            recipe.get("sha256"), str
+        ):
+            raise ValueError("Campaign recipe block is malformed")
         history = Path(root) / "recipe_history.jsonl"
         with history.open("a") as handle:
             handle.write(
@@ -361,7 +397,7 @@ def update_campaign_recipe(
                     {
                         "time": time.time(),
                         "reason": str(reason),
-                        "previous_sha256": campaign["recipe"]["sha256"],
+                        "previous_sha256": recipe["sha256"],
                         "sha256": sha256,
                     },
                     sort_keys=True,
@@ -386,7 +422,7 @@ def verify_round_bindings(
     instead of after GPU acquisition.
     """
     receipt = read_round(Path(root), round_id)
-    if receipt["phase"] not in ("prepare", "validate_data"):
+    if round_phase(Path(root), round_id) not in ("prepare", "validate_data"):
         raise ValueError("Bindings verify before launch: " + round_id)
     _require_profile_bindings(receipt, profile)
 
@@ -400,7 +436,7 @@ def record_leaderboard_entry(root: Path, round_id: str) -> dict[str, Any]:
     """
     root = Path(root)
     receipt = read_round(root, round_id)
-    if receipt["phase"] not in TERMINAL:
+    if round_phase(root, round_id) not in TERMINAL:
         raise ValueError("Leaderboard records terminal rounds: " + round_id)
     board = Path(root) / "leaderboard.jsonl"
     if board.is_file():
@@ -412,9 +448,20 @@ def record_leaderboard_entry(root: Path, round_id: str) -> dict[str, Any]:
             if isinstance(entry, dict) and entry.get("round_id") == round_id:
                 return entry
     candidate = receipt.get("candidate") or {}
+    if not isinstance(candidate, dict):
+        raise ValueError("Round candidate is malformed: " + str(round_id))
     summary = {}
-    for role, view in (candidate.get("results") or {}).items():
-        counts = (view or {}).get("counts") or {}
+    results = candidate.get("results") or {}
+    if not isinstance(results, dict):
+        raise ValueError("Round candidate is malformed: " + str(round_id))
+    for role, view in results.items():
+        if view is None:
+            view = {}
+        if not isinstance(view, dict):
+            raise ValueError("Round candidate is malformed: " + str(round_id))
+        counts = view.get("counts") or {}
+        if not isinstance(counts, dict):
+            raise ValueError("Round candidate is malformed: " + str(round_id))
         summary[role] = {
             key: counts.get(key)
             for key in (
@@ -441,12 +488,16 @@ def record_leaderboard_entry(root: Path, round_id: str) -> dict[str, Any]:
     return entry
 
 
-def _check_policy(policy: dict[str, Any]) -> None:
+def _check_policy(policy: Any) -> None:
     """Require explicit research and deployment thresholds."""
+    if not isinstance(policy, dict):
+        raise ValueError("Selection policy must be an object")
     for key in ("research", "deployment"):
         if key not in policy:
             raise ValueError("Selection policy is missing: " + key)
     research = policy["research"]
+    if not isinstance(research, dict):
+        raise ValueError("Research policy must be an object")
     for key in (
         "min_retention_accuracy",
         "max_retention_false_safe_increase",
@@ -457,6 +508,8 @@ def _check_policy(policy: dict[str, Any]) -> None:
         if key not in research:
             raise ValueError("Research policy is missing: " + key)
     deployment = policy["deployment"]
+    if not isinstance(deployment, dict):
+        raise ValueError("Deployment policy must be an object")
     for key in (
         "max_worst_family_false_safe_rate",
         "min_class_recall",
@@ -481,6 +534,33 @@ def _check_policy(policy: dict[str, Any]) -> None:
     budget = research.get("max_retention_false_safe_increase")
     if not isinstance(budget, int) or isinstance(budget, bool):
         raise ValueError("Research policy needs a retention budget")
+    floor = research.get("min_retention_accuracy")
+    if (
+        not isinstance(floor, (int, float))
+        or isinstance(floor, bool)
+        or not math.isfinite(floor)
+        or not 0 <= floor <= 1
+    ):
+        raise ValueError("Research policy needs a retention floor")
+    for key in (
+        "require_no_missing_context_regression",
+        "require_no_pair_regression",
+    ):
+        if not isinstance(research.get(key), bool):
+            raise ValueError("Research policy needs " + key)
+    for key in (
+        "max_worst_family_false_safe_rate",
+        "min_class_recall",
+        "min_pair_accuracy",
+    ):
+        value = deployment.get(key)
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(value)
+            or not 0 <= value <= 1
+        ):
+            raise ValueError("Deployment policy needs " + key)
     ranking = research.get(
         "selection_ranking", laya_training.RANKING_V1_TRANSFER
     )
@@ -716,10 +796,10 @@ def candidate_rank_key(results: dict[str, Any]) -> list[Any]:
 
 
 def apply_selection_policy(
-    policy: dict[str, Any],
-    incumbent: dict[str, Any],
-    candidate: dict[str, Any],
-    reference: Optional[dict[str, Any]] = None,
+    policy: Any,
+    incumbent: Any,
+    candidate: Any,
+    reference: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Apply research and deployment gates to one candidate.
 
@@ -1256,6 +1336,11 @@ def _revalidate_candidate(
     its recorded hash, must refuse here rather than promote bytes
     the results never described.
     """
+    if not isinstance(candidate, dict):
+        raise ValueError("Round candidate is malformed")
+    for key in ("export", "export_manifest", "results", "receipt"):
+        if key not in candidate:
+            raise ValueError("Round candidate is malformed")
     export = candidate["export"]
     if export_manifest(Path(export)) != candidate["export_manifest"]:
         raise ValueError("Candidate export changed after evaluation")
@@ -1286,15 +1371,28 @@ def register_dataset(
     a dataset-version manifest; its splits and bound pools are
     re-verified before every training use.
     """
+    if not isinstance(version, str) or not isinstance(sha256, str):
+        raise ValueError("Dataset registration needs a version and hash")
+    if not isinstance(manifest_path, str):
+        raise ValueError("Dataset registration needs a manifest path")
     record = _record(_datasets_file(root))
-    versions: dict[str, Any] = record["versions"]
+    versions = record.get("versions")
+    if not isinstance(versions, dict):
+        raise ValueError("Campaign dataset registry is malformed")
     if version in versions:
-        if versions[version]["sha256"] != sha256:
+        stored = versions[version]
+        if not isinstance(stored, dict) or stored.get("sha256") != sha256:
             raise ValueError(
                 "Dataset version re-registered with a new hash: " + version
             )
-        return cast(dict[str, Any], versions[version])
-    if _sha(Path(manifest_path)) != sha256:
+        return cast(dict[str, Any], stored)
+    try:
+        actual = _sha(Path(manifest_path))
+    except OSError as exc:
+        raise ValueError(
+            "Dataset manifest is missing: " + manifest_path
+        ) from exc
+    if actual != sha256:
         raise ValueError("Dataset manifest mismatch: " + version)
     entry = {
         "manifest": str(Path(manifest_path).resolve()),
@@ -1310,19 +1408,46 @@ def _revalidate_inputs(
     root: Path, campaign: dict[str, Any], dataset_version: str
 ) -> None:
     """Re-hash parent, recipe, contract, and dataset before a round."""
-    parent = campaign["parent"]
-    weights = Path(parent["export"]) / "model.safetensors"
-    if _sha(weights) != parent["weights_sha256"]:
+    parent = campaign.get("parent")
+    if not isinstance(parent, dict):
+        raise ValueError("Campaign parent block is malformed")
+    weights = Path(str(parent.get("export", ""))) / "model.safetensors"
+    try:
+        parent_sha = _sha(weights)
+    except OSError as exc:
+        raise ValueError("Parent export is missing") from exc
+    if parent_sha != parent.get("weights_sha256"):
         raise ValueError("Parent export changed since registration")
-    recipe = campaign["recipe"]
-    if _sha(recipe["path"]) != recipe["sha256"]:
+    recipe = campaign.get("recipe")
+    if not isinstance(recipe, dict):
+        raise ValueError("Campaign recipe block is malformed")
+    try:
+        recipe_sha = _sha(Path(str(recipe.get("path", ""))))
+    except OSError as exc:
+        raise ValueError("Campaign recipe is missing") from exc
+    if recipe_sha != recipe.get("sha256"):
         raise ValueError("Campaign recipe changed since registration")
     contract = campaign.get("reporting_contract")
-    if contract and _sha(contract["path"]) != contract["sha256"]:
-        raise ValueError("Reporting contract changed since registration")
-    datasets = _record(_datasets_file(root))["versions"]
-    entry = datasets[dataset_version]
-    if _sha(Path(entry["manifest"])) != entry["sha256"]:
+    if contract:
+        if not isinstance(contract, dict):
+            raise ValueError("Reporting contract block is malformed")
+        try:
+            contract_sha = _sha(Path(str(contract.get("path", ""))))
+        except OSError as exc:
+            raise ValueError("Reporting contract is missing") from exc
+        if contract_sha != contract.get("sha256"):
+            raise ValueError("Reporting contract changed since registration")
+    versions = _record(_datasets_file(root)).get("versions")
+    if not isinstance(versions, dict):
+        raise ValueError("Campaign dataset registry is malformed")
+    entry = versions.get(dataset_version)
+    if not isinstance(entry, dict):
+        raise ValueError("Unknown dataset version: " + str(dataset_version))
+    try:
+        entry_sha = _sha(Path(str(entry.get("manifest", ""))))
+    except OSError as exc:
+        raise ValueError("Dataset manifest is missing") from exc
+    if entry_sha != entry.get("sha256"):
         raise ValueError("Dataset manifest changed since registration")
 
 
@@ -1341,6 +1466,8 @@ def _freeze_round_recipe(
     bytes before the round receipt pins their digest.
     """
     recipe_ref = campaign.get("recipe") or {}
+    if not isinstance(recipe_ref, dict):
+        raise ValueError("Campaign recipe block is malformed")
     try:
         spec = read_json(Path(recipe_ref.get("path", "")))
     except (OSError, ValueError) as exc:
@@ -1348,9 +1475,15 @@ def _freeze_round_recipe(
     if not isinstance(spec, dict):
         raise ValueError("Bound recipe must be a JSON object")
     selection = campaign.get("selection")
+    try:
+        _check_policy(selection)
+    except ValueError as exc:
+        raise ValueError("Campaign selection policy is malformed") from exc
     if not isinstance(selection, dict):
-        raise ValueError("Campaign selection policy is missing")
+        raise ValueError("Campaign selection policy is malformed")
     results = incumbent.get("results")
+    if not isinstance(results, dict):
+        raise ValueError("Incumbent results are missing")
     reference = laya_training.build_selection_reference_from_results(
         results, selection.get("research"), digest(results)
     )
@@ -1383,20 +1516,31 @@ def prepare_round(
     identical spec returns the existing round; a differing spec under
     the same id is refused.
     """
-    if not ROUND_ID.fullmatch(round_id):
+    if not isinstance(round_id, str) or not ROUND_ID.fullmatch(round_id):
         raise ValueError("Round ID must be a simple stable identifier")
-    if not hypothesis or not str(hypothesis).strip():
+    if not isinstance(hypothesis, str) or not hypothesis.strip():
         raise ValueError("A round needs a recorded hypothesis")
     campaign = load_campaign(root)
     experiment_id = "%s-%s" % (campaign["campaign_id"], round_id)
     if len(experiment_id) > 64 or not ROUND_ID.fullmatch(experiment_id):
         raise ValueError("Campaign and round IDs exceed operator limits")
-    datasets = _record(_datasets_file(root))["versions"]
-    if dataset_version not in datasets:
-        raise ValueError("Unknown dataset version: " + dataset_version)
+    versions = _record(_datasets_file(root)).get("versions")
+    if not isinstance(versions, dict):
+        raise ValueError("Campaign dataset registry is malformed")
+    datasets = versions
+    if not isinstance(dataset_version, str) or dataset_version not in datasets:
+        raise ValueError("Unknown dataset version: " + str(dataset_version))
     _revalidate_inputs(root, campaign, dataset_version)
     incumbent = load_incumbent(root)
+    if not isinstance(overrides, dict) and overrides is not None:
+        raise ValueError("Round overrides must be an object")
     overrides = overrides or {}
+    for key in ("parent", "recipe", "selection", "campaign_id"):
+        if key not in campaign:
+            raise ValueError("Campaign is missing " + key)
+    for key in ("export", "export_manifest", "results"):
+        if key not in incumbent:
+            raise ValueError("Incumbent is missing " + key)
     bindings = {
         "dataset": datasets[dataset_version],
         "parent": campaign["parent"],
@@ -1425,7 +1569,7 @@ def prepare_round(
     path = _round_file(root, round_id)
     if path.exists():
         existing = _record(path)
-        if existing["idempotency_key"] != key:
+        if existing.get("idempotency_key") != key:
             raise ValueError(
                 "Round ID already belongs to a different spec: " + round_id
             )
@@ -1456,9 +1600,13 @@ def advance(
     ``failed`` is reachable from any active phase and records the
     failure; ``done`` is reachable only from ``report``.
     """
+    if not isinstance(round_id, str) or not isinstance(phase, str):
+        raise ValueError("Round transition needs string ids")
     path = _round_file(root, round_id)
     receipt = _record(path)
-    current = receipt["phase"]
+    current = receipt.get("phase")
+    if current not in PHASES and current not in TERMINAL:
+        raise ValueError("Round has an unknown phase: " + str(round_id))
     if current in TERMINAL:
         raise ValueError("Round is already terminal: " + round_id)
     if phase == "failed":
@@ -1474,9 +1622,10 @@ def advance(
                 "Invalid round transition %s -> %s" % (current, phase)
             )
         receipt["phase"] = phase
-    receipt["history"].append(
-        {"phase": receipt["phase"], "time": time.time(), **details}
-    )
+    history = receipt.get("history")
+    if not isinstance(history, list):
+        raise ValueError("Round history is malformed: " + str(round_id))
+    history.append({"phase": receipt["phase"], "time": time.time(), **details})
     atomic_json(path, receipt)
     return receipt
 
@@ -1495,9 +1644,11 @@ def record_candidate(
     and this run, and the results must pass shape validation. Runs
     during ``observe`` and advances the round to ``evaluate``.
     """
+    if not isinstance(export, str):
+        raise ValueError("Candidate export must be a path")
     path = _round_file(root, round_id)
     round_receipt = _record(path)
-    if round_receipt["phase"] != "observe":
+    if round_phase(Path(root), round_id) != "observe":
         raise ValueError("Candidate attaches during observe: " + round_id)
     export_path = Path(export)
     if not export_path.is_dir():
@@ -1539,17 +1690,30 @@ def _finish_decision(
     attempt, fresh or retried, so promotion never selects weights
     that changed after evaluation.
     """
-    _revalidate_candidate(root, round_id, intent["candidate"])
-    verdict = intent["verdict"]
-    if verdict["promote_research"]:
-        if incumbent["export"] != intent["candidate"]["export"]:
+    candidate = intent.get("candidate")
+    verdict = intent.get("verdict")
+    if not isinstance(candidate, dict) or not isinstance(verdict, dict):
+        raise ValueError("Decision intent is unreadable")
+    if not isinstance(incumbent, dict):
+        raise ValueError("Incumbent record is malformed")
+    _revalidate_candidate(root, round_id, candidate)
+    if verdict.get("promote_research"):
+        if incumbent.get("export") != candidate.get("export"):
+            for key in (
+                "export",
+                "export_manifest",
+                "results",
+                "receipt",
+            ):
+                if key not in candidate:
+                    raise ValueError("Decision intent is unreadable")
             atomic_json(
                 _incumbent_file(root),
                 {
-                    "export": intent["candidate"]["export"],
-                    "export_manifest": intent["candidate"]["export_manifest"],
-                    "results": intent["candidate"]["results"],
-                    "receipt": intent["candidate"]["receipt"],
+                    "export": candidate["export"],
+                    "export_manifest": candidate["export_manifest"],
+                    "results": candidate["results"],
+                    "receipt": candidate["receipt"],
                     "round_id": round_id,
                     "promoted": time.time(),
                 },
@@ -1557,9 +1721,11 @@ def _finish_decision(
     path = _round_file(root, round_id)
     receipt = _record(path)
     receipt["decision"] = verdict
+    if "previous_incumbent" not in intent:
+        raise ValueError("Decision intent is unreadable")
     receipt["previous_incumbent"] = intent["previous_incumbent"]
     atomic_json(path, receipt)
-    if receipt["phase"] != "decide":
+    if receipt.get("phase") != "decide":
         advance(root, round_id, "decide")
     _intent_file(root, round_id).unlink(missing_ok=True)
     return _record(path)
@@ -1582,11 +1748,16 @@ def _frozen_policy(root: Path, receipt: dict[str, Any]) -> dict[str, Any]:
     under the frozen policy, and a policy change requires a newly
     specified round.
     """
+    if not isinstance(receipt, dict):
+        raise ValueError("Round receipt must be an object")
     bindings = receipt.get("bindings") or {}
+    if not isinstance(bindings, dict):
+        raise ValueError("Round policy binding is damaged")
     frozen = bindings.get("policy_content")
     if not isinstance(frozen, dict) or digest(frozen) != bindings.get("policy"):
         raise ValueError("Round policy binding is damaged")
-    if digest(load_campaign(root)["selection"]) != bindings["policy"]:
+    live = load_campaign(root).get("selection")
+    if not isinstance(live, dict) or digest(live) != bindings.get("policy"):
         raise ValueError(
             "Campaign policy changed; re-specify round "
             + str(receipt.get("round_id"))
@@ -1598,11 +1769,20 @@ def _require_unmoved_incumbent(
     current: dict[str, Any], frozen: dict[str, Any], round_id: str
 ) -> None:
     """Refuse a decision when another round promoted meanwhile."""
-    if current["export"] != frozen["export"] or digest(
-        current["results"]
-    ) != digest(frozen["results"]):
+    for record in (current, frozen):
+        if not isinstance(record, dict) or not isinstance(
+            record.get("export"), str
+        ):
+            raise ValueError("Incumbent record is malformed")
+    try:
+        moved = current["export"] != frozen["export"] or digest(
+            current["results"]
+        ) != digest(frozen["results"])
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Incumbent record is malformed") from exc
+    if moved:
         raise ValueError(
-            "Incumbent moved during round; re-specify: " + round_id
+            "Incumbent moved during round; re-specify: " + str(round_id)
         )
 
 
@@ -1616,20 +1796,32 @@ def _require_retry_consistency(
     intended candidate; anything else means another round decided
     during the crash window.
     """
-    live = (current["export"], digest(current["results"]))
-    allowed = {
-        (
-            intent["previous_incumbent"]["export"],
-            digest(intent["previous_incumbent"]["results"]),
-        ),
-        (
-            intent["candidate"]["export"],
-            digest(intent["candidate"]["results"]),
-        ),
-    }
+    for record in (
+        current,
+        intent.get("previous_incumbent"),
+        intent.get("candidate"),
+    ):
+        if not isinstance(record, dict) or not isinstance(
+            record.get("export"), str
+        ):
+            raise ValueError("Decision intent is unreadable")
+    try:
+        live = (current["export"], digest(current["results"]))
+        allowed = {
+            (
+                intent["previous_incumbent"]["export"],
+                digest(intent["previous_incumbent"]["results"]),
+            ),
+            (
+                intent["candidate"]["export"],
+                digest(intent["candidate"]["results"]),
+            ),
+        }
+    except (KeyError, TypeError) as exc:
+        raise ValueError("Decision intent is unreadable") from exc
     if live not in allowed:
         raise ValueError(
-            "Incumbent moved during round; re-specify: " + round_id
+            "Incumbent moved during round; re-specify: " + str(round_id)
         )
 
 
@@ -1661,16 +1853,17 @@ def decide(
             intent = _record(intent_path)
             _require_retry_consistency(incumbent, intent, round_id)
             return _finish_decision(root, round_id, intent, incumbent)
-        if receipt["phase"] != "evaluate":
-            raise ValueError("Decision follows evaluation: " + round_id)
-        if receipt["candidate"] is None:
-            raise ValueError("No candidate recorded: " + round_id)
+        if receipt.get("phase") != "evaluate":
+            raise ValueError("Decision follows evaluation: " + str(round_id))
+        candidate = receipt.get("candidate")
+        if not isinstance(candidate, dict):
+            raise ValueError("No candidate recorded: " + str(round_id))
         frozen = _frozen_incumbent(receipt)
         _require_unmoved_incumbent(incumbent, frozen, round_id)
         verdict = apply_selection_policy(
             policy,
             frozen["results"],
-            receipt["candidate"]["results"],
+            candidate.get("results"),
             reference_results,
         )
         intent = {
@@ -1691,10 +1884,10 @@ def close_round(root: Path, round_id: str, summary: str) -> dict[str, Any]:
     """
     path = _round_file(root, round_id)
     receipt = _record(path)
-    if receipt["phase"] == "report" and "report" in receipt:
+    if receipt.get("phase") == "report" and "report" in receipt:
         return advance(root, round_id, "done")
-    if receipt["phase"] != "decide":
-        raise ValueError("Report follows decision: " + round_id)
+    if receipt.get("phase") != "decide":
+        raise ValueError("Report follows decision: " + str(round_id))
     receipt["report"] = {"summary": summary, "time": time.time()}
     atomic_json(path, receipt)
     advance(root, round_id, "report")
@@ -1708,7 +1901,11 @@ def _systemd_active(entries: list[dict[str, Any]]) -> Optional[bool]:
     raw ``systemctl show`` fields nested under ``Detail``; "running" is
     the only non-terminal owned state.
     """
+    if not isinstance(entries, list):
+        return None
     for entry in reversed(entries):
+        if not isinstance(entry, dict):
+            continue
         state = entry.get("systemd")
         if isinstance(state, dict) and "state" in state:
             return bool(state["state"] == "running")
@@ -1737,9 +1934,18 @@ def run_round(
     root = Path(root)
     campaign = load_campaign(root)
     profile = campaign.get("operator_profile")
-    if not profile:
+    if not isinstance(profile, str) or not profile:
         raise ValueError("Campaign has no operator profile")
-    experiment_id = "%s-%s" % (campaign["campaign_id"], round_id)
+    campaign_id = campaign.get("campaign_id")
+    if not isinstance(campaign_id, str) or not campaign_id:
+        raise ValueError("Campaign has no campaign id")
+    if (
+        not isinstance(max_steps, int)
+        or isinstance(max_steps, bool)
+        or max_steps < 1
+    ):
+        raise ValueError("Round step budget must be a positive integer")
+    experiment_id = "%s-%s" % (campaign_id, round_id)
 
     drivers = _RoundDrivers(
         root,
@@ -1762,11 +1968,14 @@ def run_round(
     }
     for _ in range(max_steps):
         receipt = _record(_round_file(root, round_id))
-        if receipt["phase"] in TERMINAL:
+        phase = receipt.get("phase")
+        if not isinstance(phase, str):
+            raise ValueError("Round has an unknown phase: " + str(round_id))
+        if phase in TERMINAL:
             return receipt
-        handler = handlers.get(receipt["phase"])
+        handler = handlers.get(phase)
         if handler is None:
-            raise ValueError("Unknown round phase: " + receipt["phase"])
+            raise ValueError("Unknown round phase: " + phase)
         settled = handler(drivers)
         if settled is not None:
             return settled
@@ -1799,24 +2008,30 @@ def _driver_operator(drivers: _RoundDrivers) -> Any:
 def _prepare_step(drivers: _RoundDrivers) -> None:
     """Verify the registered dataset version and its acceptance."""
     receipt = _round_receipt(drivers)
-    entry: dict[str, Any] = _record(_datasets_file(drivers.root))["versions"][
-        receipt["dataset_version"]
-    ]
-    manifest = Path(entry["manifest"])
-    laya_training.verify_dataset_version(
-        manifest.parents[2], receipt["dataset_version"]
-    )
-    if not laya_training.dataset_version_accepted(
-        manifest.parents[2], receipt["dataset_version"]
+    versions = _record(_datasets_file(drivers.root)).get("versions")
+    if not isinstance(versions, dict):
+        raise ValueError("Campaign dataset registry is malformed")
+    version = receipt.get("dataset_version")
+    if not isinstance(version, str):
+        raise ValueError("Round dataset version is malformed")
+    entry = versions.get(version)
+    if not isinstance(entry, dict) or not isinstance(
+        entry.get("manifest"), str
     ):
+        raise ValueError("Round dataset version is malformed")
+    manifest = Path(entry["manifest"])
+    laya_training.verify_dataset_version(manifest.parents[2], version)
+    if not laya_training.dataset_version_accepted(manifest.parents[2], version):
         raise ValueError("Dataset version not accepted for use")
     advance(drivers.root, drivers.round_id, "validate_data")
 
 
 def _bound_file(profile: dict[str, Any], key: str, what: str) -> Path:
     """Resolve a profile path setting, refusing a missing one."""
+    if not isinstance(profile, dict):
+        raise ValueError("Binding check needs a receipt and profile")
     raw = profile.get(key)
-    if not raw or not Path(raw).is_file():
+    if not isinstance(raw, str) or not raw or not Path(raw).is_file():
         raise ValueError("Job profile lacks a bound " + what)
     return Path(raw)
 
@@ -1837,20 +2052,30 @@ def _require_profile_bindings(
     which carries the frozen selection reference the trainer
     ranks under; pointing at the registered recipe instead fails.
     """
+    if not isinstance(receipt, dict) or not isinstance(profile, dict):
+        raise ValueError("Binding check needs a receipt and profile")
     bindings = receipt.get("bindings") or {}
+    if not isinstance(bindings, dict):
+        raise ValueError("Round lacks frozen incumbent bindings")
     frozen = bindings.get("incumbent")
     if not isinstance(frozen, dict):
         raise ValueError("Round lacks frozen incumbent bindings")
-    model = Path(profile.get("model", "")).resolve()
-    if str(model) != frozen["export"]:
+    if not isinstance(profile.get("model"), str):
+        raise ValueError("Job profile needs model")
+    model = Path(profile["model"]).resolve()
+    if str(model) != frozen.get("export"):
         raise ValueError(
             "Job model is not the round's bound incumbent: "
             + str(profile.get("model"))
         )
-    if export_manifest(model) != frozen["export_manifest"]:
+    if export_manifest(model) != frozen.get("export_manifest"):
         raise ValueError("Bound incumbent export changed under the job")
     dataset = bindings.get("dataset") or {}
-    manifest_path = Path(dataset.get("manifest", ""))
+    if not isinstance(dataset, dict):
+        raise ValueError("Round lacks frozen dataset bindings")
+    if not isinstance(dataset.get("manifest"), str):
+        raise ValueError("Round lacks frozen dataset bindings")
+    manifest_path = Path(dataset["manifest"])
     try:
         current = _sha(manifest_path)
     except OSError as exc:
@@ -1861,34 +2086,52 @@ def _require_profile_bindings(
     if not isinstance(manifest_raw, dict):
         raise ValueError("Bound dataset manifest is unreadable")
     manifest = cast(dict[str, Any], manifest_raw)
-    values: dict[str, Any] = {
-        **profile.get("defaults", {}),
-        **(receipt.get("overrides") or {}),
-    }
+    defaults = profile.get("defaults", {})
+    overrides = receipt.get("overrides") or {}
+    if not isinstance(defaults, dict) or not isinstance(overrides, dict):
+        raise ValueError("Binding check needs mapping settings")
+    values: dict[str, Any] = {**defaults, **overrides}
     roles = ("train",) if values.get("limit_train_rows") else ("train", "dev")
+    splits = manifest.get("splits", {})
+    if not isinstance(splits, dict):
+        raise ValueError("Bound dataset manifest is unreadable")
+    if not isinstance(profile.get("data"), str):
+        raise ValueError("Job profile needs data")
     for role in roles:
-        entry = manifest.get("splits", {}).get(role)
+        entry = splits.get(role)
         if entry is None:
             continue
-        actual = Path(profile.get("data", "")) / (role + ".jsonl")
-        if not actual.is_file() or _sha(actual) != entry["sha256"]:
+        if not isinstance(entry, dict):
+            raise ValueError("Bound dataset manifest is unreadable")
+        actual = Path(profile["data"]) / (role + ".jsonl")
+        if not actual.is_file() or _sha(actual) != entry.get("sha256"):
             raise ValueError(
                 "Job data does not match the bound %s split" % role
             )
     recipe = bindings.get("round_recipe") or bindings.get("recipe") or {}
+    if not isinstance(recipe, dict):
+        raise ValueError("Round lacks frozen recipe bindings")
     if _sha(_bound_file(profile, "recipe", "recipe")) != recipe.get("sha256"):
         raise ValueError("Job recipe is not the round's bound recipe")
     contract = bindings.get("reporting_contract")
     if contract:
+        if not isinstance(contract, dict):
+            raise ValueError("Round lacks frozen contract bindings")
         path = _bound_file(profile, "reporting_contract", "contract")
-        if _sha(path) != contract["sha256"]:
+        if _sha(path) != contract.get("sha256"):
             raise ValueError("Job contract is not the bound contract")
     pools = manifest.get("pools")
     job_pools = values.get("pools")
     if pools:
-        if not job_pools or not Path(job_pools).is_file():
+        if not isinstance(pools, dict):
+            raise ValueError("Bound dataset manifest is unreadable")
+        if (
+            not isinstance(job_pools, str)
+            or not job_pools
+            or not Path(job_pools).is_file()
+        ):
             raise ValueError("Job lacks the bound sampling pools")
-        if _sha(Path(job_pools)) != pools["sha256"]:
+        if _sha(Path(job_pools)) != pools.get("sha256"):
             raise ValueError("Job pools are not the bound pools")
     elif job_pools:
         raise ValueError("Job sets pools the round did not bind")
@@ -1921,7 +2164,10 @@ def _validate_step(drivers: _RoundDrivers) -> None:
     job = operator.prepare(drivers.experiment_id, receipt.get("overrides"))
     operator.preflight(job)
     campaign = load_campaign(drivers.root)
-    _revalidate_inputs(drivers.root, campaign, receipt["dataset_version"])
+    version = receipt.get("dataset_version")
+    if not isinstance(version, str):
+        raise ValueError("Round dataset version is malformed")
+    _revalidate_inputs(drivers.root, campaign, version)
     _frozen_policy(drivers.root, receipt)
     _require_profile_bindings(receipt, operator.profile)
     advance(drivers.root, drivers.round_id, "preflight")
@@ -1988,6 +2234,11 @@ def _observe_step(drivers: _RoundDrivers) -> Optional[dict[str, Any]]:
             drivers.root, drivers.round_id, "failed", reason="job incomplete"
         )
     outcome = drivers.evaluator(drivers.root, drivers.round_id, reported)
+    if not isinstance(outcome, dict):
+        raise ValueError("Evaluator returned no candidate")
+    for key in ("export", "results", "receipt"):
+        if key not in outcome:
+            raise ValueError("Evaluator omitted candidate " + key)
     record_candidate(
         drivers.root,
         drivers.round_id,

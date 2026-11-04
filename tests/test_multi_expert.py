@@ -1910,3 +1910,201 @@ def test_system_calls_and_keywords_stay_out_of_unknowns():
     assert "display" not in found["unknown_symbols"]
     assert "assert" not in found["unknown_symbols"]
     assert "error" not in found["unknown_symbols"]
+
+
+def _routing_profile(**overrides):
+    profile = {
+        "id": "e1",
+        "supported_mechanisms": ["m1"],
+        "checkpoint_sha256": "ab" * 32,
+        "question_contract": "v1",
+    }
+    profile.update(overrides)
+    return profile
+
+
+def test_route_scope_rejects_malformed_profiles():
+    from siliconshield.experts.router import route_scope
+
+    with pytest.raises(ValueError, match="profile list"):
+        route_scope(["m1"], {"e1": _routing_profile()})
+    with pytest.raises(ValueError, match="must be an object"):
+        route_scope(["m1"], [["x"]])
+    with pytest.raises(ValueError, match="needs an id"):
+        route_scope(["m1"], [{"supported_mechanisms": ["m1"]}])
+    with pytest.raises(ValueError, match="string list"):
+        route_scope(["m1"], [_routing_profile(supported_mechanisms="m1")])
+    with pytest.raises(ValueError, match="string list"):
+        route_scope(["m1"], [_routing_profile(supported_mechanisms=5)])
+    with pytest.raises(ValueError, match="must be a mapping"):
+        route_scope(["m1"], [_routing_profile()], ["x"])
+
+
+def test_route_scope_matches_mechanisms_exactly():
+    from siliconshield.experts.router import route_scope
+
+    decision = route_scope(["m1"], [_routing_profile()])
+    assert decision["experts"] == ["e1"]
+    assert decision["unsupported"] == []
+
+
+def test_area_tier_rejects_malformed_evidence():
+    from siliconshield.experts.router import _area_tier
+
+    identity = {
+        "checkpoint_sha256": "ab" * 32,
+        "question_contract": "v1",
+    }
+    with pytest.raises(ValueError, match="must be an object"):
+        _area_tier(_routing_profile(routing_evidence=["x"]), "a")
+    with pytest.raises(ValueError, match="execution identity"):
+        _area_tier(_routing_profile(routing_evidence={"areas": {}}), "a")
+    with pytest.raises(ValueError, match="must be an object"):
+        _area_tier(
+            _routing_profile(
+                routing_evidence={
+                    "execution_identity": identity,
+                    "areas": {"a": "x"},
+                }
+            ),
+            "a",
+        )
+    with pytest.raises(ValueError, match="must be counts"):
+        _area_tier(
+            _routing_profile(
+                routing_evidence={
+                    "execution_identity": identity,
+                    "areas": {
+                        "a": {
+                            "correct": "9",
+                            "total": 10,
+                            "errors": 0,
+                            "violations": 5,
+                            "false_safe": 0,
+                        }
+                    },
+                }
+            ),
+            "a",
+        )
+    with pytest.raises(ValueError, match="inconsistent"):
+        _area_tier(
+            _routing_profile(
+                routing_evidence={
+                    "execution_identity": identity,
+                    "areas": {
+                        "a": {
+                            "correct": 11,
+                            "total": 10,
+                            "errors": 0,
+                            "violations": 5,
+                            "false_safe": 0,
+                        }
+                    },
+                }
+            ),
+            "a",
+        )
+
+
+def test_arbitration_validation_rejects_malformed_shapes():
+    from siliconshield.experts import arbitration
+
+    payload = {
+        "conclusion": "unresolved",
+        "explanation": "x",
+        "evidence": [],
+        "open_questions": [],
+    }
+    with pytest.raises(ValueError, match="consulted expert names"):
+        arbitration.validate_arbitration(payload, 5)
+    with pytest.raises(ValueError, match="consulted expert names"):
+        arbitration.validate_arbitration(payload, "e1")
+    bad = dict(payload)
+    bad[7] = "x"
+    bad["zzz"] = "x"
+    with pytest.raises(ValueError, match="keys must be strings"):
+        arbitration.validate_arbitration(bad, ["e1"])
+    routing = {
+        "scope": [],
+        "experts": [],
+        "tiers": {},
+        "area_tiers": {},
+        "thin_evidence": True,
+        "unsupported": [],
+        "partial": [],
+        "coverage": {},
+        "rationale": 5,
+    }
+    effective = {
+        "scope": [],
+        "experts": [],
+        "tiers": {},
+        "area_tiers": {},
+        "thin_evidence": True,
+    }
+    planned = {
+        "unsupported": [],
+        "partial": [],
+        "coverage": {},
+        "rationale": [],
+    }
+    with pytest.raises(ValueError, match="rationale is malformed"):
+        arbitration._check_effective_routing(routing, effective, planned)
+
+
+def test_consult_rejects_malformed_arguments():
+    from siliconshield.experts import responses
+
+    with pytest.raises(ValueError, match="profile mapping"):
+        responses.consult_experts(["e1"], ["x"], "state", lambda e, s: {})
+    with pytest.raises(ValueError, match="needs a transport"):
+        responses.consult_experts(["e1"], {}, "state", "x")
+    with pytest.raises(ValueError, match="must be an object"):
+        responses.build_expert_response(["x"], "state", {})
+    with pytest.raises(ValueError, match="needs text"):
+        responses.build_expert_response(
+            {"id": "e1", "release": "r", "checkpoint_sha256": "ab" * 32},
+            5,
+            {},
+        )
+
+
+def test_identity_helpers_reject_non_text():
+    from siliconshield.experts import identity
+
+    with pytest.raises(ValueError, match="needs text"):
+        identity.text_digest(5)
+    with pytest.raises(ValueError, match="need text"):
+        identity.state_sections(["x"])
+
+
+def test_service_rejects_non_mapping_profiles(tmp_path):
+    from siliconshield.experts.service import InferenceService
+
+    registry_path = _write_registry(
+        tmp_path, _profile("expert-a", ["fifo"]), {}
+    )
+    with pytest.raises(ValueError, match="must be a mapping"):
+        InferenceService(registry_path, profiles=["x"])
+
+
+def test_worker_pool_rejects_malformed_calls(tmp_path):
+    from siliconshield.experts.worker import WorkerLoadError, WorkerPool
+
+    pool = WorkerPool()
+    try:
+        with pytest.raises(RuntimeError, match="No validated worker"):
+            pool.analyze(5, "state")
+        entry = {
+            "id": "expert-a",
+            "checkpoint": str(tmp_path),
+            "device": "cpu",
+            "expected_files": {},
+            "laya_root": str(tmp_path),
+            "python": 5,
+        }
+        with pytest.raises(WorkerLoadError, match="Cannot load"):
+            pool.load(entry)
+    finally:
+        pool.close()

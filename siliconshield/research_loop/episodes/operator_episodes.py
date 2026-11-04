@@ -226,6 +226,17 @@ FORBIDDEN_VISIBLE = (
 
 def operator_coverage(train, development, replay):
     """Measure operator signal separately from checkpoint triage and template copies."""
+    for name, rows in (
+        ("train", train),
+        ("development", development),
+        ("replay", replay),
+    ):
+        if not isinstance(rows, list) or any(
+            not isinstance(row, dict) for row in rows
+        ):
+            raise ValueError(
+                "Operator coverage needs a list of episode rows for " + name
+            )
     actions = OPERATOR_TOOLS[-1]["function"]["parameters"]["properties"][
         "action"
     ]["enum"]
@@ -306,6 +317,18 @@ ALLOWED_AT_EXECUTION = set(OPERATOR_ACTIONS)
 
 
 def episode_for(scenario, state, resources, action, reason, lineage, index):
+    for name, value in (
+        ("scenario", scenario),
+        ("action", action),
+        ("reason", reason),
+        ("lineage", lineage),
+    ):
+        if not isinstance(value, str):
+            raise ValueError("Episode builder needs text " + name)
+    if not isinstance(state, dict) or not isinstance(resources, dict):
+        raise ValueError("Episode builder needs state and resource objects")
+    if isinstance(index, bool) or not isinstance(index, int):
+        raise ValueError("Episode builder needs an integer index")
     run_id = "run-%s-%02d" % (
         hashlib.sha256(lineage.encode()).hexdigest()[:8],
         index,
@@ -398,15 +421,35 @@ def migrate_operator_row(row):
     """
     import copy
 
+    if not isinstance(row, dict):
+        raise ValueError("Migration needs an episode object")
+    messages = row.get("messages", [])
+    if not isinstance(messages, list) or any(
+        not isinstance(message, dict) for message in messages
+    ):
+        raise ValueError("Migration needs a list of message objects")
+    for message in messages:
+        calls_raw = message.get("tool_calls", [])
+        if not isinstance(calls_raw, list) or any(
+            not isinstance(call, dict) for call in calls_raw
+        ):
+            raise ValueError("Migration needs a list of tool calls")
     calls = [
         c
-        for m in row.get("messages", [])
+        for m in messages
         for c in m.get("tool_calls", [])
-        if c.get("function", {}).get("name") == "operator.decide"
+        if isinstance(c.get("function"), dict)
+        and c["function"].get("name") == "operator.decide"
     ]
     if not calls:
         return None, {"status": "rejected", "note": "not an operator episode"}
-    action = calls[0]["function"]["arguments"].get("action")
+    arguments = calls[0]["function"].get("arguments")
+    if not isinstance(arguments, dict):
+        return None, {
+            "status": "rejected",
+            "note": "operator decision has no argument object",
+        }
+    action = arguments.get("action")
     if action not in OPERATOR_ACTIONS:
         return None, {
             "status": "rejected",
@@ -415,7 +458,13 @@ def migrate_operator_row(row):
                 % (action,)
             ),
         }
-    if row.get("verification", {}).get("kind") != "authored_fixture":
+    verification = row.get("verification", {})
+    if not isinstance(verification, dict):
+        return None, {
+            "status": "rejected",
+            "note": "operator episode has no verification object",
+        }
+    if verification.get("kind") != "authored_fixture":
         return None, {
             "status": "rejected",
             "note": "only authored fixtures carry synthetic migration defaults",
@@ -425,17 +474,36 @@ def migrate_operator_row(row):
         c
         for m in row["messages"]
         for c in m.get("tool_calls", [])
-        if c.get("function", {}).get("name") == "operator.decide"
+        if isinstance(c.get("function"), dict)
+        and c["function"].get("name") == "operator.decide"
     )["function"]["arguments"]
+    if not isinstance(args, dict):
+        return None, {
+            "status": "rejected",
+            "note": "operator decision has no argument object",
+        }
     filled = {}
+    summary = row.get("summary")
     if action == "resume" and not isinstance(args.get("checkpoint_dir"), str):
+        if not isinstance(summary, dict) or not isinstance(
+            summary.get("run_id"), str
+        ):
+            return None, {
+                "status": "rejected",
+                "note": "resume migration lacks an owned run id",
+            }
         args["checkpoint_dir"] = filled["checkpoint_dir"] = (
-            "/private/runs/" + row["summary"]["run_id"]
+            "/private/runs/" + summary["run_id"]
         )
     if action == "adjust_lr" and not finite_number(args.get("lr")):
         args["lr"] = filled["lr"] = MIGRATION_DEFAULT_LR
     row["tools"] = OPERATOR_TOOLS
     target = row.get("target", {})
+    if not isinstance(target, dict):
+        return None, {
+            "status": "rejected",
+            "note": "operator episode has no target object",
+        }
     target.update({k: v for k, v in filled.items()})
     row["target"] = target
     provenance = dict(row.get("verification", {}))

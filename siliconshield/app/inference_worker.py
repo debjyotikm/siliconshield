@@ -259,6 +259,18 @@ def _verify_placement(agent: Any, device: str) -> None:
             raise ValueError("Worker fell back to CPU; refusing load.")
 
 
+def _answer_block(answer: Any, *keys: str) -> dict[str, Any]:
+    """Descend one model answer, refusing malformed blocks."""
+    block: Any = answer
+    for key in keys:
+        if not isinstance(block, dict):
+            raise ValueError("Model returned a malformed answer.")
+        block = block.get(key, {})
+    if not isinstance(block, dict):
+        raise ValueError("Model returned a malformed answer.")
+    return block
+
+
 def _warm_up(agent: Any, emit_progress: Any, questions: dict[str, Any]) -> None:
     """Run one authored warm-up inference to prove device placement."""
     emit_progress("Warming up", "running authored warm-up inference")
@@ -268,12 +280,14 @@ def _warm_up(agent: Any, emit_progress: Any, questions: dict[str, Any]) -> None:
         "module warmup; endmodule",
     )
     answers = agent.predict_batch([state], questions, sort_by_length=False)
-    if not answers:
+    if not isinstance(answers, list) or not answers:
         raise ValueError("Warm-up produced no answer.")
     answer = answers[0]
-    values = (
-        answer.get("answers", {}).get("security", {}).get("probabilities", {})
+    values = _answer_block(answer, "answers", "security").get(
+        "probabilities", {}
     )
+    if not isinstance(values, dict):
+        raise ValueError("Model returned a malformed answer.")
     for label in LABELS:
         number = values.get(label)
         if isinstance(number, bool) or not isinstance(number, (int, float)):
@@ -296,9 +310,11 @@ def _run_analyze(
     on_cuda = str(getattr(agent, "device", "")).startswith("cuda")
     if on_cuda and after > before:
         raise ValueError("Inference fell back to CPU; no verdict produced.")
-    if not answers:
+    if not isinstance(answers, list) or not answers:
         raise ValueError("Model produced no answer.")
     answer = answers[0]
+    if not isinstance(answer, dict):
+        raise ValueError("Model returned a malformed answer.")
     usage = answer.get("usage")
     if not isinstance(usage, dict) or any(
         key not in usage
@@ -312,9 +328,11 @@ def _run_analyze(
     dropped = usage["state_tokens_dropped"]
     if isinstance(dropped, (int, float)) and dropped > 0:
         raise ValueError("Model input was truncated; no verdict produced.")
-    values = (
-        answer.get("answers", {}).get("security", {}).get("probabilities", {})
+    values = _answer_block(answer, "answers", "security").get(
+        "probabilities", {}
     )
+    if not isinstance(values, dict):
+        raise ValueError("Model returned a malformed answer.")
     probabilities: dict[str, float] = {}
     for label in LABELS:
         number = values.get(label)
@@ -449,7 +467,9 @@ def main() -> None:
                 device = str(checked["device"])
                 expected = checked.get("expected_files", {})
                 if not isinstance(expected, dict):
-                    expected = {}
+                    raise ValueError(
+                        "Model entry expected_files must be an object."
+                    )
                 laya_root = checked.get("laya_root") or default_laya
                 if isinstance(laya_root, Path):
                     laya_root = str(laya_root)

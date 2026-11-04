@@ -51,8 +51,15 @@ def state_text(requirement, assumptions, rtl):
     for name, value in (
         ("requirement", requirement),
         ("assumptions", assumptions),
+        ("rtl", rtl),
     ):
-        smuggled = SECTION_HEADERS.intersection(str(value).splitlines())
+        if not isinstance(value, str):
+            raise ValueError("assembled state needs text " + name)
+    for name, value in (
+        ("requirement", requirement),
+        ("assumptions", assumptions),
+    ):
+        smuggled = SECTION_HEADERS.intersection(value.splitlines())
         if smuggled:
             raise ValueError(
                 name
@@ -84,16 +91,23 @@ def checkpoint_manifest(path: str | Path) -> CheckpointManifest:
     across the repository. Raises ValueError when identity cannot be
     established; partial hashing proves nothing, so every file counts.
     """
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Checkpoint path must be a string")
     root = Path(path)
     files = {}
-    if root.is_file():
-        files[root.name] = _sha(root)
-    elif root.is_dir():
-        for item in sorted(root.rglob("*")):
-            if item.is_file():
-                files[str(item.relative_to(root))] = _sha(item)
-    else:
-        raise ValueError("Checkpoint does not exist: " + str(root))
+    try:
+        if root.is_file():
+            files[root.name] = _sha(root)
+        elif root.is_dir():
+            for item in sorted(root.rglob("*")):
+                if item.is_file():
+                    files[str(item.relative_to(root))] = _sha(item)
+        else:
+            raise ValueError("Checkpoint does not exist: " + str(root))
+    except OSError as exc:
+        raise ValueError("Checkpoint is unreadable: " + str(root)) from exc
+    if not files:
+        raise ValueError("Checkpoint holds no files: " + str(root))
     if not files:
         raise ValueError("Checkpoint holds no files: " + str(root))
     fingerprint = hashlib.sha256(
@@ -151,6 +165,20 @@ class LayaBackend:
     """
 
     def __init__(self, python, checkpoint, laya_root=None, timeout=1200):
+        if not isinstance(python, str) or not python:
+            raise ValueError("Security assessor needs a Python launcher")
+        if not isinstance(checkpoint, (str, Path)) or not str(checkpoint):
+            raise ValueError("Security assessor needs a checkpoint path")
+        if laya_root is not None and (
+            not isinstance(laya_root, str) or not laya_root
+        ):
+            raise ValueError("Security assessor LAYA root must be a path")
+        if timeout is not None and (
+            isinstance(timeout, bool)
+            or not isinstance(timeout, (int, float))
+            or timeout <= 0
+        ):
+            raise ValueError("Security assessor timeout must be positive")
         self.python, self.checkpoint = python, Path(checkpoint)
         self.laya_root, self.timeout = laya_root, timeout
         self.name = "laya-external"
@@ -262,6 +290,8 @@ class LayaBackend:
         try:
             answer = json.loads(run.stdout.strip().splitlines()[-1])
         except (ValueError, IndexError):
+            answer = None
+        if not isinstance(answer, dict):
             return {
                 **result,
                 "status": "error",

@@ -62,6 +62,8 @@ def make_shutdown_request() -> dict[str, JsonValue]:
 
 def message_kind(message: Mapping[str, JsonValue]) -> str:
     """Return the validated message type, or raise ValueError."""
+    if not isinstance(message, Mapping):
+        raise ValueError("Worker message must be an object")
     kind = message.get("type")
     if not isinstance(kind, str):
         raise ValueError("Worker message type must be a string")
@@ -93,6 +95,8 @@ def validate_result(
     otherwise; callers must surface the failure instead of producing
     a verdict.
     """
+    if not isinstance(payload, Mapping):
+        raise ValueError("Worker result must be an object")
     label = payload.get("label")
     probabilities = payload.get("probabilities")
     usage = payload.get("usage")

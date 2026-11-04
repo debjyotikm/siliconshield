@@ -97,6 +97,8 @@ def validate_arbitration(
     """
     if not isinstance(arguments, dict):
         raise ValueError("Arbitration payload must be an object.")
+    if any(not isinstance(key, str) for key in arguments):
+        raise ValueError("Arbitration payload keys must be strings.")
     unknown = [
         key
         for key in arguments
@@ -120,6 +122,12 @@ def validate_arbitration(
         not evidence and conclusion != "unresolved"
     ):
         raise ValueError("Arbitration needs non-empty evidence.")
+    if (
+        isinstance(consulted, str)
+        or not isinstance(consulted, Collection)
+        or any(not isinstance(name, str) for name in consulted)
+    ):
+        raise ValueError("Arbitration needs consulted expert names.")
     allowed = set(consulted)
     checked_evidence: list[dict[str, str]] = []
     seen: set[str] = set()
@@ -188,7 +196,12 @@ def _check_effective_routing(
         if routing.get(key) != planned.get(key):
             raise ValueError("Assessment routing lost its planned coverage")
     planned_lines = planned.get("rationale", [])
-    if routing.get("rationale", [])[: len(planned_lines)] != planned_lines:
+    current_lines = routing.get("rationale", [])
+    if not isinstance(planned_lines, list) or not isinstance(
+        current_lines, list
+    ):
+        raise ValueError("Assessment routing rationale is malformed")
+    if current_lines[: len(planned_lines)] != planned_lines:
         raise ValueError("Assessment routing lost its planned rationale")
 
 
@@ -351,6 +364,8 @@ def build_arbitration_input(
         # arbitration in lexical hints rather than an empty map.
         # An explicit mapping (even empty) still wins.
         structure = inspect_structure(judged_rtl, [])
+    if not isinstance(structure, Mapping):
+        raise ValueError("Arbitration structure must be an object")
     return {
         "request_id": request_id,
         "state_sha256": state_hash,

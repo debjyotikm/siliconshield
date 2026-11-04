@@ -119,7 +119,11 @@ def load_catalog(path=None):
                 for item in copy.deepcopy(SCENARIOS)
             ],
         }
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Transfer catalog path must be a path")
     catalog = json.loads(Path(path).read_text())
+    if not isinstance(catalog, dict):
+        raise ValueError("Transfer catalog must be an object")
     if catalog.get("schema") != TRANSFER_CATALOG_SCHEMA:
         raise ValueError("Unknown transfer catalog schema")
     if (
@@ -144,6 +148,8 @@ def load_catalog(path=None):
 
 def build_transfer(output, catalog=None):
     """Write development-only episodes, keeping a whole campaign in one lineage."""
+    if not isinstance(output, (str, Path)):
+        raise ValueError("Transfer output must be a path")
     source = load_catalog(catalog)
     family = source["campaign_family"]
     rows = []
@@ -182,6 +188,10 @@ def build_transfer(output, catalog=None):
 
 def load_transfer(path, allowed_prefix=None):
     """Validate the tool contract and common declared campaign lineage."""
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Transfer path must be a path")
+    if allowed_prefix is not None and not isinstance(allowed_prefix, str):
+        raise ValueError("Transfer prefix must be a string")
     rows = [
         json.loads(line)
         for line in Path(path).read_text().splitlines()
@@ -189,6 +199,8 @@ def load_transfer(path, allowed_prefix=None):
     ]
     if not rows:
         raise ValueError("No transfer observations")
+    if any(not isinstance(row, dict) for row in rows):
+        raise ValueError("Transfer observations must be objects")
     families = {
         row.get("verification", {}).get("campaign_family") for row in rows
     }

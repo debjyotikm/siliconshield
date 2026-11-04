@@ -68,6 +68,8 @@ def _read_proposals(path: Path) -> list[tuple[str, dict[str, Any]]]:
             raise ProposalError(
                 "%s is not valid JSON: %s" % (candidate.name, exc)
             ) from exc
+        if not isinstance(proposal, dict):
+            raise ProposalError("%s must hold one proposal" % candidate.name)
         if proposal.get("schema") != PROPOSAL_SCHEMA:
             raise ProposalError(
                 "%s has an unknown proposal schema" % candidate.name
@@ -80,7 +82,7 @@ def _read_proposals(path: Path) -> list[tuple[str, dict[str, Any]]]:
             "rtl",
             "kind",
         ):
-            if not proposal.get(key):
+            if not proposal.get(key) or not isinstance(proposal[key], str):
                 raise ProposalError("%s is missing %s" % (candidate.name, key))
         if proposal["kind"] not in KINDS:
             raise ProposalError("%s has an unknown kind" % candidate.name)
@@ -104,6 +106,8 @@ def validate_evidence(
     with at least two fills carrying opposing outcomes. Returns the
     validated evidence.
     """
+    if not isinstance(outcome, dict):
+        raise ProposalError("Checker returned no verdict")
     label = outcome.get("label")
     if label not in VERDICTS:
         raise ProposalError("Checker returned no verdict")
@@ -116,6 +120,8 @@ def validate_evidence(
         raise ProposalError("Evidence lacks a checker identity")
     if evidence.get("contract_id") != contract_id:
         raise ProposalError("Evidence answers a different contract")
+    if not isinstance(rtl, str):
+        raise ProposalError("Proposal RTL is malformed")
     rtl_hash = hashlib.sha256(rtl.encode()).hexdigest()
     if evidence.get("rtl_sha256") != rtl_hash:
         raise ProposalError("Evidence covers different RTL bytes")
@@ -136,12 +142,16 @@ def validate_evidence(
                 raise ProposalError("Evidence bound %s is invalid" % key)
     if label == "satisfies_requirement":
         proof = evidence.get("proof", {})
+        if not isinstance(proof, dict):
+            raise ProposalError("Satisfaction lacks a named procedure")
         if not proof.get("procedure") or not isinstance(
             proof["procedure"], str
         ):
             raise ProposalError("Satisfaction lacks a named procedure")
     elif label == "violates_requirement":
         counterexample = evidence.get("counterexample", {})
+        if not isinstance(counterexample, dict):
+            raise ProposalError("Counterexample is not reachable")
         if counterexample.get("reachable") is not True:
             raise ProposalError("Counterexample is not reachable")
         if not counterexample.get("trace"):
@@ -162,7 +172,9 @@ def validate_evidence(
         for completion in completions:
             if not isinstance(completion, dict):
                 raise ProposalError("Completion is malformed")
-            if not completion.get("outcome"):
+            if not completion.get("outcome") or not isinstance(
+                completion["outcome"], str
+            ):
                 raise ProposalError("Completion lacks an outcome")
             if not completion.get("fill") or not isinstance(
                 completion["fill"], str

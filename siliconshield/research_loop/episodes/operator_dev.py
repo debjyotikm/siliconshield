@@ -135,6 +135,8 @@ DEV_SCENARIOS = [
 
 
 def build_dev(output):
+    if not isinstance(output, (str, Path)):
+        raise ValueError("Dev build needs an output path")
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     rows = []
@@ -167,6 +169,8 @@ def build_dev(output):
 
 
 def load_dev(path):
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Dev path must be a path")
     rows = [
         json.loads(line)
         for line in Path(path).read_text().splitlines()

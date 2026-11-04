@@ -25,11 +25,15 @@ def _sha(path: Path) -> str:
 
 def load(profile: dict[str, Any]) -> dict[str, Any] | None:
     """Verify the explicitly selected study, preserving legacy job behavior."""
+    if not isinstance(profile, dict):
+        raise ValueError("Study profile must be an object")
     path = profile.get("decision_study_manifest")
     if path is None:
         if profile.get("decision_study_sha256") is not None:
             raise ValueError("Study digest needs a manifest path")
         return None
+    if not isinstance(path, str):
+        raise ValueError("Study digest needs a manifest path")
     manifest = json.loads(Path(path).read_text())
     if not isinstance(manifest, dict):
         raise ValueError("Study manifest must be an object")
@@ -48,9 +52,16 @@ def verify_job(
     profile: dict[str, Any], experiment_id: str, overrides: dict[str, Any]
 ) -> dict[str, Any] | None:
     """Check effective settings, actual inputs, and argv before any submission."""
+    if not isinstance(overrides, dict):
+        raise ValueError("Study overrides must be an object")
+    if not isinstance(experiment_id, str):
+        raise ValueError("Study experiment id must be a string")
     manifest = load(profile)
     if manifest is None:
         return None
+    for key in ("model", "python", "data", "recipe"):
+        if not profile.get(key) or not isinstance(profile[key], str):
+            raise ValueError("Study profile needs " + key)
     parent = manifest["parent"]
     if Path(profile["model"]).resolve() != Path(parent["path"]):
         raise ValueError("Job parent differs from frozen study")
@@ -146,6 +157,8 @@ def verify_receipts(
     manifest: dict[str, Any], probe: dict[str, Any], resources: dict[str, Any]
 ) -> None:
     """Accept qualification only for the exact parent, data, and recipe."""
+    if not isinstance(probe, dict) or not isinstance(resources, dict):
+        raise ValueError("Study receipts must be objects")
     identity = manifest["manifest_sha256"]
     for name, receipt in (("probe", probe), ("resource", resources)):
         if receipt.get("study_sha256") != identity:
@@ -171,10 +184,20 @@ def verify_receipts(
     if set(probe.get("movement", {})) != {"encoder", "adapter", "head"}:
         raise ValueError("Probe must measure every parameter group")
     decision_study.qualify_fitting_probe(probe)
-    decision_study.check_resources(
-        resources["requirement"], resources["available"]
-    )
-    need = resources["requirement"]
+    need = resources.get("requirement")
+    if not isinstance(need, dict) or not isinstance(
+        resources.get("available"), dict
+    ):
+        raise ValueError("Resource receipt needs measured requirements")
+    for key in ("gpus", "memory_gb", "hours"):
+        value = need.get(key)
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or value < 0
+        ):
+            raise ValueError("Resource receipt needs " + key)
+    decision_study.check_resources(need, resources["available"])
     if need["gpus"] != manifest["training"]["batch"]["devices"]:
         raise ValueError("Resource receipt covers another GPU count")
     if need["memory_gb"] <= 0 or need["hours"] <= 0:
@@ -191,6 +214,21 @@ def reserve_budget(profile: dict[str, Any], job: dict[str, Any]) -> None:
     Reservations are durable and conservative. They are not reclaimed on a
     crash or failed launch. This prevents retries from exceeding a study cap.
     """
+    if not isinstance(job, dict):
+        raise ValueError("Study job must be an object")
+    for key in ("idempotency_key", "experiment_id"):
+        if not job.get(key) or not isinstance(job[key], str):
+            raise ValueError("Study job needs " + key)
+    attempts = job.get("attempts")
+    if not isinstance(attempts, int) or isinstance(attempts, bool):
+        raise ValueError("Study job needs an attempt count")
+    timeout = job.get("timeout_seconds")
+    if (
+        not isinstance(timeout, (int, float))
+        or isinstance(timeout, bool)
+        or timeout < 0
+    ):
+        raise ValueError("Study job needs a timeout")
     manifest = load(profile)
     if manifest is None:
         return
@@ -206,23 +244,37 @@ def reserve_budget(profile: dict[str, Any], job: dict[str, Any]) -> None:
             if path.exists()
             else {"study_sha256": identity, "reservations": {}}
         )
+        if not isinstance(record, dict):
+            raise ValueError("Study budget record is unreadable")
         if record.get("study_sha256") != identity:
             raise ValueError("Study budget belongs to another manifest")
-        entries = record["reservations"]
+        entries = record.get("reservations")
+        if not isinstance(entries, dict):
+            raise ValueError("Study budget record is unreadable")
         if key in entries:
-            if entries[key]["seconds"] != charge:
+            if (
+                not isinstance(entries[key], dict)
+                or entries[key].get("seconds") != charge
+            ):
                 raise ValueError("Study reservation changed on retry")
             return
-        rounds = {entry["experiment_id"] for entry in entries.values()}
+        rounds = set()
+        spent = 0.0
+        for entry in entries.values():
+            if not isinstance(entry, dict):
+                raise ValueError("Study budget record is unreadable")
+            if not isinstance(
+                entry.get("experiment_id"), str
+            ) or not isinstance(entry.get("seconds"), (int, float)):
+                raise ValueError("Study budget record is unreadable")
+            rounds.add(entry["experiment_id"])
+            spent += entry["seconds"]
         if (
             job["experiment_id"] not in rounds
             and len(rounds) >= manifest["budget"]["max_rounds"]
         ):
             raise ValueError("Study round budget exhausted")
-        if (
-            sum(entry["seconds"] for entry in entries.values()) + charge
-            > manifest["budget"]["max_hours"] * 3600
-        ):
+        if spent + charge > manifest["budget"]["max_hours"] * 3600:
             raise ValueError("Study time budget exhausted")
         entries[key] = {
             "experiment_id": job["experiment_id"],

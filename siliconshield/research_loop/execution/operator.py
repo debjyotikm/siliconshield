@@ -57,22 +57,38 @@ BOUNDED_INTERVENTIONS = (
 
 def execution_inputs(profile, overrides):
     """Immutable training inputs, independent of controller implementation."""
+    if not isinstance(profile, dict):
+        raise ValueError("Job profile must be an object")
+    if not isinstance(overrides, dict):
+        raise ValueError("Training overrides must be an object")
+    for key in ("source", "data", "model"):
+        if not profile.get(key) or not isinstance(profile[key], str):
+            raise ValueError("Job profile needs " + key)
     source = Path(profile["source"])
     files = list((source / "siliconshield/training").rglob("*.py"))
     files += list((source / "requirements").glob("*.txt"))
-    values = {**profile.get("defaults", {}), **overrides}
+    defaults = profile.get("defaults", {})
+    if not isinstance(defaults, dict):
+        raise ValueError("Profile defaults must be an object")
+    values = {**defaults, **overrides}
     splits = ("train",) if values.get("limit_train_rows") else ("train", "dev")
     files += [Path(profile["data"]) / (s + ".jsonl") for s in splits]
     files += list(Path(profile["model"]).rglob("*.json")) + list(
         Path(profile["model"]).rglob("*.safetensors")
     )
     files += preservation_teacher_files(profile)
-    files += [Path(values[key]) for key in PATH_FLAGS if values.get(key)]
+    for key in PATH_FLAGS:
+        if values.get(key):
+            if not isinstance(values[key], str):
+                raise ValueError("Path setting must be a non-empty path")
+            files.append(Path(values[key]))
     root = laya_root_for(profile)
     if root:
         files += list((Path(root) / "laya").rglob("*.py"))
     for name in ("recipe", "reporting_contract"):
         if profile.get(name):
+            if not isinstance(profile[name], str):
+                raise ValueError("Job profile path must be a string")
             files.append(Path(profile[name]))
     return {
         str(p): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -116,7 +132,11 @@ def systemd_state(unit, runner):
             "LoadState,ActiveState,SubState,Result,ExecMainStatus,Description,InvocationID",
         ]
     )
-    if show is None or show.get("LoadState") == "not-found":
+    if show is None:
+        return {"state": "missing", "detail": show}
+    if not isinstance(show, dict):
+        raise ValueError("Systemd state is unreadable")
+    if show.get("LoadState") == "not-found":
         return {"state": "missing", "detail": show}
     active, result = show.get("ActiveState"), show.get("Result")
     if active in ("active", "activating"):
@@ -200,6 +220,10 @@ class Operator:
         from siliconshield.research_loop.execution import study_contract
 
         overrides = overrides or {}
+        if intervention_budget is not None and not isinstance(
+            intervention_budget, dict
+        ):
+            raise ValueError("Intervention budget must be an object")
         study = study_contract.verify_job(
             self.profile, experiment_id, overrides
         )
@@ -209,6 +233,10 @@ class Operator:
         path = self.manifest_path(experiment_id)
         if path.exists():
             existing = read_json(path)
+            if not isinstance(existing, dict) or not isinstance(
+                existing.get("idempotency_key"), str
+            ):
+                raise ValueError("Run manifest is unreadable")
             if existing["idempotency_key"] != key:
                 # A submitted run is authoritative: reattach after operator-code
                 # upgrades instead of orphaning an owned job. Drift is recorded.
@@ -474,10 +502,28 @@ class Operator:
                 "finalize",
             ),
         )
-        for name, expected in manifest.get("input_hashes", {}).items():
-            if hashlib.sha256(Path(name).read_bytes()).hexdigest() != expected:
+        for key in ("attempts", "max_retries"):
+            value = manifest.get(key)
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+            ):
+                raise ValueError("Run manifest needs " + key)
+        hashes = manifest.get("input_hashes", {})
+        if not isinstance(hashes, dict) or any(
+            not isinstance(name, str) or not isinstance(expected, str)
+            for name, expected in hashes.items()
+        ):
+            raise ValueError("Preflight input identity is malformed")
+        for name, expected in hashes.items():
+            try:
+                actual = hashlib.sha256(Path(name).read_bytes()).hexdigest()
+            except OSError:
+                raise ValueError("Prepared input unreadable: " + name)
+            if actual != expected:
                 raise ValueError("Prepared input changed: " + name)
-        if not manifest.get("input_hashes"):
+        if not hashes:
             raise ValueError("Preflight input identity is missing")
         resources = self.reservation.path.parent
         resources.mkdir(parents=True, exist_ok=True)
@@ -498,6 +544,11 @@ class Operator:
             owner_path = resources / "owner.json"
             if owner_path.exists():
                 owner = read_json(owner_path)
+                if not isinstance(owner, dict):
+                    raise ValueError("GPU ownership record is unreadable")
+                for key in ("unit", "identity", "output"):
+                    if not owner.get(key) or not isinstance(owner[key], str):
+                        raise ValueError("GPU ownership record needs " + key)
                 other_state = systemd_state(owner["unit"], self.runner)
                 desc = (other_state.get("detail") or {}).get("Description")
                 # A missing (garbage-collected) unit cannot be an active owner; its
@@ -511,9 +562,10 @@ class Operator:
                         "GPU resources are owned by an active or foreign run"
                     )
                 terminal = Path(owner["output"]) / "execution.json"
+                receipt = read_json(terminal) if terminal.is_file() else None
                 if (
-                    not terminal.is_file()
-                    or read_json(terminal).get("identity") != owner["identity"]
+                    not isinstance(receipt, dict)
+                    or receipt.get("identity") != owner["identity"]
                 ):
                     raise RuntimeError(
                         "Stale GPU ownership needs a matching terminal receipt"
@@ -596,7 +648,8 @@ class Operator:
         report = status.get("report.json")
         execution = status.get("execution.json", {})
         if (
-            execution.get("identity") != manifest["idempotency_key"]
+            not isinstance(execution, dict)
+            or execution.get("identity") != manifest["idempotency_key"]
             or execution.get("phase") != "completed"
         ):
             return False
@@ -629,7 +682,7 @@ class Operator:
             return (
                 Path(manifest["output"]) / "report.json"
             ).stat().st_mtime >= execution["started"]
-        except (ValueError, KeyError, OSError):
+        except (ValueError, KeyError, TypeError, OSError):
             return False
 
     def diagnose(self, manifest):
@@ -654,15 +707,37 @@ class Operator:
         if action not in BOUNDED_INTERVENTIONS:
             raise ValueError("Intervention is not allowlisted: " + str(action))
         budget = manifest.get("intervention_budget", {})
-        used = [
-            i
-            for i in manifest.get("interventions", [])
-            if i["action"] == action
-        ]
+        if not isinstance(budget, dict):
+            raise ValueError("Intervention budget is malformed")
+        entries = manifest.get("interventions", [])
+        if not isinstance(entries, list) or any(
+            not isinstance(entry, dict) for entry in entries
+        ):
+            raise ValueError("Intervention history is malformed")
+        used = [i for i in entries if i.get("action") == action]
         if action == "adjust_lr":
-            if len(used) >= budget.get("max_lr_adjustments", 0):
+            allowed = budget.get("max_lr_adjustments", 0)
+            if (
+                not isinstance(allowed, int)
+                or isinstance(allowed, bool)
+                or allowed < 0
+            ):
+                raise ValueError("Intervention budget is malformed")
+            if len(used) >= allowed:
                 raise ValueError("Learning-rate intervention budget exhausted")
-            low, high = budget.get("lr_bounds", [0, 0])
+            bounds = budget.get("lr_bounds", [0, 0])
+            if (
+                not isinstance(bounds, (list, tuple))
+                or len(bounds) != 2
+                or any(
+                    isinstance(edge, bool)
+                    or not isinstance(edge, (int, float))
+                    or not math.isfinite(edge)
+                    for edge in bounds
+                )
+            ):
+                raise ValueError("Intervention budget is malformed")
+            low, high = bounds
             lr = params.get("lr")
             if (
                 isinstance(lr, bool)
@@ -702,7 +777,7 @@ class Operator:
             raise ValueError(
                 "Test-touched run lineage may not resume into further training"
             )
-        if not checkpoint_dir:
+        if not checkpoint_dir or not isinstance(checkpoint_dir, str):
             raise ValueError("Resume requires an explicit checkpoint directory")
         root = Path(checkpoint_dir).resolve()
         if root != Path(manifest["output"]).resolve():
@@ -711,7 +786,12 @@ class Operator:
             )
         if (root / "test_touch.json").exists():
             raise ValueError("Test-touched checkpoint lineage")
-        import torch
+        try:
+            import torch
+        except ImportError as exc:
+            raise ValueError(
+                "Resume validation needs torch in the operator environment"
+            ) from exc
 
         try:
             checkpoint = torch.load(
@@ -765,7 +845,13 @@ class Operator:
                     state["numpy"], tuple
                 ):
                     raise ValueError("Invalid Python/NumPy RNG state")
-        except (OSError, KeyError, TypeError, RuntimeError) as exc:
+        except (
+            OSError,
+            KeyError,
+            TypeError,
+            AttributeError,
+            RuntimeError,
+        ) as exc:
             raise ValueError("No valid LAYA resumable checkpoint") from exc
         return {"step": progress["step"], "signature": signature}
 
@@ -814,6 +900,14 @@ class Operator:
         status = self.jobs.status(manifest["experiment_id"])
         if self._report_valid(manifest, status):
             raise ValueError("Cannot abandon a run with a valid report")
+        for key in ("attempts", "max_retries"):
+            value = manifest.get(key)
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+            ):
+                raise ValueError("Run manifest needs " + key)
         if (
             manifest["attempts"] < 1 + manifest["max_retries"]
             and (Path(manifest["output"]) / "latest.pt").exists()

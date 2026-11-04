@@ -24,6 +24,9 @@ def load_config(
     path: Path | None = None, *, port: int | None = None
 ) -> dict[str, Any]:
     """Validate configuration without models, GPU access, or agent requests."""
+    if path is not None and not isinstance(path, (str, Path)):
+        raise ValueError("Demo configuration path must be a path")
+    path = Path(path) if path else None
     raw = json.loads(path.read_text()) if path else {}
     if not isinstance(raw, dict):
         raise ValueError("Demo configuration must be a JSON object")

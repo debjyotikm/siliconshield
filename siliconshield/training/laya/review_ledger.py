@@ -34,6 +34,8 @@ def _section(state: str, name: str, stop: str) -> str:
 
 def requirement_of(row: dict[str, Any]) -> str:
     """Return the requirement text from rendered row bytes."""
+    if not isinstance(row, dict):
+        raise ValueError("Row must be an object")
     state = row.get("state")
     if not isinstance(state, str):
         raise ValueError("Row lacks state: " + repr(row.get("id")))
@@ -42,6 +44,8 @@ def requirement_of(row: dict[str, Any]) -> str:
 
 def assumptions_of(row: dict[str, Any]) -> str:
     """Return the assumptions text from rendered row bytes."""
+    if not isinstance(row, dict):
+        raise ValueError("Row must be an object")
     state = row.get("state")
     if not isinstance(state, str):
         raise ValueError("Row lacks state: " + repr(row.get("id")))
@@ -82,6 +86,8 @@ def validate_review(record: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Unknown reviewer type")
     if record["verdict"] not in VERDICTS:
         raise ValueError("Unknown review verdict")
+    if "resolution" in record and not isinstance(record["resolution"], str):
+        raise ValueError("Review resolution must be text")
     if (
         record["verdict"] == "disagree"
         and not record.get("resolution", "").strip()
@@ -110,6 +116,8 @@ def _sha(text: str) -> str:
 
 def validate_ledger(path: Path) -> list[dict[str, Any]]:
     """Load and validate every review in a JSONL ledger."""
+    if not isinstance(path, (str, Path)):
+        raise ValueError("Review ledger path must be a path")
     records = []
     for lineno, line in enumerate(
         Path(path).read_text(encoding="utf-8").splitlines(), 1
@@ -135,6 +143,10 @@ def validate_ledger(path: Path) -> list[dict[str, Any]]:
 
 def ledger_digest(records: list[dict[str, Any]]) -> str:
     """Return the canonical digest over a validated ledger."""
+    if not isinstance(records, list) or any(
+        not isinstance(record, dict) for record in records
+    ):
+        raise ValueError("Ledger digest needs a list of review objects")
     return hashlib.sha256(
         json.dumps(records, sort_keys=True).encode()
     ).hexdigest()
@@ -142,12 +154,23 @@ def ledger_digest(records: list[dict[str, Any]]) -> str:
 
 def template_ids(records: list[dict[str, Any]]) -> set[str]:
     """Return the set of reviewed template ids."""
+    if not isinstance(records, list) or any(
+        not isinstance(record, dict)
+        or not isinstance(record.get("template_id"), str)
+        for record in records
+    ):
+        raise ValueError("Template ids need a list of review objects")
     return {record["template_id"] for record in records}
 
 
 def _approved(record: dict[str, Any]) -> bool:
     """Return whether a ledger record admits training rows."""
-    if record.get("resolution", "").strip():
+    if not isinstance(record, dict):
+        raise ValueError("Approval check needs a review object")
+    resolution = record.get("resolution", "")
+    if resolution and not isinstance(resolution, str):
+        raise ValueError("Review resolution must be text")
+    if isinstance(resolution, str) and resolution.strip():
         refs = record.get("evidence_refs")
         return bool(
             record.get("status") == APPROVED_STATUS
@@ -170,6 +193,16 @@ def require_template_coverage(
     matching id with different reviewed bytes refuses
     training, since the review did not cover those bytes.
     """
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) for row in rows
+    ):
+        raise ValueError("Template coverage needs a list of row objects")
+    if not isinstance(records, list) or any(
+        not isinstance(record, dict)
+        or not isinstance(record.get("template_id"), str)
+        for record in records
+    ):
+        raise ValueError("Template coverage needs a list of review objects")
     reviewed = {
         record["template_id"]: record for record in records if _approved(record)
     }
@@ -199,9 +232,11 @@ def require_template_coverage(
 
 def packet_assertion_sha(assertions: Any) -> str:
     """Return the canonical hash of a packet's assertion blocks."""
-    return hashlib.sha256(
-        json.dumps(assertions, sort_keys=True).encode()
-    ).hexdigest()
+    try:
+        blob = json.dumps(assertions, sort_keys=True).encode()
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Packet assertions must be JSON-serializable") from exc
+    return hashlib.sha256(blob).hexdigest()
 
 
 def require_packet_binding(
@@ -218,6 +253,12 @@ def require_packet_binding(
     """
     if not isinstance(packets, dict) or not packets:
         raise ValueError("Packet binding needs a packet mapping")
+    if not isinstance(records, list) or any(
+        not isinstance(record, dict)
+        or not isinstance(record.get("template_id"), str)
+        for record in records
+    ):
+        raise ValueError("Packet binding needs a list of review objects")
     for record in records:
         if not _approved(record):
             continue

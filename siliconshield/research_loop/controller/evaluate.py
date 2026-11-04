@@ -72,7 +72,7 @@ def require_episodes(rows: list) -> list:
     Zero selected episodes verify nothing; adapter-vs-reference
     counts of 0 >= 0 must never read as non-regression evidence.
     """
-    if not rows:
+    if not isinstance(rows, list) or not rows:
         raise ValueError(
             "Evaluation selected no episodes; refusing a vacuous report."
         )

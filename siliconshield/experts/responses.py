@@ -60,6 +60,13 @@ def build_expert_response(
     truncated input) or names a different model than the profile:
     callers must surface the failure, never judge from it.
     """
+    if not isinstance(profile, Mapping):
+        raise ValueError("Capability profile must be an object")
+    for key in ("id", "release", "checkpoint_sha256"):
+        if not profile.get(key) or not isinstance(profile[key], str):
+            raise ValueError("Capability profile needs " + key)
+    if not isinstance(state, str):
+        raise ValueError("State digest needs text")
     if not isinstance(payload, Mapping):
         raise ValueError("Worker result must be an object")
     worker_id = payload.get("model_id")
@@ -69,9 +76,10 @@ def build_expert_response(
             % (worker_id, profile["id"])
         )
     identity = validate_execution_identity(payload.get("execution_identity"))
-    for key in ("checkpoint_sha256", "question_contract"):
-        if identity[key] != profile[key]:
-            raise ValueError("Worker differs from profile " + key)
+    if identity["checkpoint_sha256"] != profile["checkpoint_sha256"]:
+        raise ValueError("Worker differs from profile checkpoint_sha256")
+    if identity["question_contract"] != profile["question_contract"]:
+        raise ValueError("Worker differs from profile question_contract")
     if payload.get("state_sha256") != text_digest(state):
         raise ValueError("Worker result belongs to a different input")
     checked = contracts.validate_result(payload)
@@ -119,6 +127,10 @@ def consult_experts(
         raise ValueError("Cannot consult experts on empty state text")
     if isinstance(expert_ids, str) or not isinstance(expert_ids, list):
         raise ValueError("Expert ids must be a list of names")
+    if not isinstance(profiles, Mapping):
+        raise ValueError("Consult needs a profile mapping")
+    if not callable(transport):
+        raise ValueError("Consult needs a transport")
     for expert_id in expert_ids:
         if not isinstance(expert_id, str) or not expert_id:
             raise ValueError("Expert ids must be a list of names")

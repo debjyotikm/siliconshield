@@ -72,6 +72,10 @@ def adapt_report(
     report: Mapping[str, JsonValue], *, source_sha256: Union[str, None] = None
 ) -> tuple[DevelopmentSummary, dict[str, JsonValue], dict[str, JsonValue]]:
     """Return (summary, provenance, group_seed) for one trainer report."""
+    if not isinstance(report, Mapping):
+        raise ValueError("LAYA trainer report must be an object")
+    if source_sha256 is not None and not isinstance(source_sha256, str):
+        raise ValueError("LAYA report source hash must be a string")
     if report.get("schema") != TRAINER_SCHEMA:
         raise ValueError(
             "Unsupported LAYA trainer report schema: "

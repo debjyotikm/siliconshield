@@ -924,3 +924,160 @@ def test_stop_reports_without_experiment_id(demo, tmp_path, monkeypatch):
     assert fake.stopped == ["stop"]
     assert len(result["messages"]) == 1
     assert "r1" in result["messages"][0]
+
+
+def test_backend_rejects_malformed_inputs(tmp_path):
+    from siliconshield.web_demo import backend
+
+    assert backend.read_json(5, "fallback") == "fallback"
+    with pytest.raises(ValueError, match="argument list"):
+        backend.run_command("echo hi")
+    with pytest.raises(ValueError, match="timeout must be positive"):
+        backend.run_command(["echo", "hi"], timeout="x")
+    with pytest.raises(ValueError, match="must be an object"):
+        backend.state_text(["x"])
+    with pytest.raises(ValueError, match="must be an object"):
+        backend.Demo(["x"], health_poll=False)
+    with pytest.raises(ValueError, match="state directory"):
+        backend.Demo({"entries": []}, health_poll=False)
+    with pytest.raises(ValueError, match="entries with ids"):
+        backend.Demo(
+            {"state_dir": str(tmp_path / "s"), "entries": [{"x": 1}]},
+            health_poll=False,
+        )
+    demo = backend.Demo(
+        {"state_dir": str(tmp_path / "s"), "entries": []},
+        health_poll=False,
+    )
+    with pytest.raises(ValueError, match="Unknown execution device"):
+        demo.device_name("cuda")
+    with pytest.raises(ValueError, match="Unknown execution device"):
+        demo.device_name(5)
+    assert demo.device_name("cpu") == "CPU"
+    assert demo.device_name("cuda:2") == "GPU 2"
+    assert demo.inference_device() == "cpu"
+    assert demo.glimmer_health() == {"status": "not configured"}
+
+
+def test_demo_config_accepts_string_paths(tmp_path):
+    from siliconshield.web_demo import config as demo_config
+
+    path = tmp_path / "demo.json"
+    path.write_text("{}")
+    assert demo_config.load_config(str(path))["port"] == 8765
+    with pytest.raises(ValueError, match="must be a path"):
+        demo_config.load_config(5)
+
+
+def test_toy_runner_rejects_malformed_campaigns(tmp_path):
+    from siliconshield.web_demo import toy_runner
+
+    with pytest.raises(ValueError, match="must be a path"):
+        toy_runner.execute(5)
+    bad = tmp_path / "bad.json"
+    bad.write_text("[1]")
+    with pytest.raises(ValueError, match="operator object"):
+        toy_runner.execute(bad)
+    bad.write_text('{"x": 1}')
+    with pytest.raises(ValueError, match="operator object"):
+        toy_runner.execute(bad)
+    bad.write_text('{"operator": {"endpoint": 5}}')
+    with pytest.raises(ValueError, match="needs text endpoint"):
+        toy_runner.execute(bad)
+
+
+def test_training_status_survives_corrupt_receipts(tmp_path):
+    import json
+
+    from siliconshield.web_demo import backend
+
+    root = tmp_path / "runs"
+    run_id = "20261104-120000-abcdef"
+    folder = root / run_id
+    (folder / "runs" / "job-a").mkdir(parents=True)
+    (folder / "campaign").mkdir(parents=True)
+    (folder / "controller-result.json").write_text("[1, 2]")
+    (folder / "campaign" / "campaign-status.json").write_text("[1]")
+    (folder / "profile.json").write_text('{"defaults": [1]}')
+    (folder / "runs" / "job-a" / "run-manifest.json").write_text("[1]")
+    (folder / "runs" / "job-a" / "events.jsonl").write_text(
+        '5\n{"event": "train", "step": 1}\n'
+        '{"event": "evaluation", "metrics": [1]}\n'
+    )
+    (folder / "campaign" / "x").mkdir(parents=True)
+    (folder / "campaign" / "x" / "operator-status.json").write_text(
+        '{"experiment": "e", "cycles": [5, {"step": 1}]}'
+    )
+    state = tmp_path / "state"
+    state.mkdir()
+    pointer = {
+        "id": run_id,
+        "directory": str(folder),
+        "unit": "siliconshield-web-toy-" + run_id,
+        "status": "complete",
+    }
+    (state / "active-training.json").write_text(json.dumps(pointer))
+    demo = backend.Demo(
+        {
+            "state_dir": str(state),
+            "entries": [],
+            "training_root": str(root),
+            "training_enabled": False,
+        },
+        health_poll=False,
+    )
+    assert demo.training["id"] == run_id
+    status = demo.training_status()
+    assert status["active"] is False
+    assert status["jobs"][0]["events"] == [
+        {
+            "event": "train",
+            "step": 1,
+            "loss": None,
+            "step_seconds": None,
+            "time": None,
+        }
+    ]
+    assert status["operator_cycles"] == [{"experiment": "e", "step": 1}]
+    assert status["campaign"] == {}
+    stopped = demo.stop_training()
+    assert stopped["status"] == "stop_requested"
+    assert stopped["messages"][0].startswith("Unreadable launch profile: ")
+    import sys
+
+    (folder / "profile.json").write_text(
+        json.dumps(
+            {
+                "python": sys.executable,
+                "source": str(tmp_path),
+                "model": str(tmp_path),
+                "data": str(tmp_path),
+                "runs": str(folder / "runs"),
+                "defaults": {"max_updates": 10},
+            }
+        )
+    )
+    stopped = demo.stop_training()
+    assert stopped["messages"] == ["Unreadable run manifest: run-manifest.json"]
+
+
+def test_glimmer_client_rejects_malformed_arguments():
+    from siliconshield.web_demo import glimmer_client
+
+    endpoint = "http://127.0.0.1:1/chat/completions"
+    with pytest.raises(ValueError, match="non-empty string"):
+        glimmer_client.LocalGlimmerClient(5, "model")
+    with pytest.raises(ValueError, match="audit directory"):
+        glimmer_client.LocalGlimmerClient(endpoint, "model", audit_dir=5)
+    client = glimmer_client.LocalGlimmerClient(endpoint, "model")
+    with pytest.raises(ValueError, match="tools must be a list"):
+        client.complete([], tools=5)
+
+
+def test_toy_dataset_rejects_malformed_root(tmp_path):
+    from siliconshield.web_demo import toy_data
+
+    with pytest.raises(ValueError, match="must be a path"):
+        toy_data.create_dataset(5)
+    summary = toy_data.create_dataset(str(tmp_path / "toy"))
+    assert summary["train"] == 18

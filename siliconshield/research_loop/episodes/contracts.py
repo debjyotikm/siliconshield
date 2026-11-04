@@ -421,6 +421,8 @@ def validate_episode(row: dict[str, JsonValue]) -> None:
     Raises ValueError describing the first structural problem found.
     Accepts only the current tool contract; see _validate_tool_contract.
     """
+    if not isinstance(row, dict):
+        raise ValueError("Episode must be an object")
     if not row.get("id") or not row.get("group_id"):
         raise ValueError("Episode and lineage group IDs are required")
     verification = row.get("verification", {})

@@ -30,8 +30,23 @@ def prepare_model(record: dict[str, Any], target: Path) -> str:
     verified files. The complete export fingerprint is returned only when every
     payload file matches and no extra files are present.
     """
+    if not isinstance(record, dict) or not isinstance(
+        record.get("files"), dict
+    ):
+        raise ValueError("Model record must name its pinned files")
+    if not isinstance(target, Path):
+        raise ValueError("Model destination must be a path")
+    for key in ("repo_id", "revision", "export_sha256"):
+        if not isinstance(record.get(key), str) or not record[key]:
+            raise ValueError("Model record is missing " + key)
     expected = record["files"]
+    for name, wanted in expected.items():
+        if not isinstance(name, str) or not name:
+            raise ValueError("Model record names a non-string file")
+        if not isinstance(wanted, str) or not wanted:
+            raise ValueError("Model record pins no digest for " + name)
     target.mkdir(parents=True, exist_ok=True)
+    root = target.resolve()
     existing = {
         str(p.relative_to(target)) for p in target.rglob("*") if p.is_file()
     }
@@ -39,6 +54,9 @@ def prepare_model(record: dict[str, Any], target: Path) -> str:
         raise ValueError("Destination has files outside the pinned export")
     for name, wanted in expected.items():
         path = target / name
+        resolved = path.resolve()
+        if resolved == root or root not in resolved.parents:
+            raise ValueError("Pinned file escapes its destination: " + name)
         if path.exists():
             if file_sha256(path) != wanted:
                 raise ValueError("Existing file checksum mismatch: " + name)

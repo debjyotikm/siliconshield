@@ -10,6 +10,8 @@ TURN = re.compile(
 
 
 def encode_episode(tokenizer, row, max_length):
+    if isinstance(max_length, bool) or not isinstance(max_length, int):
+        raise ValueError("Episode encoding needs an integer max length")
     validate_episode(row)
     rendered = tokenizer.apply_chat_template(
         row["messages"],

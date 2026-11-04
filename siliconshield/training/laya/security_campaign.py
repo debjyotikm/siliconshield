@@ -24,6 +24,22 @@ FINAL_REPORT_SCHEMA = 3
 
 
 def run_process(command, log_path, environment, timeout):
+    if (
+        not isinstance(command, list)
+        or not command
+        or any(not isinstance(part, str) for part in command)
+    ):
+        raise ValueError("Campaign command needs an argument list")
+    if not isinstance(log_path, (str, Path)):
+        raise ValueError("Campaign log path must be a path")
+    if not isinstance(environment, dict):
+        raise ValueError("Campaign environment must be a mapping")
+    if (
+        isinstance(timeout, bool)
+        or not isinstance(timeout, (int, float))
+        or timeout <= 0
+    ):
+        raise ValueError("Campaign timeout must be positive")
     with Path(log_path).open("a") as log:
         child = subprocess.Popen(
             command,
@@ -45,9 +61,22 @@ def run_process(command, log_path, environment, timeout):
 
 
 def temperature_for(config):
-    return config["temperature_by_options"].get(
-        "choice:3-5", config["temperature"][0]
-    )
+    if not isinstance(config, dict):
+        raise ValueError("Temperature fit must be an object")
+    options = config.get("temperature_by_options")
+    if not isinstance(options, dict):
+        raise ValueError("Temperature fit lacks option temperatures")
+    fallback = config.get("temperature")
+    if (
+        not isinstance(fallback, (list, tuple))
+        or not fallback
+        or not isinstance(fallback[0], (int, float))
+    ):
+        raise ValueError("Temperature fit lacks a base temperature")
+    value = options.get("choice:3-5", fallback[0])
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("Temperature fit has a non-numeric temperature")
+    return value
 
 
 def fit_temperature(logits, targets):
@@ -59,6 +88,18 @@ def fit_temperature(logits, targets):
 
 
 def grouped_calibration(rows, logits, targets):
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict) or not isinstance(row.get("family_id"), str)
+        for row in rows
+    ):
+        raise ValueError("Grouped calibration needs rows with family ids")
+    if (
+        not isinstance(logits, (list, tuple))
+        or not isinstance(targets, (list, tuple))
+        or len(logits) != len(rows)
+        or len(targets) != len(rows)
+    ):
+        raise ValueError("Grouped calibration needs per-row logits/targets")
     families = sorted({row["family_id"] for row in rows})
     if len(families) < 4:
         raise ValueError("grouped calibration requires at least four families")
@@ -75,9 +116,12 @@ def grouped_calibration(rows, logits, targets):
         fitted = fit_temperature(
             [logits[i] for i in fit_indices], [targets[i] for i in fit_indices]
         )
-        temperature = fitted["temperature_by_options"].get(
-            "choice:3-5", fitted["temperature"][0]
-        )
+        temperature = temperature_for(fitted)
+        if "temperature_clamped" not in fitted:
+            raise ValueError(
+                "Temperature fit lacks clamping evidence; "
+                "use the pinned campaign runtime"
+            )
         scaled[held] = np.asarray(logits)[held] / temperature
         fold_metrics = training.metrics(
             scaled[held], [targets[i] for i in held]
@@ -101,6 +145,11 @@ def grouped_calibration(rows, logits, targets):
     raw = training.metrics(logits, targets)
     cross_validated = training.metrics(scaled, targets)
     fitted = fit_temperature(logits, targets)
+    if "temperature_clamped" not in fitted:
+        raise ValueError(
+            "Temperature fit lacks clamping evidence; "
+            "use the pinned campaign runtime"
+        )
     validation = {
         "method": "two_fold_family_grouped_temperature_validation",
         "family_count": len(families),
@@ -114,6 +163,10 @@ def grouped_calibration(rows, logits, targets):
 
 
 def validate_training_report(output, run_id, seed, dev_hash, config):
+    if not isinstance(output, (str, Path)):
+        raise ValueError("Training report output must be a path")
+    if not isinstance(config, dict):
+        raise ValueError("Training report config must be an object")
     output = Path(output)
     report_path = (
         output / "training_report.json"
@@ -121,6 +174,8 @@ def validate_training_report(output, run_id, seed, dev_hash, config):
         else output / "report.json"
     )
     report = json.loads(report_path.read_text())
+    if not isinstance(report, dict):
+        raise ValueError("invalid or stale training report")
     if (
         report.get("schema") != 2
         or report.get("run_id") != run_id
@@ -128,11 +183,19 @@ def validate_training_report(output, run_id, seed, dev_hash, config):
         or report.get("test_evaluated")
     ):
         raise ValueError("invalid or stale training report")
-    if report["progress"]["step"] < 0 or not report["progress"].get(
-        "stop_reason"
-    ):
+    progress = report.get("progress")
+    if not isinstance(progress, dict):
+        raise ValueError("training report lacks progress evidence")
+    step = progress.get("step")
+    if isinstance(step, bool) or not isinstance(step, (int, float)):
+        raise ValueError("training report step is not a number")
+    if step < 0 or not progress.get("stop_reason"):
         raise ValueError("training did not reach a terminal state")
-    signature = report["signature"]
+    signature = report.get("signature")
+    if not isinstance(signature, dict) or not isinstance(
+        signature.get("data"), dict
+    ):
+        raise ValueError("training report lacks signature evidence")
     if signature["seed"] != seed or signature["data"]["dev"] != dev_hash:
         raise ValueError("seed or development provenance mismatch")
     pointer, best, weights_path = training.load_best(output)
@@ -179,28 +242,36 @@ def validate_training_report(output, run_id, seed, dev_hash, config):
     for name, expected in expected_fields.items():
         if signature.get(name) != expected:
             raise ValueError("training signature mismatch: " + name)
+    manifest = signature.get("code_manifest")
+    if not isinstance(manifest, dict):
+        raise ValueError("training report lacks code provenance")
     if (
-        signature["code_manifest"]["combined_sha256"]
+        manifest.get("combined_sha256")
         != training.code_manifest()["combined_sha256"]
     ):
         raise ValueError("training code provenance mismatch")
-    if signature["initial_checkpoint"] != training.checkpoint_manifest(
+    if signature.get("initial_checkpoint") != training.checkpoint_manifest(
         config["model"]
     ):
         raise ValueError("initial checkpoint provenance mismatch")
-    if (
-        pointer["weights_sha256"]
-        != report["selected_checkpoint"]["weights_sha256"]
-    ):
+    selected = report.get("selected_checkpoint")
+    if not isinstance(selected, dict):
+        raise ValueError("training report lacks its selected checkpoint")
+    if pointer["weights_sha256"] != selected.get("weights_sha256"):
         raise ValueError("selected checkpoint mismatch")
     export = json.loads((output / "export.json").read_text())
+    if not isinstance(export, dict):
+        raise ValueError("training export receipt is not an object")
     if (
-        export["weights_sha256"] != pointer["weights_sha256"]
+        export.get("weights_sha256") != pointer["weights_sha256"]
         or training.sha256(output / "model/model.safetensors")
         != pointer["weights_sha256"]
     ):
         raise ValueError("training export mismatch")
-    if report["export"]["export_manifest"] != training.checkpoint_manifest(
+    receipt = report.get("export")
+    if not isinstance(receipt, dict):
+        raise ValueError("training report lacks its export receipt")
+    if receipt.get("export_manifest") != training.checkpoint_manifest(
         output / "model"
     ):
         raise ValueError("training export file set changed")
@@ -311,6 +382,8 @@ def train_seed(config, state, seed, environment, logs):
 
 
 def cache_valid(payload, identity):
+    if not isinstance(payload, dict) or not isinstance(identity, dict):
+        return False
     return all(payload.get(key) == value for key, value in identity.items())
 
 

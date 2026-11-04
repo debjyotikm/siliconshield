@@ -258,6 +258,10 @@ def build(
     evidence, partitions lineage groups into splits, and writes the splits
     plus their manifest. Raises ValueError when nothing eligible remains.
     """
+    if not isinstance(runs, (str, os.PathLike)) or not isinstance(
+        output, (str, os.PathLike)
+    ):
+        raise ValueError("Episode build needs run and output paths")
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     collection = _EpisodeCollection()
@@ -306,6 +310,10 @@ def write_manifest(
     output: Union[str, os.PathLike[str]], manifest: dict[str, JsonValue]
 ) -> dict[str, JsonValue]:
     """Hash split contents; optionally authenticate with a key kept outside the dataset."""
+    if not isinstance(output, (str, os.PathLike)):
+        raise ValueError("Episode manifest output must be a path")
+    if not isinstance(manifest, dict):
+        raise ValueError("Episode manifest must be an object")
     output = Path(output)
     manifest["files"] = {
         s: hashlib.sha256((output / (s + ".jsonl")).read_bytes()).hexdigest()
@@ -330,6 +338,20 @@ def verify_split_membership(
     require_signed: bool = False,
 ) -> str:
     """Verify content and lineage, independent of the filename. Test access is explicit."""
+    if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+        raise ValueError("Episode rows must be a sequence of objects")
+    if any(not isinstance(row, Mapping) for row in rows):
+        raise ValueError("Episode rows must be a sequence of objects")
+    if not isinstance(allowed_splits, (tuple, list)) or any(
+        not isinstance(split, str) for split in allowed_splits
+    ):
+        raise ValueError("Allowed splits must be a list of names")
+    if not isinstance(episodes_path, (str, os.PathLike)):
+        raise ValueError("Episodes path must be a path")
+    if manifest_path is not None and not isinstance(
+        manifest_path, (str, os.PathLike)
+    ):
+        raise ValueError("Episodes manifest path must be a path")
     episodes_path = Path(episodes_path)
     manifest_file = (
         Path(manifest_path)

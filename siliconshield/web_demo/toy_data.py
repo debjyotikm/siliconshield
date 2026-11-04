@@ -18,6 +18,9 @@ ASSUMPTIONS = (
 
 def create_dataset(root: Path) -> dict[str, Any]:
     """Write a balanced, authored fixture for operator integration only."""
+    if not isinstance(root, (str, Path)):
+        raise ValueError("Toy dataset root must be a path")
+    root = Path(root)
     root.mkdir(parents=True, exist_ok=False)
     splits: dict[str, list[dict[str, Any]]] = {"train": [], "dev": []}
     for i, (width, style) in enumerate(

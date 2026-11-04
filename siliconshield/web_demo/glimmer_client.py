@@ -27,6 +27,10 @@ class LocalGlimmerClient:
         audit_dir: Path | None = None,
         decode_arguments: bool = False,
     ) -> None:
+        if not isinstance(endpoint, str) or not endpoint.strip():
+            raise ValueError("Glimmer endpoint must be a non-empty string")
+        if audit_dir is not None and not isinstance(audit_dir, (str, Path)):
+            raise ValueError("Glimmer audit directory must be a path")
         parsed = urlparse(endpoint)
         if (
             parsed.hostname not in ("127.0.0.1", "localhost", "::1")
@@ -141,6 +145,8 @@ class LocalGlimmerClient:
             not isinstance(item, dict) for item in messages
         ):
             raise ValueError("Chat messages must be a list of objects.")
+        if not isinstance(tools, (list, tuple)):
+            raise ValueError("Chat tools must be a list.")
         messages = copy.deepcopy(messages)
         if messages and messages[0].get("role") == "system":
             if not isinstance(messages[0].get("content"), str):
@@ -190,7 +196,7 @@ class LocalGlimmerClient:
                     json.loads(last.get("content", "{}")).get("recorded")
                     is True
                 )
-            except (ValueError, AttributeError):
+            except (ValueError, AttributeError, TypeError):
                 recorded = False
             if decided and recorded:
                 payload.update(

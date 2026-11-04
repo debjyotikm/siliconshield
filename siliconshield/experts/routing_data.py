@@ -157,6 +157,8 @@ for _mech in _CWE_MECHANISMS:
 
 def area_for_tag(tag: str) -> str | None:
     """Resolve a scope tag to a benchmark area, if known."""
+    if not isinstance(tag, str):
+        return None
     tag = tag.strip()
     if tag in BENCHMARK_AREAS:
         return tag

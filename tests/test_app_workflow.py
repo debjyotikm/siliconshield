@@ -399,3 +399,126 @@ def fixture_laya_runtime(tmp_path: Path) -> Path:
             """)
     )
     return root
+
+
+def test_assessor_rejects_malformed_inputs(tmp_path):
+    import subprocess
+    from types import SimpleNamespace
+
+    from siliconshield.app import laya_assessor as assessor
+
+    with pytest.raises(ValueError, match="needs text"):
+        assessor.state_text(5, "a", "rtl")
+    with pytest.raises(ValueError, match="must be a string"):
+        assessor.checkpoint_manifest(5)
+    checkpoint = tmp_path / "ckpt"
+    checkpoint.mkdir()
+    (checkpoint / "w.bin").write_text("x")
+    with pytest.raises(ValueError, match="Python launcher"):
+        assessor.LayaBackend(5, str(checkpoint))
+    with pytest.raises(ValueError, match="checkpoint path"):
+        assessor.LayaBackend("python3", 5)
+    with pytest.raises(ValueError, match="timeout must be positive"):
+        assessor.LayaBackend("python3", str(checkpoint), timeout="x")
+    backend = assessor.LayaBackend("python3", str(checkpoint))
+    real_run = subprocess.run
+
+    def fake_run(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout="[1, 2]\n", stderr="")
+
+    import unittest.mock as mock
+
+    with mock.patch.object(subprocess, "run", fake_run):
+        result = backend.assess("r", "a", "rtl")
+    assert result["status"] == "error"
+    assert result["detail"] == ("Security-model worker returned no JSON result")
+
+
+def test_worker_rejects_malformed_runtime_answers():
+    from siliconshield.app import inference_worker as worker
+
+    class FakeAgent:
+        device = "cpu"
+        cpu_fallback_count = 0
+
+        def __init__(self, answers):
+            self._answers = answers
+
+        def predict_batch(self, states, questions, sort_by_length=False):
+            return self._answers
+
+    usage = {
+        "truncated": False,
+        "truncated_questions": [],
+        "state_tokens_dropped": 0,
+    }
+    good = {
+        "usage": dict(usage),
+        "answers": {
+            "security": {
+                "probabilities": {
+                    "satisfies_requirement": 0.8,
+                    "violates_requirement": 0.1,
+                    "insufficient_context": 0.1,
+                }
+            }
+        },
+    }
+    outcome = worker._run_analyze(FakeAgent([dict(good)]), "state", {})
+    assert outcome["label"] == "satisfies_requirement"
+    bad_answers = [
+        (5, "no answer"),
+        ([5], "malformed answer"),
+        ([{"usage": dict(usage), "answers": []}], "malformed answer"),
+        (
+            [
+                {
+                    "usage": dict(usage),
+                    "answers": {"security": {"probabilities": []}},
+                }
+            ],
+            "malformed answer",
+        ),
+    ]
+    for payload, message in bad_answers:
+        with pytest.raises(ValueError, match=message):
+            worker._run_analyze(FakeAgent(payload), "state", {})
+    with pytest.raises(ValueError, match="no answer"):
+        worker._warm_up(FakeAgent(5), lambda *a: None, {})
+
+
+def test_investigate_rejects_malformed_cases(tmp_path):
+    from siliconshield.app import workflow as workflow_module
+
+    base = {"name": "c", "rtl": "module m; endmodule", "requirement": "r"}
+    bad_cases = [
+        ["x"],
+        dict(base, rtl=5),
+        dict(base, requirement="  "),
+        dict(base, assumptions=5),
+        dict(base, protected_signals="ab"),
+        dict(base, checks=[5]),
+        dict(base, checks=[{"kind": "k"}]),
+    ]
+    for index, case in enumerate(bad_cases):
+        with pytest.raises(ValueError):
+            workflow_module.investigate(case, tmp_path / str(index))
+
+    class BadAssessor:
+        def assess(self, *args):
+            return ["x"]
+
+    with pytest.raises(ValueError, match="return an object"):
+        workflow_module.investigate(
+            dict(base), tmp_path / "assessor", assessor=BadAssessor()
+        )
+    with pytest.raises(ValueError, match="provide assess"):
+        workflow_module.investigate(
+            dict(base), tmp_path / "shape", assessor=object()
+        )
+    with pytest.raises(ValueError, match="must be a path"):
+        workflow_module.investigate(dict(base), 5)
+    with pytest.raises(ValueError, match="must be an object"):
+        workflow_module.report_assessment(["x"])
+    with pytest.raises(ValueError, match="RTL text"):
+        workflow_module.apply_patch(5, [("a", "b")])

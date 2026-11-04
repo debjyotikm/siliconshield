@@ -172,11 +172,26 @@ error instead of returning a verdict. The bridge does not pass the
 response through the experts CLI arbitration validator. Review the
 trace to confirm that the assessed RTL and requirement match the task
 and that the summary follows the tool evidence. See
-[Glimmer inference](inference.md) for serving and model naming.
+[Glimmer inference](inference.md) for serving, the demonstrated
+deployment and its measured throughput, and model naming.
 
-Demonstrated on two base-model sessions against local experts.
+Demonstrated on three base-model sessions against local experts.
 Broader driver reliability is not established. Session verdicts
 inherit the experts' documented domain limits.
+
+### Served model identity
+
+The demonstrated sessions used served model `glimmer-base`, the
+`muse-glimmer-30b` open weights at revision
+`cec94fcfd6512f2cfe708138c32533b346ea4f69`
+([meta-models/Muse-Glimmer-30B](https://huggingface.co/meta-models/Muse-Glimmer-30B)).
+The serving snapshot hashes to fingerprint
+`ed711c3e8bafc658bfe15eb59222f1ab31c7c2422c706533345079b827e1f146`
+(SHA-256 over the config, tokenizer, index, and both weight shards,
+per `training/glimmer/identity.py`). A binding receipt over the
+weights manifest, the server model roster, and the session traces
+hashes to
+`cf97f50f379bb8efda9833506aec300adafad2070c516abb0637bbadc294a7ec`.
 
 ## Routing flow
 
