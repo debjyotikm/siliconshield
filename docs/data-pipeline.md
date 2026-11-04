@@ -1,9 +1,13 @@
-# Decision-model dataset construction and qualification
+# Dataset construction and qualification
 
-[Documentation index](README.md) · [Study walkthrough](study-walkthrough.md) ·
-[Training](security-model-training.md) · [Evaluation](evaluation.md)
+[Documentation index](README.md) ·
+[Training](security-model-training.md)
 
-This guide turns source RTL into an accepted dataset for a decision-model
+> Scope: this guide builds datasets for the retained local research path.
+> That path is disabled by default and is not part of the shipped product,
+> which uses Glimmer and the Contract skills.
+
+This guide turns source RTL into an accepted dataset for a retained-model
 study. Each example asks whether an implementation satisfies an English
 requirement under stated assumptions. Source repository names and CWE tags
 provide provenance. They do not determine the answer.
@@ -30,8 +34,8 @@ The sections below define the admission checks for each case.
 
 | Collection | Role in a new study | Detailed reference |
 |---|---|---|
-| [Training collection](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training) | Reusable source material to audit and qualify for the proposed task. It is not the complete training history of either release. | [Release recipes and lineage](training-recipes.md#published-populations-and-weight-lineage) |
-| [Development benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark) | Comparison and capability measurements. Keep it out of TRAIN when using it for evaluation. | [Benchmark populations and protocols](benchmark.md) |
+| [Training collection](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training) | Reusable source material to audit and qualify for the proposed task. It is not the complete training history of either release. | [Model card lineage](siliconshield-rtl.md#training-lineage-and-reproducibility) |
+| [Development benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark) | Comparison and capability measurements. Keep it out of TRAIN when using it for evaluation. | Collection card documents populations and protocols. |
 
 A downloaded collection does not supply a new study's acceptance record.
 Audit its lineage and template coverage, construct appropriate disjoint views,
@@ -47,9 +51,8 @@ reproduce private experiment catalogs or establish broad coverage of either
 project.
 
 Keep satisfying, violating, rewritten, and missing-context variants in the
-same lineage. Assign that lineage to a partition before expanding it. The
-[study walkthrough](study-walkthrough.md#understand-a-complete-row-and-triplet)
-shows the row and linked-triplet format. Labels belong in metadata, not in
+same lineage. Assign that lineage to a partition before expanding it. Rows use
+the linked-triplet format. Labels belong in metadata, not in
 model-visible comments such as “faulty case.”
 
 The catalog structure is illustrated in
@@ -205,7 +208,7 @@ revalidates the record, its audit, and referenced bytes.
 
 Pin sampling pools before acceptance because pool
 bindings change the version manifest. Once a version is accepted, new
-owned training should proceed through a [decision study](study-walkthrough.md),
+owned training should proceed through a decision study,
 which binds the job to these exact bytes.
 
 ## What coverage means
@@ -218,13 +221,13 @@ coverage or proof of CDC, timing, analog, or physical behavior.
 
 Keep calibration and test material out of generation feedback. A diagnostic
 view used to decide the next training change is spent as independent evidence.
-See [evaluation](evaluation.md) and [training](security-model-training.md) for
+See [training](security-model-training.md) for
 continued studies and retired populations.
 
 ## Sources and builders
 
 Use this module reference when extending the construction pipeline. Dataset
-acceptance ends at the version record. The [study contract](study-walkthrough.md)
+acceptance ends at the version record. The study contract
 binds that version to an experiment, and the [trainer](security-model-training.md)
 executes its optimization plan.
 

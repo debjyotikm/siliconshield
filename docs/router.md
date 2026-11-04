@@ -1,15 +1,14 @@
 # Router architecture
 
-[Documentation index](README.md) · [Decision-model qualification](expert-qualification.md) ·
-[Benchmark](benchmark.md)
+[Documentation index](README.md)
 
 The router connects an explicit assessment scope to specialists with relevant
 measured capabilities. It preserves each model's result, ranks the available evidence,
 and makes coverage gaps explicit before optional Muse arbitration. No single
 model covers the whole design space. Scope tags identify the property class,
 and measured profiles determine which specialist evidence is available. The
-Contract-1 decision model handles local guard requirements. The Contract-2
-decision model handles FIFO, counter, and arbitration requirements. Anything outside measured
+Contract-1 skill handles local guard requirements. The Contract-2
+skill handles FIFO, counter, and arbitration requirements. Anything outside measured
 support stays visible instead of receiving an unqualified verdict. This is application-level expert routing,
 not a jointly trained neural mixture of experts. Improvement over the best
 single model requires a matched evaluation.
@@ -25,7 +24,7 @@ calls and dashed arrows are replies. The loop consults experts sequentially.
 
 The experts CLI and Python API expose this path. Modules live in
 `siliconshield/experts/`, with evaluation in
-`siliconshield/benchmark/`. The two current decision models are
+`siliconshield/benchmark/`. The two current retained models are
 [Contract-1](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1)
 (local guards) and
 [Contract-2](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2)
@@ -45,9 +44,8 @@ Prepare the input as a small verification problem:
 3. State the reset scope and any environment constraints that affect the answer.
 4. Choose mechanism tags supported by the registered capability profiles.
 
-First register immutable exports and measured capability profiles as described
-in [decision-model qualification](expert-qualification.md). A registry without
-capability profiles provides no routable experts.
+First register immutable exports and measured capability profiles.
+A registry without capability profiles provides no routable experts.
 
 The state file uses literal section headers, without colons:
 
@@ -146,6 +144,68 @@ reuse `InferenceService` and `WorkerPool` across calls. This is a local-pipe
 service API, not a bundled HTTP endpoint. Muse-assisted paths may transmit
 RTL and evidence to the configured provider.
 
+## Glimmer specialists
+
+The Meta-only path runs the same router flow with Glimmer behind the
+transport instead of local workers. Each registry expert carries
+`"kind": "glimmer"` and names its skill directory as its checkpoint,
+with expected digests for the serving weights fingerprint and the
+skill file. Registry loading verifies the skill bytes. Every consult
+re-reads the skill from that pinned directory and refuses on any
+digest mismatch, and the serving fingerprint passed on the command
+line must match the registry and profile binding exactly.
+
+Glimmer returns one verdict label with self-reported confidence. The
+transport maps that to a unit score distribution by assigning the
+verdict its confidence and splitting the remainder equally. These
+scores are self-reported confidences, not calibrated probabilities.
+A verdict whose confidence cannot top the distribution is refused.
+Inputs estimated beyond the serving context budget are refused
+rather than truncated. `--arbitrate` sends the validated verdicts
+to Muse Spark 1.3 for the final assessment. A registry entry that
+is not a Glimmer specialist is refused before any model call, so
+retained local models cannot run through this path.
+
+Register two entries (ids `contract-1` and `contract-2`) pointing
+at `.agents/skills/contract-1` and `.agents/skills/contract-2`.
+Start from the runnable template
+[models.glimmer.example.json](../configs/models.glimmer.example.json).
+Copy it next to your deployment, fill in the serving fingerprint
+from the deployment receipt (see Served model identity below),
+use absolute skill paths, and pin each skill digest with
+`sha256sum .agents/skills/contract-1/SKILL.md` (same for
+`contract-2`). Leave `profile` and `qualification` out until
+measurement completes. Then measure each specialist on its own
+domain with the smoke dataset (a few minutes per run):
+
+```bash
+python -m siliconshield.experts.measure \
+  --registry /path/to/models.glimmer.json \
+  --experts contract-1 --areas ot-access-control \
+  --endpoint http://127.0.0.1:18400/v1/chat/completions \
+  --ssh-host YOUR_SSH_ALIAS --model glimmer-base \
+  --glimmer-fingerprint YOUR_FINGERPRINT \
+  --dataset examples/benchmark/glimmer-smoke-6.example.json \
+  --out-dir /path/to/profiles
+python -m siliconshield.experts.measure \
+  --registry /path/to/models.glimmer.json \
+  --experts contract-2 --areas counter \
+  --endpoint http://127.0.0.1:18400/v1/chat/completions \
+  --ssh-host YOUR_SSH_ALIAS --model glimmer-base \
+  --glimmer-fingerprint YOUR_FINGERPRINT \
+  --dataset examples/benchmark/glimmer-smoke-6.example.json \
+  --out-dir /path/to/profiles
+```
+
+Add a `profile` field to each registry entry pointing at the
+written `contract-1.profile.json` and `contract-2.profile.json`
+files. Leave `qualification` out so the service backfills it from
+each profile, or copy the profile's `qualification_ref` value
+exactly. For routing and arbitration, specialists need measured
+probe counts from a benchmark that matches the deployment. The
+example profiles shipped for orientation are unrated until
+replaced by a local measurement.
+
 ## Driving assessments from Glimmer
 
 Glimmer can drive the same assessment path through two tools,
@@ -167,7 +227,7 @@ assessment. Specialist predictions come from the validated router tool. Glimmer
 chooses the tool arguments and writes a final conversational response. The
 session accepts that response only after at least one successful
 `router.assess` result with expert responses, and only when the verdict
-names every consulted expert id and label; anything else aborts with an
+names every consulted expert id and label. Anything else aborts with an
 error instead of returning a verdict. The bridge does not pass the
 response through the experts CLI arbitration validator. Review the
 trace to confirm that the assessed RTL and requirement match the task
@@ -200,7 +260,7 @@ hashes to
    and service do not infer scope from it. Use only tags represented by the
    capability profiles. Unratable tags stay visible instead of being dropped.
 2. **Profile gate.** An expert is eligible only when its capability
-   profile claims every tag; claiming a benchmark area also claims
+   profile claims every tag. Claiming a benchmark area also claims
    that area's mechanism tags. Unclaimed scopes route nowhere and are
    reported unsupported. Experts covering only some tags are
    reported as partial coverage for scope splitting, never
@@ -262,9 +322,9 @@ Never edit tiers by hand.
 
 ## Provisioning future models
 
-Use [decision-model qualification](expert-qualification.md) to register an immutable
-export, measure its capability profile, qualify routing, and retain a rollback
-release. That guide also covers upgrades and removal. A different output task
+Register an immutable export, measure its capability profile, qualify routing,
+and retain a rollback release. Plan upgrades and removal in the same change.
+A different output task
 or worker protocol needs an explicit integration change.
 
 ## Verification

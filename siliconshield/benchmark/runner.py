@@ -32,6 +32,7 @@ class BenchmarkRunner:
         """Sorted benchmark areas covered by these rows."""
         return sorted({row["benchmark_area"] for row in self._rows})
 
+    # Non-meta local decision models are not supported. Use at own risk.
     def run_model(
         self,
         model_id: str,

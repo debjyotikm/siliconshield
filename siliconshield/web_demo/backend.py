@@ -1,28 +1,28 @@
-"""Browser-facing orchestration over the maintained worker and study APIs."""
+"""Browser-facing orchestration over Glimmer specialists and their skills."""
 
 import copy
+import hashlib
 import json
-import os
-import re
-import shutil
-import subprocess
 import threading
 import time
 import traceback
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any, cast
 
-from siliconshield.app.laya_assessor import checkpoint_manifest
 from siliconshield.experts.arbitration import arbitrate_assessment
-from siliconshield.experts.contracts import validate_result
 from siliconshield.experts.identity import assemble_state
 from siliconshield.experts.service import InferenceService
-from siliconshield.experts.worker import WorkerPool
+from siliconshield.research_loop.controller.client import ChatClient
 from siliconshield.research_loop.episodes.contracts import atomic_json
-from siliconshield.research_loop.execution.operator import Operator
+from siliconshield.research_loop.procedures.adapter_specialists import (
+    AdapterTransport,
+)
+from siliconshield.research_loop.procedures.glimmer_specialists import (
+    GlimmerTransport,
+)
 from siliconshield.web_demo.glimmer_client import LocalGlimmerClient
-from siliconshield.web_demo.toy_data import create_dataset
 
 LABELS = [
     "satisfies_requirement",
@@ -34,74 +34,11 @@ ROUTING_SCOPES = ("fifo", "counter", "arbitration", "ot-access-control")
 
 
 def read_json(path: Path, fallback: Any = None) -> Any:
-    """Read an optional report which may not yet have been published."""
+    """Read an optional JSON document which may not exist yet."""
     try:
         return json.loads(Path(path).read_text())
     except (OSError, ValueError, TypeError):
         return fallback
-
-
-def run_command(
-    argv: list[str], timeout: int = 20, env: dict[str, str] | None = None
-) -> str:
-    """Run a bounded, administrator-configured command without a shell."""
-    if (
-        not isinstance(argv, list)
-        or not argv
-        or any(not isinstance(part, str) for part in argv)
-    ):
-        raise ValueError("Demo commands need a non-empty argument list")
-    if (
-        isinstance(timeout, bool)
-        or not isinstance(timeout, (int, float))
-        or timeout <= 0
-    ):
-        raise ValueError("Demo command timeout must be positive")
-    if env is not None and (
-        not isinstance(env, dict) or any(not isinstance(k, str) for k in env)
-    ):
-        raise ValueError("Demo command environment must be a string map")
-    result = subprocess.run(
-        argv,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env=env,
-        check=False,
-    )
-    if result.returncode:
-        raise RuntimeError(
-            (result.stderr or result.stdout or "Command failed")[-3000:]
-        )
-    return result.stdout
-
-
-def gpu_status() -> list[dict[str, str]]:
-    """Read GPU status, never loading a model or stopping a process."""
-    text = run_command(
-        [
-            "nvidia-smi",
-            "--query-gpu=index,name,memory.used,memory.total,utilization.gpu",
-            "--format=csv,noheader,nounits",
-        ]
-    )
-    cards = []
-    for row in text.strip().splitlines():
-        fields = [field.strip() for field in row.split(",")]
-        if len(fields) < 5:
-            raise RuntimeError("Unreadable nvidia-smi row: %r" % row)
-        # The card name itself may contain commas; only the first
-        # and last three columns have fixed positions.
-        cards.append(
-            {
-                "index": fields[0],
-                "name": ",".join(fields[1:-3]),
-                "memory_used": fields[-3],
-                "memory_total": fields[-2],
-                "utilization": fields[-1],
-            }
-        )
-    return cards
 
 
 def state_text(body: dict[str, Any]) -> str:
@@ -134,8 +71,126 @@ def state_text(body: dict[str, Any]) -> str:
     )
 
 
+class _RecordingChatClient:
+    """Record live Glimmer calls for demo evidence.
+
+    Wraps one chat client and keeps every completion request and
+    response: endpoint, model, per-message sizes, the skill digest
+    actually sent, timing, and the exact response text. Failed
+    calls are recorded with their error instead of vanishing. An
+    optional progress callback streams call lifecycle lines while
+    each call runs, so observers see activity during long calls.
+    """
+
+    def __init__(
+        self,
+        client: Any,
+        endpoint: str,
+        model: str,
+        progress: Any = None,
+        heartbeat_seconds: float = 10.0,
+    ) -> None:
+        self._client = client
+        self._endpoint = endpoint
+        self._model = model
+        self._progress = progress
+        self._heartbeat_seconds = heartbeat_seconds
+        self.calls: list[dict[str, Any]] = []
+
+    def _say(self, text: str) -> None:
+        if self._progress is not None:
+            self._progress(text)
+
+    def complete(self, messages: Any, tools: Any = ()) -> Any:
+        started = time.monotonic()
+        number = len(self.calls) + 1
+        skill = ""
+        for message in messages:
+            if message.get("role") == "system":
+                skill = message.get("content", "")
+        digest = hashlib.sha256(skill.encode("utf-8")).hexdigest()[:12]
+        self._say(
+            "Call %d: POST %s model %s skill %s. Waiting on Glimmer."
+            % (number, self._endpoint, self._model, digest)
+        )
+        done = threading.Event()
+
+        def heartbeat() -> None:
+            while not done.wait(self._heartbeat_seconds):
+                self._say(
+                    "Call %d: still waiting (%ds elapsed)."
+                    % (number, time.monotonic() - started)
+                )
+
+        pulse = threading.Thread(target=heartbeat, daemon=True)
+        pulse.start()
+        try:
+            reply = self._client.complete(messages, tools)
+        except Exception as exc:
+            done.set()
+            seconds = time.monotonic() - started
+            self.calls.append(
+                {
+                    "endpoint": self._endpoint,
+                    "model": self._model,
+                    "seconds": seconds,
+                    "error": str(exc),
+                }
+            )
+            self._say("Call %d failed after %.1fs: %s" % (number, seconds, exc))
+            raise
+        finally:
+            done.set()
+        seconds = time.monotonic() - started
+        content = reply.get("content", "") if isinstance(reply, dict) else ""
+        request_messages = [
+            {"role": message.get("role"), "chars": len(text)}
+            for message in messages
+            for text in [message.get("content", "")]
+        ]
+        self.calls.append(
+            {
+                "endpoint": self._endpoint,
+                "model": self._model,
+                "seconds": seconds,
+                "kind": "chat",
+                "request_messages": request_messages,
+                "skill_sha256": hashlib.sha256(
+                    skill.encode("utf-8")
+                ).hexdigest(),
+                "response_chars": len(content),
+                "response": content,
+            }
+        )
+        self._say(
+            "Call %d finished in %.1fs (%d response chars)."
+            % (number, seconds, len(content))
+        )
+        return reply
+
+
+def _call_with_heartbeat(
+    log: Any, start_text: str, wait_text: str, call: Any
+) -> Any:
+    """Run one blocking agent call with elapsed-time progress updates."""
+    started = time.monotonic()
+    log(start_text)
+    done = threading.Event()
+
+    def heartbeat() -> None:
+        while not done.wait(10.0):
+            log(wait_text % (time.monotonic() - started))
+
+    pulse = threading.Thread(target=heartbeat, daemon=True)
+    pulse.start()
+    try:
+        return call()
+    finally:
+        done.set()
+
+
 class Demo:
-    """Own this session's workers and retain actual execution receipts."""
+    """Consult Glimmer specialists and retain actual execution receipts."""
 
     def __init__(
         self, config: dict[str, Any], *, health_poll: bool = True
@@ -159,84 +214,33 @@ class Demo:
         self.state = Path(config["state_dir"])
         self.state.mkdir(parents=True, exist_ok=True, mode=448)
         self.entries = {entry["id"]: entry for entry in entries}
-        self.pools: dict[str, WorkerPool] = {}
-        self.loaded: dict[str, dict[str, Any]] = {}
         self.jobs: dict[str, dict[str, Any]] = {}
         self._evicted: list[str] = []
         self._threads: list[threading.Thread] = []
         self.lock = threading.RLock()
         self.inference_lock = threading.Lock()
-        self.training: dict[str, Any] | None = None
-        self.preparing_local = False
         self.health: dict[str, Any] = {
             "glimmer": {"status": "not configured"},
-            "gpus": [],
         }
         self.stopping = False
-        pointer = self.state / "active-training.json"
-        if pointer.exists():
-            saved = json.loads(pointer.read_text())
-            self._validate_training_pointer(saved)
-            self.training = saved
         if health_poll:
             threading.Thread(target=self.health_loop, daemon=True).start()
-
-    def _validate_training_pointer(self, record: dict[str, Any]) -> None:
-        """Refuse corrupt or foreign restart pointers before accessing jobs."""
-        if not isinstance(record, dict) or not self.config["training_root"]:
-            raise ValueError(
-                "Existing training pointer requires its original output directory."
-            )
-        run_id = record.get("id", "")
-        if not isinstance(run_id, str) or not re.fullmatch(
-            "\\d{8}-\\d{6}-[a-f0-9]{6}", run_id
-        ):
-            raise ValueError(
-                "Malformed training pointer: inspect the saved session."
-            )
-        expected = Path(self.config["training_root"]).resolve() / run_id
-        directory = record.get("directory", "")
-        if not isinstance(directory, str):
-            raise ValueError(
-                "Malformed training pointer: inspect the saved session."
-            )
-        if (
-            Path(directory).resolve() != expected
-            or record.get("unit") != "siliconshield-web-toy-" + run_id
-        ):
-            raise ValueError(
-                "Training pointer does not belong to this configured session."
-            )
-
-    def inference_device(self, value: str | None = None) -> str:
-        """Select only CPU or the explicitly configured CUDA device."""
-        gpu = self.config.get("gpu")
-        selected = (
-            ("cpu" if gpu is None else f"cuda:{gpu}")
-            if value is None
-            else value
-        )
-        allowed = ["cpu"] + ([] if gpu is None else [f"cuda:{gpu}"])
-        if not isinstance(selected, str) or selected not in allowed:
-            raise ValueError("Select CPU or the configured GPU.")
-        return selected
-
-    def device_name(self, device: str) -> str:
-        """Name the server-side execution device."""
-        if device == "cpu":
-            return "CPU"
-        if not isinstance(device, str) or not re.fullmatch(r"cuda:\d+", device):
-            raise ValueError("Unknown execution device: %r" % (device,))
-        return "GPU " + device.split(":")[1]
 
     def glimmer_health(self) -> dict[str, Any]:
         """Check an explicitly configured local service without generation."""
         cfg = self.config.get("glimmer")
         if not cfg:
             return {"status": "not configured"}
+        if cfg["endpoint"].endswith("/score"):
+            return self._shim_health(cfg)
         if not isinstance(cfg, dict) or not isinstance(cfg.get("model"), str):
             raise ValueError("Glimmer configuration needs a model id.")
-        client = LocalGlimmerClient(**cfg, timeout=8)
+        client = LocalGlimmerClient(
+            cfg["endpoint"],
+            cfg["model"],
+            ssh_host=cfg.get("ssh_host"),
+            timeout=8,
+        )
         reply = client.models()
         if not isinstance(reply, dict) or not isinstance(
             reply.get("data"), list
@@ -255,30 +259,31 @@ class Demo:
             "transport": "SSH" if cfg.get("ssh_host") else "Loopback HTTP",
         }
 
-    def check_storage(self) -> Path:
-        """Keep toy checkpoints on the configured external output volume."""
-        root = Path(self.config["training_root"])
-        root.mkdir(parents=True, exist_ok=True)
-        if shutil.disk_usage(root).free < 64 * 1024**3:
-            raise RuntimeError(
-                "Toy training requires at least 64 GiB free on its output volume."
-            )
-        if shutil.disk_usage(self.state).free < 5 * 1024**3:
-            raise RuntimeError(
-                "State filesystem has less than 5 GiB headroom. Training was not launched."
-            )
-        return root
+    def _shim_health(self, cfg: dict[str, Any]) -> dict[str, Any]:
+        """Check the scoring shim through its model list."""
+        if not isinstance(cfg.get("model"), str):
+            raise ValueError("Adapter configuration needs a model id.")
+        url = cfg["endpoint"][: -len("/score")] + "/v1/models"
+        with urllib.request.urlopen(url, timeout=8) as reply:
+            data = json.loads(reply.read())
+        if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+            raise RuntimeError("Scoring shim returned a malformed reply.")
+        served = [
+            model["id"]
+            for model in data["data"]
+            if isinstance(model, dict) and isinstance(model.get("id"), str)
+        ]
+        if cfg["model"] not in served:
+            raise RuntimeError("Configured adapter model is not served.")
+        return {
+            "status": "ready",
+            "model": cfg["model"],
+            "transport": "Loopback scoring",
+        }
 
     def health_loop(self) -> None:
-        """Poll configured services without dispatching inference or training."""
+        """Poll the Glimmer service without dispatching inference."""
         while not self.stopping:
-            try:
-                self.health["gpus"] = (
-                    gpu_status() if self.config["gpu"] is not None else []
-                )
-                self.health.pop("gpu_error", None)
-            except Exception as exc:
-                self.health["gpu_error"] = str(exc)
             try:
                 self.health["glimmer"] = self.glimmer_health()
             except Exception as exc:
@@ -297,102 +302,12 @@ class Demo:
             return job_id in self._evicted
 
     def close(self) -> None:
-        """Drain owned jobs, then close this application's workers.
-
-        Running jobs get a bounded drain before the pools close:
-        a job that outlasts the drain fails loudly when its pool
-        closes instead of writing receipts post-close.
-        """
+        """Drain owned jobs with a bounded wait, then stop polling."""
         self.stopping = True
         with self.lock:
             threads = list(self._threads)
         for thread in threads:
             thread.join(timeout=30)
-        if not self.inference_lock.acquire(timeout=30):
-            # An outlasting job still holds the lock; close its
-            # pools anyway so shutdown stays bounded. The job then
-            # fails loudly against closed pools, as documented.
-            with self.lock:
-                pools = list(self.pools.values())
-            for pool in pools:
-                pool.close()
-            return
-        try:
-            for pool in self.pools.values():
-                pool.close()
-            self.pools.clear()
-            self.loaded.clear()
-        finally:
-            self.inference_lock.release()
-
-    def training_active(self) -> bool:
-        """Reconcile controller receipts and independently owned jobs."""
-        if not self.training:
-            return False
-        folder = Path(self.training["directory"])
-        terminal = read_json(folder / "controller-result.json")
-        if terminal:
-            return self.owned_job_running(folder)
-        if self.training.get("status") in ["complete", "error", "stopped"]:
-            return self.owned_job_running(folder)
-        if (
-            self.training.get("status") in ["preparing", "starting"]
-            and self.preparing_local
-        ):
-            return True
-        try:
-            state = run_command(
-                [
-                    "systemctl",
-                    "--user",
-                    "show",
-                    self.training["unit"],
-                    "--property=ActiveState",
-                    "--value",
-                ],
-                timeout=5,
-            ).strip()
-        except Exception:
-            return True
-        if state in ["active", "activating", "reloading"]:
-            self.training["status"] = "running"
-            return True
-        if self.owned_job_running(folder):
-            return True
-        # In-memory only: a status read reconciles the diagnosis but
-        # never rewrites the pointer file. The same diagnosis is
-        # recomputed on the next read.
-        self.training["status"] = "error"
-        self.training["error"] = (
-            "Controller exited without a completion receipt. Inspect the saved run before retrying."
-        )
-        return False
-
-    def owned_job_running(self, folder: Path) -> bool:
-        """Keep a live child job visible even after controller failure."""
-        for path in (folder / "runs").glob("*/run-manifest.json"):
-            manifest = read_json(path, {})
-            if not isinstance(manifest, dict) or not isinstance(
-                manifest.get("unit"), str
-            ):
-                continue
-            try:
-                state = run_command(
-                    [
-                        "systemctl",
-                        "--user",
-                        "show",
-                        manifest["unit"],
-                        "--property=ActiveState",
-                        "--value",
-                    ],
-                    timeout=5,
-                ).strip()
-                if state in ["active", "activating"]:
-                    return True
-            except Exception:
-                return True
-        return False
 
     def submit_task(self, kind: str, fn: Any) -> dict[str, Any]:
         """Run one bounded background request and retain its real result."""
@@ -466,121 +381,107 @@ class Demo:
             except OSError:
                 pass
 
-    def ensure_model(
-        self, model: str, log: Any, device: str | None = None
-    ) -> dict[str, Any]:
-        """Verify and load an immutable model on the requested device."""
-        if self.stopping:
-            raise ValueError("This demo session is stopping.")
-        if model not in self.entries:
-            raise ValueError("Unknown decision model.")
-        device = self.inference_device(device)
-        if self.training_active():
-            raise ValueError(
-                "Toy training owns this demo session. Wait for closeout before loading models."
-            )
-        pool = self.pools.get(model)
-        if (
-            model in self.loaded
-            and self.loaded[model].get("device") == device
-            and pool is not None
-            and model in pool
-        ):
-            return self.loaded[model]
-        stale = self.pools.pop(model, None)
-        if stale is not None:
-            log(f"Unloading {model} before changing inference device.")
-            stale.close()
-        self.loaded.pop(model, None)
-        if device.startswith("cuda:"):
-            processes = run_command(
-                [
-                    "nvidia-smi",
-                    f"--id={self.config['gpu']}",
-                    "--query-compute-apps=pid",
-                    "--format=csv,noheader",
-                ]
-            ).split()
-            owned = {
-                str(p.pid)
-                for pool in self.pools.values()
-                for p in pool._workers.values()
-            }
-            if set(processes) - owned:
-                raise RuntimeError(
-                    "Demo GPU has an unrelated compute process. No process was interrupted."
-                )
-        entry = copy.deepcopy(self.entries[model])
-        entry["device"] = device
-        env = {
-            "PYTHONPATH": self.config["source"],
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "OMP_NUM_THREADS": "4",
-            "MKL_NUM_THREADS": "4",
+    def _engine_transport(
+        self, service: InferenceService, log: Any = None
+    ) -> tuple[Any, Any]:
+        """Bind the configured engine to registry specialists.
+
+        Selects the chat or scoring transport from the registry
+        kind. Either way the serving fingerprint must match the
+        registry and profile binding exactly. Returns the transport
+        with its live-call recorder.
+        """
+        cfg = self.config.get("glimmer")
+        if not cfg:
+            raise ValueError("Configure the Glimmer endpoint before assessing.")
+        entries = {
+            model_id: service.model_entry(model_id)
+            for model_id in service.expert_ids
         }
-        if device == "cpu":
-            env["CUDA_VISIBLE_DEVICES"] = ""
-        log(
-            f"Loading {model} on {self.device_name(device)}. Verifying checkpoint and runtime."
-        )
-        pool = WorkerPool(extra_env=env)
-        try:
-            pool.load(entry)
-            ready = pool.ready(model)
-            if ready.get("device") != device:
-                raise RuntimeError(
-                    "Worker device differs from the requested device."
+        if not entries:
+            raise ValueError("No usable specialists in the registry.")
+        for model_id, entry in entries.items():
+            # Non-meta local decision models are not supported. Use at own risk.
+            if entry.get("kind", "local-worker") == "local-worker":
+                raise ValueError(
+                    "Refusing to route %r: local-worker entries are not "
+                    "served by this demo." % (model_id,)
                 )
-        except Exception:
-            pool.close()
-            raise
-        self.pools[model] = pool
-        self.loaded[model] = ready
-        log(f"{model} loaded on {self.device_name(device)}.")
-        return ready
-
-    def load(
-        self, model: str, log: Any, device: str | None = None
-    ) -> dict[str, Any]:
-        """Serialize worker loading against inference and training launch."""
-        with self.inference_lock:
-            return self.ensure_model(model, log, device)
-
-    def unload(self, model: str) -> dict[str, Any]:
-        """Release only this session's selected model worker."""
-        with self.inference_lock:
-            if model in self.pools:
-                self.pools.pop(model).close()
-            self.loaded.pop(model, None)
-        return {"status": "unloaded"}
+        kinds = {entry.get("kind") for entry in entries.values()}
+        if kinds == {"adapter"}:
+            transport = AdapterTransport(
+                cfg["endpoint"],
+                cfg["model"],
+                cfg["fingerprint"],
+                entries,
+                progress=log,
+            )
+            return transport, transport
+        if kinds != {"glimmer"}:
+            raise ValueError(
+                "One demo serves one engine: register glimmer or adapter "
+                "specialists, not both."
+            )
+        recorder = _RecordingChatClient(
+            ChatClient(
+                cfg["endpoint"],
+                cfg["model"],
+                ssh_host=cfg.get("ssh_host"),
+            ),
+            cfg["endpoint"],
+            cfg["model"],
+            progress=log,
+        )
+        ssh_host = cfg.get("ssh_host")
+        return (
+            GlimmerTransport(
+                recorder,
+                cfg["model"],
+                cfg["endpoint"],
+                cfg["fingerprint"],
+                entries,
+                device_type=(
+                    "ssh:%s" % ssh_host.strip()
+                    if ssh_host and ssh_host.strip()
+                    else "remote"
+                ),
+            ),
+            recorder,
+        )
 
     def assess(self, body: dict[str, Any], log: Any) -> dict[str, Any]:
-        """Score the supplied text through the real identity-checked worker."""
+        """Consult one named Glimmer specialist behind its skill."""
         text = state_text(body)
         model = body.get("model")
         if not isinstance(model, str):
             raise ValueError("A model ID is required.")
-        device = self.inference_device(body.get("device"))
+        if not self.config.get("registry"):
+            raise ValueError("Register specialists before assessing.")
+        service = InferenceService(self.config["registry"])
         with self.inference_lock:
-            self.ensure_model(model, log, device)
-            log(
-                "Assessing the RTL against the supplied requirement and assumptions."
-            )
+            transport, recorder = self._engine_transport(service, log)
+            log("Consulting the Contract skill through Muse Glimmer.")
             started = time.monotonic()
-            try:
-                result = cast(
-                    dict[str, Any], self.pools[model].analyze(model, text)
+            assessment = service.assess_expert(model, text, transport)
+            if not assessment["responses"]:
+                raise RuntimeError(
+                    "Specialist %r returned no verdict: %s"
+                    % (model, assessment["errors"])
                 )
-            except Exception:
-                self.pools.pop(model).close()
-                self.loaded.pop(model, None)
-                raise
-            result["scores"] = validate_result(result)["scores"]
-            result["wall_seconds"] = time.monotonic() - started
-            result["input"] = {
-                k: body[k] for k in ["rtl", "requirement", "assumptions"]
+            response = cast(dict[str, Any], assessment["responses"][0])
+            result = {
+                "model": response["expert_id"],
+                "label": response["label"],
+                "scores": response["scores"],
+                "truncated": response["truncated"],
+                "wall_seconds": time.monotonic() - started,
+                "glimmer_model": self.config["glimmer"]["model"],
+                "glimmer_calls": recorder.calls,
+                "input": {
+                    k: body[k] for k in ["rtl", "requirement", "assumptions"]
+                },
             }
-            log("Decision received. All three class scores are available.")
+            log("Specialist verdict received with skill evidence.")
             return result
 
     def route(self, body: dict[str, Any], log: Any) -> dict[str, Any]:
@@ -589,49 +490,75 @@ class Demo:
         scope = body.get("scope")
         if not isinstance(scope, str) or scope not in ROUTING_SCOPES:
             raise ValueError("Select a measured routing domain.")
-        if not self.config["registry"]:
-            raise ValueError("Register decision models before routing.")
+        if not self.config.get("registry"):
+            raise ValueError("Register specialists before routing.")
         service = InferenceService(self.config["registry"])
         with self.inference_lock:
-            if self.training_active():
-                raise ValueError("Wait for the toy training closeout.")
-
-            def consult(model: str, state: str) -> dict[str, Any]:
-                self.ensure_model(
-                    model, log, service.model_entry(model)["device"]
-                )
-                try:
-                    return cast(
-                        dict[str, Any], self.pools[model].analyze(model, state)
-                    )
-                except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught
-                    dead = self.pools.pop(model, None)
-                    if dead is not None:
-                        dead.close()
-                    self.loaded.pop(model, None)
-                    raise
-
+            transport, recorder = self._engine_transport(service, log)
             log("Routing by measured domain coverage: " + scope + ".")
-            assessment = service.assess([scope], text, consult)
+            assessment = service.assess([scope], text, transport)
         result: dict[str, Any] = {
             "assessment": assessment,
             "broken_experts": service.broken_experts,
             "unprofiled_experts": service.unprofiled_experts,
+            "glimmer_calls": recorder.calls,
+            "arbitration_requested": body.get("arbitrate") is True,
             "input": {
                 k: body[k] for k in ["rtl", "requirement", "assumptions"]
             },
         }
-        if body.get("arbitrate") is True and (not self.config["glimmer"]):
-            result["arbitration_error"] = (
-                "Configure local Glimmer to request arbitration."
-            )
-            return result
         if body.get("arbitrate") is True:
-            log(
-                "Local Muse Glimmer is reviewing the identity-bound specialist evidence."
-            )
-            try:
-                result["arbitration"] = arbitrate_assessment(
+            agent = self.config.get("arbiter") or self.config.get("glimmer")
+            if agent is None:
+                result["arbitration_error"] = (
+                    "Configure an arbiter: no generative service is "
+                    "available. Specialist evidence remains available."
+                )
+                log("Arbitration refused: no generative arbiter configured.")
+                return result
+            if agent.get("engine") == "spark":
+
+                def run_spark() -> Any:
+                    return arbitrate_assessment(
+                        assessment,
+                        text,
+                        body["requirement"],
+                        profiles=service.profiles_for(
+                            assessment["routing"]["experts"]
+                        ),
+                        assumptions=body["assumptions"],
+                        audit_dir=self.state / "arbitration",
+                        model=agent["model"],
+                    )
+
+                try:
+                    result["arbitration"] = _call_with_heartbeat(
+                        log,
+                        "Calling %s via the local muse CLI "
+                        "for final assessment." % agent["model"],
+                        "Muse Spark final assessment: "
+                        "still waiting (%ds elapsed).",
+                        run_spark,
+                    )
+                    result["arbitration_model"] = agent["model"]
+                    log("Muse Spark returned a validated arbitration response.")
+                except Exception as exc:
+                    result["arbitration_error"] = str(exc)
+                    log(
+                        "Arbitration failed. Specialist evidence remains "
+                        "available, without an agent verdict."
+                    )
+                return result
+            if agent["endpoint"].endswith("/score"):
+                result["arbitration_error"] = (
+                    "Configure an arbiter: the scoring adapter cannot "
+                    "arbitrate. Specialist evidence remains available."
+                )
+                log("Arbitration refused: no generative arbiter configured.")
+                return result
+
+            def run_glimmer() -> Any:
+                return arbitrate_assessment(
                     assessment,
                     text,
                     body["requirement"],
@@ -640,7 +567,9 @@ class Demo:
                     ),
                     assumptions=body["assumptions"],
                     client_factory=lambda: LocalGlimmerClient(
-                        **self.config["glimmer"],
+                        agent["endpoint"],
+                        agent["model"],
+                        ssh_host=agent.get("ssh_host"),
                         max_tokens=1536,
                         timeout=180,
                         max_calls=1,
@@ -648,6 +577,16 @@ class Demo:
                         decode_arguments=True,
                     ),
                 )
+
+            try:
+                result["arbitration"] = _call_with_heartbeat(
+                    log,
+                    "Local Muse Glimmer is reviewing the identity-bound "
+                    "specialist evidence.",
+                    "Muse Glimmer arbitration: still waiting (%ds elapsed).",
+                    run_glimmer,
+                )
+                result["arbitration_model"] = agent["model"]
                 log("Muse Glimmer returned a validated arbitration response.")
             except Exception as exc:
                 result["arbitration_error"] = str(exc)
@@ -659,388 +598,16 @@ class Demo:
         }
         return result
 
-    def prepare_training(self, log: Any) -> dict[str, Any]:
-        """Launch one fixed operability study after explicit preflight."""
-        if not self.config["training_enabled"]:
-            raise ValueError(
-                "Toy training is disabled. Configure training.enabled explicitly."
-            )
-        with self.inference_lock:
-            if self.training_active():
-                raise ValueError("A demo training run is already active.")
-            for pool in self.pools.values():
-                pool.close()
-            self.pools.clear()
-            self.loaded.clear()
-            log(
-                "Released this demo’s inference workers. Checking GPU and Glimmer availability."
-            )
-            if run_command(
-                [
-                    "nvidia-smi",
-                    "--query-compute-apps=pid",
-                    "--format=csv,noheader",
-                ]
-            ).strip():
-                raise RuntimeError(
-                    "A GPU workload is active. The training preflight refuses to disturb it."
-                )
-            self.glimmer_health()
-            training_root = self.check_storage()
-            parent = self.entries["contract-1"]
-            if (
-                checkpoint_manifest(parent["checkpoint"])["files"]
-                != parent["expected_files"]
-            ):
-                raise ValueError(
-                    "Training parent files differ from the registered export."
-                )
-            run_id = time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:6]
-            folder = training_root / run_id
-            folder.mkdir(parents=True)
-            unit = "siliconshield-web-toy-" + run_id
-            self.preparing_local = True
-            self.training = {
-                "id": run_id,
-                "directory": str(folder),
-                "unit": unit,
-                "status": "preparing",
-                "started": time.time(),
-            }
-            atomic_json(self.state / "active-training.json", self.training)
-        try:
-            log(
-                "Constructing 18 TRAIN and 6 development decisions in complete three-label groups."
-            )
-            summary = create_dataset(folder / "data")
-            atomic_json(folder / "dataset-summary.json", summary)
-            atomic_json(
-                folder / "recipe.json", {"source_mass": {"toy-synthetic": 1.0}}
-            )
-            updates = self.config.get("toy_updates", 3)
-            schedule = {
-                "max_updates": updates,
-                "min_updates": updates,
-                "warmup": 2,
-                "hold_updates": 0,
-                "patience": 9,
-                "eval_every_updates": 3,
-                "lr_schedule": "constant",
-                "lr_endpoint": 1.0,
-            }
-            profile = {
-                "python": self.config["training_python"],
-                "source": self.config["source"],
-                "laya_root": self.config["training_runtime"],
-                "model": self.entries["contract-1"]["checkpoint"],
-                "data": str(folder / "data"),
-                "runs": str(folder / "runs"),
-                "gpus": [self.config["gpu"]],
-                "recipe": str(folder / "recipe.json"),
-                "resource_root": self.config["resource_root"],
-                "max_retries": 0,
-                "timeout_seconds": 600,
-                "defaults": {
-                    **schedule,
-                    "continue_training": True,
-                    "freeze_encoder": True,
-                    "adapter_lr": 1e-05,
-                    "head_lr": 1e-05,
-                    "micro_batch": 3,
-                    "accumulation": 2,
-                    "seed": 7,
-                    "sampling": "grouped",
-                    "pools": str(folder / "data/pools.json"),
-                    "question_contract": "siliconshield-requirement-context-v1",
-                    "no_diagnostic_weights": True,
-                },
-            }
-            atomic_json(folder / "profile.json", profile)
-            campaign: dict[str, Any] = {
-                "profile": str(folder / "profile.json"),
-                "output": str(folder / "campaign"),
-                "experiment_prefix": "webtoy-" + run_id,
-                "timeout_seconds": 1500,
-                "min_fit_gain": 0.0,
-                "operator": {
-                    **self.config["glimmer"],
-                    "max_cycles": 6,
-                    "poll_seconds": 5,
-                    "intervention_budget": {},
-                },
-                "fitting_common": {
-                    **schedule,
-                    "no_development_in_fitting": True,
-                },
-                "arms": [
-                    {"name": "adapter", "overrides": {"limit_train_rows": 18}}
-                ],
-                "development_overrides": schedule,
-            }
-            atomic_json(folder / "campaign.json", campaign)
-            log(
-                "Checking contract bytes, split isolation, sampler exposure, and reporting settings."
-            )
-            env = {
-                **os.environ,
-                "PYTHONPATH": self.config["source"],
-                "LAYA_ROOT": self.config["training_runtime"],
-                "CUDA_VISIBLE_DEVICES": "",
-                "PYTHONDONTWRITEBYTECODE": "1",
-            }
-            command = [
-                self.config["training_python"],
-                "-m",
-                "siliconshield.training.laya.validate_study_inputs",
-                "--data",
-                str(folder / "data"),
-                "--pools",
-                str(folder / "data/pools.json"),
-                "--recipe",
-                str(folder / "recipe.json"),
-                "--question-contract",
-                "siliconshield-requirement-context-v1",
-                "--seed",
-                "7",
-                "--global-batch",
-                "6",
-                "--world",
-                "1",
-                "--max-updates",
-                str(updates),
-                "--output-receipt",
-                str(folder / "input-validation.json"),
-            ]
-            output = run_command(command, timeout=120, env=env)
-            (folder / "validation.log").write_text(output)
-            receipt = read_json(folder / "input-validation.json", {})
-            if receipt.get("result") != "pass":
-                raise RuntimeError("Input validation did not pass.")
-            if (folder / "cancel.request").exists():
-                self.training["status"] = "stopped"
-                atomic_json(self.state / "active-training.json", self.training)
-                return self.training
-            log(
-                "Input preflight passed. Starting the bounded operator controller."
-            )
-            argv = [
-                "systemd-run",
-                "--user",
-                "--quiet",
-                "--unit=" + unit,
-                "--property=Type=exec",
-                "--property=RuntimeMaxSec=1800",
-                "--property=WorkingDirectory=" + str(folder),
-                "--property=StandardOutput=append:"
-                + str(folder / "controller.log"),
-                "--property=StandardError=append:"
-                + str(folder / "controller.log"),
-                "--setenv=PYTHONDONTWRITEBYTECODE=1",
-                "--setenv=PYTHONPATH=" + self.config["source"],
-                self.config["python"],
-                "-m",
-                "siliconshield.web_demo.toy_runner",
-                str(folder / "campaign.json"),
-            ]
-            run_command(argv, timeout=30)
-            self.training["status"] = "running"
-            atomic_json(self.state / "active-training.json", self.training)
-            log(
-                "Training controller is running. The dashboard follows actual job receipts and events."
-            )
-            return self.training
-        except Exception as exc:
-            self.training.update(status="error", error=str(exc))
-            atomic_json(self.state / "active-training.json", self.training)
-            raise
-        finally:
-            self.preparing_local = False
-
-    def stop_training(self) -> dict[str, Any]:
-        """Request a checkpoint-boundary stop for this demo's owned jobs."""
-        if not self.training:
-            return {
-                "status": "idle",
-                "enabled": self.config["training_enabled"],
-            }
-        folder = Path(self.training["directory"])
-        (folder / "cancel.request").touch()
-        if not (folder / "profile.json").exists():
-            return {
-                "status": "stop_requested",
-                "messages": ["Preparation will stop before launch."],
-            }
-        try:
-            op = Operator(str(folder / "profile.json"))
-        except Exception as exc:
-            return {
-                "status": "stop_requested",
-                "messages": ["Unreadable launch profile: %s" % exc],
-            }
-        messages = []
-        for file in (folder / "runs").glob("*/run-manifest.json"):
-            manifest = read_json(file, {})
-            if not isinstance(manifest, dict):
-                messages.append("Unreadable run manifest: " + file.name)
-                continue
-            if manifest.get("phase") in [
-                "submit",
-                "observe",
-                "diagnose",
-                "intervene",
-            ]:
-                try:
-                    if manifest["phase"] == "submit":
-                        manifest = op.observe(manifest)
-                    op.intervene(manifest, "stop")
-                    messages.append(
-                        "Checkpoint-boundary stop requested for "
-                        + str(manifest.get("experiment_id", file.parent.name))
-                    )
-                except Exception as exc:
-                    messages.append(str(exc))
-        return {"status": "stop_requested", "messages": messages}
-
-    def training_status(self) -> dict[str, Any]:
-        """Read receipts without changing training decisions or metrics."""
-        if not self.training:
-            return {
-                "status": "idle",
-                "enabled": self.config["training_enabled"],
-            }
-        active = self.training_active()
-        value = copy.deepcopy(self.training)
-        folder = Path(value["directory"])
-        terminal = read_json(folder / "controller-result.json")
-        if not isinstance(terminal, dict):
-            terminal = None
-        campaign = read_json(folder / "campaign/campaign-status.json", {})
-        if not isinstance(campaign, dict):
-            campaign = {}
-        profile = read_json(folder / "profile.json", {})
-        defaults = (
-            profile.get("defaults", {}) if isinstance(profile, dict) else {}
-        )
-        if not isinstance(defaults, dict):
-            defaults = {}
-        value["updates_per_phase"] = defaults.get(
-            "max_updates", self.config.get("toy_updates", 3)
-        )
-        value["active"] = active
-        value["phase"] = campaign.get("phase", "preparing")
-        value["dataset"] = read_json(folder / "dataset-summary.json", {})
-        value["validation"] = read_json(folder / "input-validation.json")
-        value["jobs"] = []
-        value["operator_cycles"] = []
-        if terminal and (not active):
-            value["status"] = terminal["status"]
-            value["error"] = terminal.get("error")
-            value["reason"] = terminal.get("reason")
-        if (folder / "cancel.request").exists():
-            value["stop_requested"] = True
-        for manifest_path in sorted(
-            (folder / "runs").glob("*/run-manifest.json"),
-            key=lambda p: ("-fit-" not in p.parent.name, p.parent.name),
-        ):
-            manifest = read_json(manifest_path, {})
-            if not isinstance(manifest, dict):
-                manifest = {}
-            path = manifest_path.parent
-            events = []
-            try:
-                for line in (path / "events.jsonl").read_text().splitlines():
-                    try:
-                        row = json.loads(line)
-                        if not isinstance(row, dict):
-                            continue
-                        event = row.get("event", "")
-                        if event == "train":
-                            events.append(
-                                {
-                                    k: row.get(k)
-                                    for k in [
-                                        "event",
-                                        "step",
-                                        "loss",
-                                        "step_seconds",
-                                        "time",
-                                    ]
-                                }
-                            )
-                        elif "development" in event or event in [
-                            "evaluation",
-                            "eval",
-                            "train_fitting",
-                        ]:
-                            metrics = row.get(
-                                "metrics", row.get("development", {})
-                            )
-                            if not isinstance(metrics, dict):
-                                continue
-                            events.append(
-                                {
-                                    "event": event,
-                                    "step": row.get("step", 0),
-                                    "accuracy": metrics.get("accuracy"),
-                                    "nll": metrics.get("nll"),
-                                    "false_safe_count": metrics.get(
-                                        "false_safe_count"
-                                    ),
-                                }
-                            )
-                    except (ValueError, TypeError):
-                        pass
-            except OSError:
-                pass
-            report = read_json(path / "report.json", {})
-            value["jobs"].append(
-                {
-                    "name": path.name,
-                    "phase": manifest.get("phase"),
-                    "terminal": manifest.get("terminal"),
-                    "events": events,
-                    "report": report,
-                    "execution": read_json(path / "execution.json", {}),
-                    "directory": str(path),
-                }
-            )
-        for path in sorted(
-            (folder / "campaign").glob("*/operator-status.json"),
-            key=lambda p: ("-fit-" not in p.parent.name, p.parent.name),
-        ):
-            record = read_json(path, {})
-            if not isinstance(record, dict):
-                continue
-            cycles = record.get("cycles", [])
-            if not isinstance(cycles, list):
-                continue
-            for cycle in cycles:
-                if not isinstance(cycle, dict):
-                    continue
-                value["operator_cycles"].append(
-                    {"experiment": record.get("experiment"), **cycle}
-                )
-        value["campaign"] = campaign
-        log = folder / "controller.log"
-        if log.exists():
-            # Status polls every couple of seconds; seek the tail
-            # instead of reading a growing log end to end.
-            with log.open("rb") as stream:
-                stream.seek(0, 2)
-                stream.seek(max(stream.tell() - 12000, 0))
-                value["log"] = stream.read().decode("utf-8", "replace")[-12000:]
-        return value
-
     def status(self) -> dict[str, Any]:
-        """Report actual model readiness, profiles, and configured services."""
+        """Report registered specialists, profiles, and Glimmer health."""
         service = None
         registry_error = None
-        if self.config["registry"]:
+        if self.config.get("registry"):
             try:
                 service = InferenceService(self.config["registry"])
             except (ValueError, OSError) as exc:
                 # Health polling must survive a transient registry
-                # problem; readiness still comes from loaded workers.
+                # problem; readiness comes from the registry itself.
                 registry_error = "%s: %s" % (
                     type(exc).__name__,
                     exc,
@@ -1049,13 +616,11 @@ class Demo:
             "models": [
                 {
                     "id": key,
-                    "display_name": entry["display_name"],
-                    "device": self.loaded.get(key, {}).get(
-                        "device", entry["device"]
+                    "display_name": entry.get("display_name", key),
+                    "kind": entry.get("kind", "local-worker"),
+                    "skill_sha256": entry.get("expected_files", {}).get(
+                        "SKILL.md"
                     ),
-                    "default_device": entry["device"],
-                    "loaded": key in self.loaded,
-                    "ready": self.loaded.get(key),
                     "profile": service.profiles_for([key]).get(key)
                     if service
                     else None,
@@ -1064,7 +629,6 @@ class Demo:
             ],
             "registry_error": registry_error,
             "health": copy.deepcopy(self.health),
-            "training": self.training_status(),
-            "training_enabled": self.config["training_enabled"],
-            "glimmer_configured": bool(self.config["glimmer"]),
+            "glimmer_configured": bool(self.config.get("glimmer")),
+            "arbiter_configured": bool(self.config.get("arbiter")),
         }

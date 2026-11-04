@@ -4,7 +4,7 @@
 #
 # GPU execution, serving, and model-quality evaluation are explicitly out
 # of scope here, as is the SiliconShield-RTL training suite (needs torch,
-# a LAYA checkout, and the Verilator/Yosys toolchain); see docs/setup.md.
+# a compatible local-model-runtime checkout, and the Verilator/Yosys toolchain); see docs/setup.md.
 # The tree carries a curated submission gate. The broader
 # fixture suite is a local-only artifact and is not part of this gate.
 set -euo pipefail

@@ -9,6 +9,7 @@ GPU: artifact hashes are verified by the worker process at load time,
 on the machine that serves them.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -24,6 +25,7 @@ class ModelEntry(TypedDict, total=False):
 
     id: str
     display_name: str
+    kind: str
     checkpoint: str
     python: str
     laya_root: str
@@ -109,25 +111,45 @@ def _validate_entry(
         raise _fail("model %r is missing a display name" % model_id)
     if not isinstance(display_name, str):
         raise _fail("model %r has a non-string display name" % model_id)
+    kind = raw.get("kind", "local-worker")
+    if kind not in ("local-worker", "glimmer", "adapter"):
+        raise _fail("model %r has unknown kind %r" % (model_id, kind))
     checkpoint = _checked_dir(
         raw.get("checkpoint"), "checkpoint", base, model_id
     )
-    python = raw.get("python")
-    if not isinstance(python, str) or not python:
-        raise _fail("model %r is missing its worker interpreter" % model_id)
-    resolved_python = _resolve(base, python)
-    if not os.path.isfile(resolved_python):
-        raise _fail("worker interpreter missing: %s" % resolved_python)
-    if not os.access(resolved_python, os.X_OK):
-        raise _fail(
-            "worker interpreter is not executable: %s" % resolved_python
-        )
-    laya_root = raw.get("laya_root")
-    if not isinstance(laya_root, str) or not laya_root:
-        raise _fail("model %r is missing its LAYA runtime" % model_id)
-    resolved_laya = _resolve(base, laya_root)
-    if not (Path(resolved_laya) / "laya" / "__init__.py").is_file():
-        raise _fail("LAYA runtime has no laya package: %s" % resolved_laya)
+    resolved_python = ""
+    resolved_laya = ""
+    if kind in ("glimmer", "adapter"):
+        # A remotely served specialist is used behind its skill
+        # document: it must not claim a local worker interpreter
+        # or runtime.
+        if raw.get("python") is not None:
+            raise _fail(
+                "model %r is a %s entry and must not name "
+                "a worker interpreter" % (model_id, kind)
+            )
+        if raw.get("laya_root") is not None:
+            raise _fail(
+                "model %r is a %s entry and must not name "
+                "a LAYA runtime" % (model_id, kind)
+            )
+    else:
+        python = raw.get("python")
+        if not isinstance(python, str) or not python:
+            raise _fail("model %r is missing its worker interpreter" % model_id)
+        resolved_python = _resolve(base, python)
+        if not os.path.isfile(resolved_python):
+            raise _fail("worker interpreter missing: %s" % resolved_python)
+        if not os.access(resolved_python, os.X_OK):
+            raise _fail(
+                "worker interpreter is not executable: %s" % resolved_python
+            )
+        laya_root = raw.get("laya_root")
+        if not isinstance(laya_root, str) or not laya_root:
+            raise _fail("model %r is missing its LAYA runtime" % model_id)
+        resolved_laya = _resolve(base, laya_root)
+        if not (Path(resolved_laya) / "laya" / "__init__.py").is_file():
+            raise _fail("LAYA runtime has no laya package: %s" % resolved_laya)
     expected = raw.get("expected_files")
     if not isinstance(expected, dict) or not expected:
         raise _fail("model %r needs expected_files digests" % model_id)
@@ -146,8 +168,40 @@ def _validate_entry(
                 "model %r has a malformed digest for %r" % (model_id, name)
             )
         digests[name] = digest_value
+    if kind == "glimmer":
+        for name in ("model.safetensors", "SKILL.md"):
+            if name not in digests:
+                raise _fail(
+                    "model %r is a glimmer entry and needs an "
+                    "expected digest for %s" % (model_id, name)
+                )
+    if kind == "adapter":
+        for name in ("adapter_model.safetensors", "SKILL.md"):
+            if name not in digests:
+                raise _fail(
+                    "model %r is an adapter entry and needs an "
+                    "expected digest for %s" % (model_id, name)
+                )
+    if kind in ("glimmer", "adapter"):
+        skill_path = Path(checkpoint) / "SKILL.md"
+        try:
+            skill_bytes = skill_path.read_bytes()
+        except OSError as exc:
+            raise _fail(
+                "model %r names an unreadable skill: %s" % (model_id, exc)
+            )
+        actual = hashlib.sha256(skill_bytes).hexdigest()
+        if actual != digests["SKILL.md"]:
+            raise _fail(
+                "model %r skill digest mismatch: registry pins a "
+                "different SKILL.md" % (model_id,)
+            )
     device = raw.get("device")
-    if not isinstance(device, str) or not DEVICE_PATTERN.match(device):
+    if not isinstance(device, str) or not device.strip():
+        raise _fail("model %r needs a device string" % (model_id,))
+    if kind in ("glimmer", "adapter"):
+        device = device.strip()
+    elif not DEVICE_PATTERN.match(device):
         raise _fail(
             "model %r needs a cpu or cuda:N device, got %r" % (model_id, device)
         )
@@ -155,11 +209,14 @@ def _validate_entry(
         "id": model_id,
         "display_name": display_name,
         "checkpoint": checkpoint,
-        "python": resolved_python,
-        "laya_root": resolved_laya,
         "expected_files": digests,
         "device": device,
     }
+    if kind in ("glimmer", "adapter"):
+        entry["kind"] = kind
+    else:
+        entry["python"] = resolved_python
+        entry["laya_root"] = resolved_laya
     profile = raw.get("profile")
     if profile is not None:
         if not isinstance(profile, str) or not profile:

@@ -698,6 +698,11 @@ textarea {
   content: "•";
   color: #79a0ce;
 }
+.activity .t {
+  color: #8ba1b8;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .spinner {
   display: inline-block;
   width: 13px;

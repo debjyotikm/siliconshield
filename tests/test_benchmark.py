@@ -383,6 +383,18 @@ def test_blank_lines_skipped_before_validation(tmp_path):
     assert len(load_benchmark(str(bench))["rows"]) == 6
 
 
+def test_json_array_file_loads_same_rows(tmp_path):
+    from siliconshield.benchmark.dataset import load_benchmark
+
+    bench = tmp_path / "bench.example.json"
+    bench.write_text(json.dumps(_rows(), indent=2))
+    assert len(load_benchmark(str(bench))["rows"]) == 6
+    bad = tmp_path / "bad.example.json"
+    bad.write_text(json.dumps([{"id": "x"}]))
+    with pytest.raises(ValueError, match="missing keys"):
+        load_benchmark(str(bad))
+
+
 def test_cli_maps_unwritable_report_to_exit_2(tmp_path, capsys):
     from siliconshield.benchmark.cli import build_parser, run_benchmark
     from siliconshield.schemas import GUI_MODEL_REGISTRY_SCHEMA

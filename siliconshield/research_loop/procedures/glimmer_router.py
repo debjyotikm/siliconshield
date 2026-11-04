@@ -129,6 +129,7 @@ class RouterTools:
             "unprofiled_experts": service.unprofiled_experts,
         }
 
+    # Non-meta local decision models are not supported. Use at own risk.
     def _assess(self, args: dict[str, Any]) -> dict[str, Any]:
         fields = {}
         for key in ("scope", "requirement", "assumptions", "rtl"):

@@ -5,6 +5,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import siliconshield
 from siliconshield.experts.registry import load_registry
@@ -33,10 +34,9 @@ def load_config(
     unknown = set(raw) - {
         "registry",
         "state_dir",
-        "gpu",
         "port",
         "glimmer",
-        "training",
+        "arbiter",
     }
     if unknown:
         raise ValueError(
@@ -58,9 +58,6 @@ def load_config(
     selected_port = raw.get("port", 8765) if port is None else port
     if type(selected_port) is not int or not 1024 <= selected_port <= 65535:
         raise ValueError("port must be an integer from 1024 through 65535")
-    gpu = raw.get("gpu")
-    if gpu is not None and (type(gpu) is not int or gpu < 0):
-        raise ValueError("gpu must be a nonnegative device index or null")
     registry = raw.get("registry")
     entries = []
     if registry is not None:
@@ -72,105 +69,104 @@ def load_config(
             raise ValueError(
                 "This demo expects registry IDs contract-1 and contract-2"
             )
+    kinds = {entry.get("kind", "local-worker") for entry in entries}
+    if "adapter" in kinds and "glimmer" in kinds:
+        raise ValueError(
+            "One demo serves one engine: register glimmer or adapter "
+            "specialists, not both."
+        )
+    adapter_mode = "adapter" in kinds
     glimmer = raw.get("glimmer")
     if glimmer is not None:
         if not isinstance(glimmer, dict) or set(glimmer) - {
             "endpoint",
             "model",
             "ssh_host",
+            "fingerprint",
         }:
             raise ValueError(
-                "glimmer accepts endpoint, model, and optional ssh_host"
+                "glimmer accepts endpoint, model, fingerprint, "
+                "and optional ssh_host"
             )
         if not isinstance(glimmer.get("endpoint"), str) or not isinstance(
             glimmer.get("model"), str
         ):
             raise ValueError("glimmer needs endpoint and model strings")
+        fingerprint = glimmer.get("fingerprint")
+        if (
+            not isinstance(fingerprint, str)
+            or len(fingerprint) != 64
+            or any(char not in "0123456789abcdef" for char in fingerprint)
+        ):
+            raise ValueError("glimmer needs the 64-hex serving fingerprint")
         from siliconshield.web_demo.glimmer_client import LocalGlimmerClient
 
-        LocalGlimmerClient(**glimmer)
-    training = raw.get("training", {})
-    if not isinstance(training, dict) or set(training) - {
-        "enabled",
-        "python",
-        "runtime",
-        "output_dir",
-        "resource_root",
-    }:
-        raise ValueError("Invalid training configuration fields")
-    enabled = training.get("enabled", False)
-    if type(enabled) is not bool:
-        raise ValueError("training.enabled must be a boolean")
+        if adapter_mode:
+            if glimmer.get("ssh_host") is not None:
+                raise ValueError(
+                    "Adapter endpoints are loopback-direct; ssh_host "
+                    "belongs on the arbiter."
+                )
+            _check_score_endpoint(glimmer["endpoint"])
+        else:
+            LocalGlimmerClient(
+                glimmer["endpoint"],
+                glimmer["model"],
+                ssh_host=glimmer.get("ssh_host"),
+            )
+    arbiter = raw.get("arbiter")
+    if arbiter is not None:
+        if not isinstance(arbiter, dict) or set(arbiter) - {
+            "endpoint",
+            "model",
+            "ssh_host",
+            "engine",
+        }:
+            raise ValueError(
+                "arbiter accepts engine, endpoint, model, and optional ssh_host"
+            )
+        if arbiter.get("engine") == "spark":
+            if not isinstance(arbiter.get("model"), str):
+                raise ValueError("spark arbiter needs a model string")
+        else:
+            if not isinstance(arbiter.get("endpoint"), str) or not isinstance(
+                arbiter.get("model"), str
+            ):
+                raise ValueError("arbiter needs endpoint and model strings")
+            from siliconshield.web_demo.glimmer_client import (
+                LocalGlimmerClient,
+            )
+
+            LocalGlimmerClient(
+                arbiter["endpoint"],
+                arbiter["model"],
+                ssh_host=arbiter.get("ssh_host"),
+            )
     result: dict[str, Any] = {
         "registry": registry,
         "entries": entries,
         "state_dir": state,
         "source": str(source),
         "python": sys.executable,
-        "gpu": gpu,
         "port": selected_port,
         "glimmer": glimmer,
-        "training_enabled": enabled,
-        "toy_updates": 3,
-        "training_root": None,
-        "training_python": None,
-        "training_runtime": None,
-        "resource_root": None,
+        "arbiter": arbiter,
     }
-    for key, output in [
-        ("python", "training_python"),
-        ("runtime", "training_runtime"),
-        ("output_dir", "training_root"),
-        ("resource_root", "resource_root"),
-    ]:
-        if key in training:
-            result[output] = _path(training[key], base, "training." + key)
-    if enabled:
-        if (
-            gpu is None
-            or not glimmer
-            or not any(e["id"] == "contract-1" for e in entries)
-        ):
-            raise ValueError(
-                "Training needs a GPU index, Glimmer, and a Contract-1 registry entry"
-            )
-        if any(
-            result[key] is None
-            for key in (
-                "training_root",
-                "training_python",
-                "training_runtime",
-                "resource_root",
-            )
-        ):
-            raise ValueError(
-                "Training needs python, runtime, output_dir, and resource_root"
-            )
-        if not sys.platform.startswith("linux"):
-            raise ValueError(
-                "Toy training requires Linux with systemd user services"
-            )
-        if not os.access(result["training_python"], os.X_OK):
-            raise ValueError(
-                "training.python must be an executable interpreter"
-            )
-        if not (
-            Path(result["training_runtime"]) / "laya/__init__.py"
-        ).is_file():
-            raise ValueError("training.runtime must contain the LAYA package")
-    for key in ("state_dir", "training_root", "resource_root"):
-        if result[key] is not None:
-            target = Path(result[key])
-            if target.is_relative_to(source) or source.is_relative_to(target):
-                raise ValueError(
-                    key + " must be separate from the installed source"
-                )
-            for entry in entries:
-                checkpoint = Path(entry["checkpoint"]).resolve()
-                if target.is_relative_to(
-                    checkpoint
-                ) or checkpoint.is_relative_to(target):
-                    raise ValueError(
-                        key + " must not overlap a model checkpoint"
-                    )
     return result
+
+
+def _check_score_endpoint(endpoint: str) -> None:
+    """Require a loopback scoring URL ending in /score."""
+    parsed = urlparse(endpoint)
+    if (
+        parsed.hostname not in ("127.0.0.1", "localhost", "::1")
+        or parsed.scheme != "http"
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or not parsed.path.endswith("/score")
+    ):
+        raise ValueError(
+            "Adapter endpoint must be loopback HTTP ending in /score"
+        )

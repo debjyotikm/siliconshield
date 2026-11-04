@@ -123,9 +123,14 @@ class InferenceService:
         entry = self._models[model_id]
         stated_weights = entry["expected_files"].get("model.safetensors")
         if stated_weights is None:
+            stated_weights = entry["expected_files"].get(
+                "adapter_model.safetensors"
+            )
+        if stated_weights is None:
             raise ValueError(
-                "Registry must state model.safetensors to bind "
-                "a profile for %r" % (model_id,)
+                "Registry must state model.safetensors or "
+                "adapter_model.safetensors to bind a profile for %r"
+                % (model_id,)
             )
         stated_contract = entry.get("question_contract")
         stated_release = entry.get("release")
@@ -137,8 +142,7 @@ class InferenceService:
             )
         if profile["checkpoint_sha256"] != stated_weights:
             mismatches.append(
-                "checkpoint_sha256: profile %r != registry "
-                "model.safetensors %r"
+                "checkpoint_sha256: profile %r != registry weights %r"
                 % (profile["checkpoint_sha256"], stated_weights)
             )
         for field, stated, expected in (

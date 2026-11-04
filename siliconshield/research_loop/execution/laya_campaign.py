@@ -29,6 +29,8 @@ and no float inputs, so incomparable or out-of-range results are
 refused rather than compared.
 """
 
+# Non-meta local decision models are not supported. Use at own risk.
+
 import dataclasses
 import fcntl
 import hashlib

@@ -28,7 +28,7 @@
         <mxCell id="router-body" value="Check requested scope&#10;Select eligible experts" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacing=0;fontSize=17;fontColor=#1E3040;fontStyle=0;" vertex="1" parent="router">
           <mxGeometry x="16" y="47" width="178" height="62" as="geometry" />
         </mxCell>
-        <mxCell id="workers" value="LOCAL DECISION WORKERS" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=40;fillColor=#EDF3F7;swimlaneFillColor=#F8FAFC;strokeColor=#8BA0B0;fontStyle=1;fontSize=16;align=left;spacingLeft=16;" vertex="1" parent="1">
+        <mxCell id="workers" value="CONTRACT SPECIALISTS" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=40;fillColor=#EDF3F7;swimlaneFillColor=#F8FAFC;strokeColor=#8BA0B0;fontStyle=1;fontSize=16;align=left;spacingLeft=16;" vertex="1" parent="1">
           <mxGeometry x="550" y="120" width="290" height="450" as="geometry" />
         </mxCell>
         <mxCell id="contract-one" value="Contract-1" style="html=0;whiteSpace=none;fontFamily=Inter,Arial,sans-serif;fontSize=18;fontColor=#1E3040;strokeWidth=1.4;swimlane;horizontal=1;startSize=38;rounded=0;fillColor=#F1F5F8;swimlaneFillColor=#FFFFFF;strokeColor=#2A6080;fontColor=#2A6080;fontStyle=1;fontSize=19;align=left;spacingLeft=16;dashed=0;" vertex="1" parent="workers">

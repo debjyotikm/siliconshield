@@ -44,6 +44,12 @@ def build_parser():
     parser.add_argument(
         "--muse-model", help="Model identity served at --muse-endpoint"
     )
+    parser.add_argument(
+        "--local-model",
+        action="store_true",
+        help="Run the local decision model. Local models are off by "
+        "default; listing cases needs no flag.",
+    )
     return parser
 
 
@@ -53,6 +59,12 @@ def main():
         for name, case in sorted(CASES.items()):
             print("%-26s %s" % (name, case["title"]))
         return
+    if not args.local_model:
+        raise SystemExit(
+            "Local decision models are off by default. Pass "
+            "--local-model to run this investigation, or assess "
+            "through the Glimmer specialists path."
+        )
     if args.case and (args.rtl or args.requirement):
         raise SystemExit("Use --case or --rtl, not both at once.")
     if args.case:

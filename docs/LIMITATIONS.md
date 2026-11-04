@@ -1,534 +1,287 @@
-# SiliconShield-RTL capabilities and limitations
+# Tested domains and operating scope
 
-[Documentation index](README.md) · [Model-family card](siliconshield-rtl.md) ·
-[Evaluation protocol](evaluation.md) · [Router](router.md)
+[Documentation index](README.md) · [Router](router.md) ·
+[Writing RTL requirements](rtl-requirements.md) · [Research paper](whitepaper.md)
 
-SiliconShield's decision models assess a specific RTL implementation against
-an explicit requirement. Contract-1 specializes in visible local guards and
-register updates. Contract-2 specializes in focused FIFO, counter, and
-arbitration contracts. They supply requirement-specific evidence for engineering
-review and Muse-assisted investigation.
+SiliconShield uses Muse to investigate RTL against explicit requirements.
+Its strongest evidence concerns small digital-design regions where the relevant
+state, update paths, and execution assumptions are available together. This
+page describes what has been exercised, what each specialist is intended to
+review, and which extensions still need evaluation.
 
-This guide explains where each model has demonstrated useful behavior, which
-errors have been observed, and how to use the results. The tables reproduce
-recorded evaluations of the released checkpoints.
+An area marked **not evaluated** is an open measurement boundary. It is not a
+claim that Muse cannot reason about that area. Likewise, a skill's review
+instructions describe its intended scope, not an accuracy guarantee for every
+mechanism named in those instructions.
 
-[Operating scope](#choose-the-decision-model-by-the-property) ·
-[Local-guard examples](#explicit-local-guards) ·
-[Temporal specialist](#contract-2-temporal-specialist) ·
-[Failure patterns](#known-failure-patterns-and-engineering-response) ·
-[Evaluation record](#contract-1-evaluation-record) ·
-[Reproducibility](#reproducibility-notes)
+## Three distinct sources of evidence
 
-## Choose the decision model by the property
-
-| Decision model | Demonstrated operating scope | Review focus |
+| Component | Role | Evidence to use |
 |---|---|---|
-| Contract-1 | Visible privilege and lock guards, clear enables, and exact-address qualification around local writes | Include every relevant writer and the meaning of each guard. Helper logic and changed representations need additional scrutiny. |
-| Contract-2 | Focused FIFO occupancy, counter updates, and arbitration contracts | Distinguish accepted operations from requests and occupancy from stored data. Commit/hold priority and arbiter-tree behavior need additional scrutiny. |
-
-The decision labels are `satisfies_requirement`, `violates_requirement`, and
-`insufficient_context`. Each applies to the supplied RTL, requirement, and
-assumptions. A model assessment helps prioritize inspection. Design acceptance
-requires engineering review or an executable check of the property. The three
-scores describe model preference and have not been calibrated as probabilities
-of correctness.
-
-The [router](router.md) selects specialists using measured deployment profiles.
-Domain membership identifies a relevant model, but individual predictions can
-still be wrong. The examples below show both successful use and observed errors
-within these domains.
-
-## Measured strengths
-
-### Explicit local guards
-
-Contract-1 is strongest when the protected state and its enabling condition are
-visible in one small RTL region. Evaluated contracts include privilege checks,
-clear authorization, exact-address writes, sticky-bit clear conditions, masks,
-strobes, owner-width comparisons, and default-deny branches.
-
-On counterbalanced development, it classified 191/192 fully specified cases
-correctly (99.48%). The complete three-class population, including 96
-insufficient-context cases, scored 257/288 (89.24%). A separate four-family
-qualification scored 249/288 (86.46%), with 92/96 violation recall and no
-false-safes observed among its 96 violations. The
-[evaluation record](#contract-1-evaluation-record) separates these populations
-and reports the other classes and whole-triplet results.
-
-A register-write example makes the task concrete:
-
-> After reset, `cfg_reg` may change only on a write performed while
-> `privileged` is 1. A write while `privileged` is 0 must leave `cfg_reg`
-> unchanged.
-
-The violating branch omits the privilege check:
-
-```systemverilog
-else if (wr_en)
-  cfg_reg <= wdata;
-```
-
-The satisfying branch includes it:
-
-```systemverilog
-else if (wr_en && privileged)
-  cfg_reg <= wdata;
-```
-
-Six authored examples form three matched pairs. Each pair keeps the requirement
-fixed and changes one guard:
-
-| Pair | Violating design | Satisfying design |
-|---|---|---|
-| Privilege | Write checks only `wr_en` | Write checks `wr_en && privileged` |
-| Clear authorization | Clear checks only `clear_req` | Clear checks `clear_req && clear_enable` |
-| Address qualification | Write accepts an address range | Write accepts only `8'hA0` |
-
-Contract-1 classified all six correctly in one matched batch. The scores are
-raw SDK outputs for that batch:
-
-| Example | Expected decision | Winning model score |
-|---|---|---:|
-| Missing privilege guard | Violates | 99.9889% |
-| Enforced privilege guard | Satisfies | 94.9334% |
-| Omitted clear enable | Violates | 98.4911% |
-| Enforced clear enable | Satisfies | 99.9990% |
-| Overbroad address check | Violates | 99.9998% |
-| Exact address check | Satisfies | 99.9993% |
-
-These curated examples illustrate measured behavior. Their 6/6 outcome is not
-an estimate of accuracy on unseen designs.
-
-## Contract-2 (temporal specialist)
-
-[Contract-2](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2)
-assesses focused FIFO, counter, and arbitration contracts. Its development
-results were 97/108 for FIFO, 92/108 for counters, and 14/18 for arbitration.
-Those areas form the same 234-decision population used during selection:
-
-| Focused development metric | Contract-2 |
-|---|---:|
-| Correct decisions | 203/234, 86.75% |
-| Satisfies / violates / context correct | 64/78 / 61/78 / 78/78 |
-| False-safes | 17/78 violations |
-| Whole triplets correct | 51/78, 65.38% |
-
-These are development measurements, rather than independent qualification.
-Contract-2 is an **owner-selected research release**. The candidate missed the
-frozen violation-recall, false-safe, and NLL promotion gates, so the trainer
-retained its parent. The publication decision did not change that selection
-outcome.
-
-Performance varies within the temporal domain. Commit/hold, arbiter-tree,
-empty-data-blanking, and stored-word-hold families remain observed weaknesses.
-Broader development measurements also limit its use as a generalist:
-
-| Development area outside the focused temporal population | Correct decisions | Recorded false-safes |
-|---|---:|---:|
-| Local safety | 933/2,610 | 281 |
-| Transfer | 275/621 | Not listed in this summary |
-| Access control | 77/108 | Not listed in this summary |
-
-Use a separately qualified specialist for these scopes. Muse arbitration can
-interpret expert evidence and disagreements, but an accuracy improvement over
-individual models still requires a matched evaluation.
-
-### Contract-2 examples: distinguish occupancy from stored data
-
-The following fragments explain the property boundaries. They are not newly
-scored model examples. Assume reset has completed and the displayed branch is
-the relevant writer.
-
-For the requirement "A push while full must leave occupancy unchanged", the
-update must distinguish the request from an accepted operation:
-
-```systemverilog
-if (push && !full) occupancy <= occupancy + 1'b1;
-```
-
-That branch holds occupancy when full. A separate data writer can nevertheless
-violate the requirement "A rejected push must leave the stored word unchanged":
-
-```systemverilog
-if (push) stored_word <= write_data;
-```
-
-The data writer lacks the acceptance guard. Inspect it independently of the
-occupancy update. Stored-word hold and empty-data blanking are among the
-measured weak families, so include all relevant writers and check the exact
-property before accepting the assessment.
-
-Counter priority needs the same precision. For the requirement "A hold cycle
-must preserve the count, including when commit is asserted", this ordering
-violates the contract whenever `commit` changes the value during hold:
-
-```systemverilog
-if (commit) count <= next_count;
-else if (hold) count <= count;
-```
-
-Another specification may intentionally give commit priority. State the required
-ordering explicitly and check the simultaneous-control case. Contract-2's
-commit/hold errors show that the model label alone does not resolve this case
-reliably.
-
-## Known failure patterns and engineering response
-
-These cases distinguish errors within the intended scope from weaknesses under
-changed input conditions. They are diagnostic examples, not estimates of how
-often each error occurs in production RTL.
-
-### Missing context
-
-An `insufficient_context` label means that omitted implementation or policy
-information can change whether the requirement holds. Unfamiliar syntax or low
-confidence alone does not establish this condition. Contract-1 has no separately
-qualified out-of-distribution detector.
-
-Consider the requirement:
-
-> After reset, `cfg_reg` may change only on a write performed while
-> `privileged` is 1.
-
-The supplied fragment instead uses an internal guard whose definition is
-omitted:
-
-```systemverilog
-else if (wr_en && policy_allow)
-  cfg_reg <= wdata;
-```
-
-Compatible definitions of `policy_allow` can make this fragment satisfy or
-violate the requirement. Its reviewed label is therefore `insufficient_context`.
-Contract-1 returned `satisfies_requirement` with a score of 99.9512% in the
-recorded diagnostic. A complete module declaring `policy_allow` as an
-unconstrained primary input is a different case: an allowed input assignment
-that bypasses privilege would establish a violation.
-
-The diagnostic screen scored 0/6 on newly authored missing-context examples.
-A second screen with more familiar omission patterns scored 2/6. These small
-screens are consistent with the lower context recall in the
-[shift evaluation](#requirement-and-representation-shifts), but do not establish
-a population error rate.
-
-**Engineering response:** supply the policy-to-signal mapping, helper or task
-definition, encoding, and observation assumptions needed by the property. If an
-indirect writer or controlling definition is absent, request it before treating
-a definite model label as a usable conclusion. Better phrasing cannot restore
-missing implementation detail.
-
-### Multi-path authorization and missing conjuncts
-
-A normal write can be protected while a debug write bypasses the same rule:
-
-```systemverilog
-else if (dbg_wr)
-  key_reg <= dbg_data;
-else if (wr_en && privileged)
-  key_reg <= wdata;
-```
-
-The diagnostic requirement applied privilege protection to both paths. The
-expected decision was `violates_requirement`, but Contract-1 returned
-`satisfies_requirement` with a score of 99.7409%.
-
-**Engineering response:** enumerate every assignment to the protected state,
-including debug, test, clear, and indirect paths. Review each writer against
-the requirement. A correctly assessed normal path does not establish coverage
-of the other writers.
-
-### Correct lock guards can be rejected
-
-In another diagnostic, this branch satisfied the local lock requirement:
-
-```systemverilog
-else if (wr_en && !locked)
-  control_reg <= wdata;
-```
-
-Contract-1 returned `violates_requirement` with a score of 99.9550%. A case with
-two write paths under one outer `if (!locked)` also received a false violation,
-with a score of 98.8771%.
-
-**Engineering response:** confirm a reported violation by inspecting the update
-condition or obtaining a counterexample. These are observed false alarms within
-the local-guard domain, so routing by domain alone does not eliminate them.
-
-### Changed requirements and representations
-
-The reserved shift evaluation changed requirement phrasing, omitted context,
-and storage representation. Contract-1's accuracy and whole-triplet consistency
-fell substantially, with errors across internal storage, inverted storage, and
-rotate/debug updates. The tested variations include local access-control
-requirements, so this is a transfer limitation within a relevant application
-area.
-
-**Engineering response:** qualify a deployment on representative RTL and
-wording, including equivalent forms and satisfying/violating contrasts.
-A familiar mechanism name or a high model score does not establish transfer
-to a new representation. The [full results](#requirement-and-representation-shifts)
-retain the counts and error directions.
-
-## Recommended use
-
-1. Specify one property and the state it protects, including reset and
-   observation scope where relevant.
-2. Supply the RTL region with all writers, relevant helper definitions, and
-   the meaning of policy signals.
-3. Route using a capability profile measured for the deployed checkpoint and
-   inference configuration.
-4. Inspect all three scores, execution errors, and expert disagreements. Keep
-   the requirement and source locations with the result.
-5. Confirm consequential findings through engineering review or a
-   requirement-bound executable check. Include both satisfying and violating
-   counterfactuals when evaluating a model or preparing a demonstration.
-
-Muse can organize the validated specialist evidence and explain disagreements.
-Expert agreement alone does not verify a property. The
-[investigation workflow](releases.md#real-muse-repair) provides a separate path for
-executing checks. A passing bounded simulation establishes the observed outcome
-within that check, not an unbounded proof.
-
-### Assessments are bounded by the supplied RTL
-
-The router assesses the state supplied by its caller. It does not automatically
-elaborate a repository or establish that every generated block, helper, and
-module instance is present. Keep excerpt boundaries and source locations
-explicit. The conclusion applies to that region and its assumptions.
-
-### Worker token-budget truncation receives no verdict
-
-Contract-1's evaluated limits are 1,536 tokens for the input sequence and
-256 tokens for the question and options. The inference worker rejects detected
-truncation without assigning a decision label. It cannot detect source removed
-before the request was constructed. Integrators must preserve relevant context
-and report excerpt boundaries rather than treating a short input as complete.
-
-## Contract-1 evaluation record
-
-### How to read the evidence
-
-| Evidence | Interpretation |
+| Muse Glimmer with Contract-1 and Contract-2 skills | The shipped specialist path. Versioned review procedures guide Glimmer's analysis and structured response. | Live skill assessments, deployment-specific capability profiles, and router integration checks. |
+| Fine-tuned Muse Glimmer RTL adapter | A separately published research decision model covering local guards and focused temporal contracts. | Its frozen-checkpoint development measurements, authored demonstrations, and reload checks. |
+| Earlier retained decision models | Historical weight-based specialists used in the research leading to this project. | Their own model cards and historical evaluation records. Their scores do not measure the current Glimmer skills. |
+
+The fine-tuned adapter and the Contract skills are different interfaces. The
+adapter scores three answer tokens. The skills ask Glimmer to reason through a
+review procedure and return a verdict, confidence, evidence, and open questions.
+The adapter's measurements do not automatically qualify the skill path, and
+successful skill calls do not validate the adapter.
+
+## Contract-1 skill: local access-control review
+
+[Contract-1](../.agents/skills/contract-1/SKILL.md) organizes review around the
+writers and guards of a protected register or state element. It directs
+Glimmer to enumerate update paths, trace authorization conditions, inspect
+branch priority, and identify a concrete triggering case for a violation.
+
+| Intended review domain | What the requirement should identify |
 |---|---|
-| Frozen development views | Performance on populations used in model development and selection |
-| Family-disjoint qualification | Transfer to four unseen authored structural families |
-| Requirement and representation shift | Robustness under deliberate changes to wording, context, and RTL representation |
-| Six-example authored local-guard set | Measured behavior on those selected examples |
+| Privilege-qualified register writes | The protected register and the privilege condition that must hold for an update. |
+| Lock protection | Which updates are prohibited while locked, including debug and test paths. |
+| Clear authorization | The clear request and the permission required to act on it. |
+| Address qualification | The address or range allowed to update the target register. |
+| Write strobes and masks | Which bits may change and under which authorization. |
+| Owner checks and default-deny behavior | The owner comparison, relevant widths, and behavior when no authorized case matches. |
 
-A **false-safe** is a true violation predicted as `satisfies_requirement`.
-A violation predicted as `insufficient_context` also reduces violation recall,
-but does not count as a false-safe. A **whole triplet** is correct only when all
-three linked satisfying, violating, and insufficient-context decisions are
-correct. This measures consistency across related cases rather than accuracy
-on an isolated example.
+**Recorded live evidence.** The browser-backend verification consulted the
+Contract-1 skill through a real Glimmer service for an authored guarded-register
+case. It returned `satisfies_requirement` with validated skill identity and a
+self-reported confidence of 0.95. The [demo evidence](web-demo.md#recorded-evidence)
+identifies the scope of that check. It establishes a working assessment path on
+that example, not a domain-wide accuracy estimate.
 
-The two reserved evaluations were frozen before inference, balanced across
-labels, solver-checked, and group-disjoint from their matching training and
-development data. They cover authored local contracts, not a random production
-hardware sample. Both have now been evaluated. Their rows, errors, and logits
-remain excluded from further training and checkpoint selection.
+The skill also includes review instructions for multiple writers and hidden
+helpers. That procedural coverage is useful, but no complete per-family quality
+evaluation for the current skill deployment is reported here. In particular,
+large helper graphs, indirect storage representations, and extensive debug or
+test logic require representative measurements before carrying an established
+reliability claim.
 
-The historical final test and unrelated sealed OpenTitan and HardSecBench
-partitions were not evaluated for this study. The results below do not make a
-claim about those populations.
+## Contract-2 skill: focused state-transition review
 
-### Counterbalanced development
+[Contract-2](../.agents/skills/contract-2/SKILL.md) organizes review around the
+transition that occurs for each input combination constrained by a requirement.
+It distinguishes a requested operation from an accepted operation and asks
+Glimmer to check which branch governs simultaneous controls.
 
-| Evaluation | Correct decisions | Violation recall | False-safes | Whole triplets |
-|---|---:|---:|---:|---:|
-| Counterbalanced development | 257/288 (89.24%) | 95/96 (98.96%) | 0/96 | 66/96 |
+| Intended review domain | What to inspect |
+|---|---|
+| FIFO occupancy and backpressure | Push/pop acceptance, full/empty behavior, and the resulting occupancy update. |
+| Stored-word capture and blanking | Data-path updates separately from occupancy and flag updates. |
+| Counters | Increment, decrement, load, clear, saturation, and wrap conditions. |
+| Commit and hold priority | The specified outcome when controls are asserted together. |
+| Arbitration and grant handshakes | Request eligibility, grant acceptance, overlap, and release conditions. |
+| Local sequencing | The visible state transitions and observation edges covered by the property. |
 
-The fully specified subset contains 96 satisfying and 96 violating decisions.
-Contract-1 classified 96 and 95 correctly, respectively, giving 191/192
-(99.48%). The full three-class result includes another 96 insufficient-context
-decisions. This development population is separate from the 4,095-decision
-retention views below.
+The repository provides authored temporal examples and a structured review
+procedure. This document does not assign the historical Contract-2 model's
+accuracy, or the fine-tuned adapter's accuracy, to the current Contract-2 skill.
+A deployed skill needs its own measured capability profile.
 
-### Unseen counterbalanced write-path families
+The intended scope is focused transition reasoning. It does not establish
+unbounded liveness, arbitrary protocol correctness, fairness over every possible
+execution, or correctness of an entire FIFO simply because one occupancy
+requirement is satisfied.
 
-This qualification contains 288 decisions in 96 complete triplets across four
-unseen structural families:
+## Fine-tuned Muse Glimmer: measured domains
 
-| Metric | Result |
-|---|---:|
-| Overall accuracy | 249/288, 86.46% |
-| Satisfies recall | 81/96, 84.38% |
-| Violates recall | 92/96, 95.83% |
-| Insufficient-context recall | 76/96, 79.17% |
-| False-safes | 0/96 violations |
-| Whole triplets correct | 59/96, 61.46% |
-| Negative log likelihood | 0.7566 |
-| Brier score, sum over classes | 0.2360 |
-| Expected calibration error, 10 bins | 12.13% |
+The separately released
+[SiliconShield Muse Glimmer RTL adapter](https://huggingface.co/debjyotikm/siliconshield-muse-glimmer-rtl-lora)
+was trained on accepted local-guard and focused temporal examples. Its frozen
+checkpoint was evaluated on 288 local-guard decisions and 234 temporal
+decisions. These are existing development populations, not a new sealed test.
 
-Rows in the confusion matrix are true labels and columns are predictions:
+| Evaluated population | Correct decisions | What the measurement covers |
+|---|---:|---|
+| Counterbalanced local guards | 280/288, 97.22% | Small write-path contracts assessed against explicit requirements, including satisfying, violating, and omitted-context cases. |
+| Focused temporal contracts | 223/234, 95.30% | The selected FIFO, counter, and arbitration population under its stated assumptions. |
 
-| True \ predicted | Satisfies | Violates | Insufficient context |
+The model completed 88/96 local-guard triplets and 67/78 temporal triplets
+correctly. A triplet is credited only when all three linked labels are correct.
+This measures consistency across related requirements or design variants.
+
+The remaining errors define useful follow-up work:
+
+- Local guards: five satisfying cases and three violations were classified as
+  insufficient context. No violation was classified as satisfying in this
+  96-violation population.
+- Focused temporal contracts: three satisfying cases were classified as
+  violating. Five violations were classified as satisfying and three as
+  insufficient context.
+- All 174 omitted-context development cases were classified correctly. Broader
+  omission patterns still need independent evaluation.
+
+These counts describe the evaluated samples. They do not establish zero risk
+for local guards or universal context detection. Detailed results are retained
+in the [release evaluation record](https://huggingface.co/debjyotikm/siliconshield-muse-glimmer-rtl-lora/blob/main/evaluation.json)
+and [research paper](whitepaper.md).
+
+### Authored examples exercised with the frozen adapter
+
+| Example | Requirement focus | Recorded result |
+|---|---|---|
+| Privilege guard present | Every non-reset write requires privilege. | Correct satisfying prediction. |
+| Privilege guard removed | An unprivileged write must not change the register. | Correct violating prediction. |
+| Authorization helper omitted | The missing definition can change whether the write is authorized. | Correct insufficient-context prediction. |
+| Simultaneous push/pop holds | Both requests together must preserve the count. | Correct satisfying prediction. |
+| Simultaneous push/pop increments | An explicit increment on both requests breaks the hold requirement. | Correct violating prediction. |
+| Counter-update helper omitted | The missing definition can change the specified transition. | Correct insufficient-context prediction. |
+
+All six passed. They are authored demonstrations, not an unseen benchmark or
+an estimate of the frequency of errors in production RTL.
+
+### Areas without qualification in this adapter study
+
+| Area | What remains to be established |
+|---|---|
+| New design lineages and substantially different requirement wording | Independent group-disjoint evaluation beyond the reused development populations. |
+| Large modules and cross-module behavior | Whether relevant context can be assembled and assessed without losing dependencies. |
+| Deep helper chains, indirect writers, and encoded storage | Transfer across those representations rather than reliance on familiar local forms. |
+| Long temporal sequences | Multi-cycle protocol properties, eventual responses, fairness, and liveness beyond the bounded local contracts. |
+| Clock-domain and reset-domain crossings | Synchronizer behavior, metastability assumptions, asynchronous interactions, and cross-domain ordering. |
+| Four-state semantics | X/Z propagation and simulator-dependent unknown-value behavior. The task data uses declared two-state assumptions. |
+| Complete security subsystems | End-to-end access control, lifecycle transitions, cryptographic implementations, and hardware/firmware interactions. |
+| Physical behavior | Timing closure, power or electromagnetic leakage, analog effects, and physical fault injection. |
+| Additional output tasks | CWE classification, vulnerability localization, generated-repair correctness, and calibrated risk estimates. |
+
+OpenTitan-derived contracts are evidence about those extracted behaviors. They
+are not an assessment of OpenTitan as a whole. Similarly, a source category or
+CWE provenance tag does not establish a separately trained classification task.
+
+## Requirements determine the assessment boundary
+
+A useful assessment begins with a precise property, not a request to declare a
+design generally secure. State the protected object, relevant event, and
+permitted behavior. Include the assumptions that affect the answer.
+
+For example, this branch protects a register against unprivileged writes:
+
+```systemverilog
+else if (wr_en && privileged)
+  cfg_reg <= wdata;
+```
+
+For the requirement “Outside reset, `cfg_reg` may change only when `privileged`
+is asserted,” this branch is consistent with the policy if it is the relevant
+non-reset writer. A second debug path must be checked separately. If the
+requirement also covers reset, the reset assignment needs to satisfy it too.
+That change in scope can change the correct answer without changing the RTL.
+
+For a FIFO, “a push while full must preserve occupancy” is different from
+“a rejected push must preserve the stored word.” A correct count update does
+not settle the data-path requirement. Similarly, checking behavior when an
+input named `full` is asserted does not establish that the logic generating
+`full` is correct.
+
+A missing helper definition matters only when it can change the property.
+A complete design with an unconstrained primary input is different from an
+excerpt with omitted implementation. Unfamiliar code, low confidence, an
+execution failure, and semantic insufficient context are distinct conditions.
+See [Writing requirements for RTL analysis](rtl-requirements.md) for examples.
+
+## What the router and Muse analysis establish
+
+The router uses caller-supplied scope and measured capability profiles to select
+relevant specialists. Muse can examine their assessments alongside the RTL,
+explain disagreements, and identify the information or checks needed next.
+This makes the review traceable to a requirement and implementation region.
+
+The [router guide](router.md#driving-assessments-from-glimmer) records live
+Glimmer-driven assessment sessions. Fixture checks exercise routing, response
+validation, identity mismatches, malformed verdicts, and recovery. These are
+valuable integration results. They do not establish an accuracy advantage over
+the best individual specialist or unattended reliability across arbitrary RTL.
+
+Two consultations of the same Glimmer model under different skills are not
+independent model votes. Agreement can help organize an investigation, but it
+does not multiply confidence or verify the property. Disagreements and weak
+coverage should remain visible in the resulting assessment.
+
+The router does not automatically elaborate a whole repository or establish
+that every relevant generated block and helper is included. Lexical inspection
+can assist scope selection. It does not replace elaboration or supply missing
+implementation detail.
+
+## Scores, context budgets, and deployment identity
+
+The two current interfaces report different kinds of scores:
+
+- **Skill-assisted Glimmer:** confidence is supplied by the model in its
+  structured response. The transport assigns that value to the selected label
+  and splits the remaining mass between the other two labels. This is not a
+  measured three-class token distribution.
+- **Fine-tuned adapter:** scores come from normalization over the three
+  registered answer-token logits. They express relative model preference under
+  that prompt, not calibrated correctness probabilities.
+
+Preserve this distinction in integrations. Neither interface has a measured
+calibration guarantee for arbitrary engineering inputs.
+
+The published adapter loader rejects inputs exceeding its 2,048-token budget.
+The tested skill-serving configuration has its own context and generation
+budgets. Its preflight uses an input-size estimate, so it should not be described
+as exact tokenizer verification. Neither interface can establish that a caller
+has supplied all relevant RTL merely because the input fits.
+
+The adapter's tested loader uses BF16 across three CUDA GPUs. Other placements,
+quantization, and CPU-only execution require separate qualification. The skill
+path uses the configured Glimmer serving endpoint and pinned skill content.
+Changing model weights, skill text, prompt, precision, or serving configuration
+can change behavior and requires corresponding capability measurements.
+
+Fresh loading of the frozen adapter reproduced all 144 monitor decisions.
+Probability parity did not meet the registered tolerance on 22 rows, with a
+maximum absolute score difference of approximately 0.031. The saved adapter
+weights matched exactly. This remains a numerical reproducibility question,
+not evidence of changed labels on that check.
+
+## Extending coverage
+
+For a new design domain, assemble representative requirements and RTL with
+reviewed satisfying, violating, and genuinely missing-context cases. Keep
+related designs in the same split, reserve independent families before
+inspection, and measure the actual model-plus-skill or adapter deployment.
+
+Report class recall and error direction alongside overall accuracy. Check
+simultaneous controls, every relevant writer, and equivalent RTL forms. Use
+whole triplets to test consistency and retain the source locations and
+assumptions behind each result. These steps turn a plausible new capability
+into measured operating scope.
+
+Consequential findings should be checked through engineering review and
+appropriate simulation or formal analysis. A neural verdict prioritizes that
+work. A bounded simulation establishes what its check exercised, while a
+formal result applies under its property and environment assumptions.
+
+## Historical decision-model evidence
+
+The retained research checkpoints named Contract-1 and Contract-2 preceded the
+current Glimmer skills. Their results remain useful for the research record,
+but must not be presented as measurements of Muse Glimmer or of skill-guided
+inference.
+
+| Historical checkpoint / population | Correct decisions | False-safe violations | Whole triplets |
 |---|---:|---:|---:|
-| Satisfies | 81 | 0 | 15 |
-| Violates | 0 | 92 | 4 |
-| Insufficient context | 16 | 4 | 76 |
+| Contract-1 counterbalanced development | 257/288 | 0/96 | 66/96 |
+| Contract-1 four-family qualification | 249/288 | 0/96 | 59/96 |
+| Contract-2 focused temporal development | 203/234 | 17/78 | 51/78 |
 
-Family accuracies ranged from 83.33% to 90.28%. The row-level Wilson interval
-is 82.02% to 89.93%, reported descriptively because rows within a triplet and
-family are correlated. It is not a family-clustered population interval. Four
-families provide limited evidence about variation across new design lineages.
-The observed zero false-safes applies to these 96 violations and does not
-establish a zero error rate elsewhere.
-
-### Familiar development populations
-
-A separate frozen development population measures retained capabilities:
-
-| Development view | Correct | False-safes | Whole triplets |
-|---|---:|---:|---:|
-| HardSecBench-derived | 2,601/2,610, 99.66% | 7 | 862/870, 99.08% |
-| OpenTitan-derived | 180/180, 100% | 0 | 60/60, 100% |
-| Authored transfer | 561/567, 98.94% | 0 | 183/189, 96.83% |
-| Requirement-understanding stress | 340/738, 46.07% | 22 | 15/246, 6.10% |
-
-Across these four views, Contract-1 scored 3,682/4,095 (89.91%), with class
-recalls of 86.67% satisfies, 95.75% violates, and 87.33% insufficient context.
-It recorded 29 false-safes among 1,365 violations and 1,120/1,365 correct whole
-triplets. NLL was 0.6541 and 10-bin ECE was 8.40%.
-
-The source-derived and authored-transfer views show strong retention of familiar
-contracts. The requirement-understanding stress view is substantially weaker.
-Reporting these views separately preserves that distinction. All four are
-development evidence rather than independent generalization measurements.
+The earlier Contract-2 release was owner-selected after its automated promotion
+gates failed. That outcome belongs to the earlier checkpoint and is not a
+judgment about the current temporal skill or fine-tuned Glimmer adapter.
+The [historical model-family card](siliconshield-rtl.md) retains those identities
+and publication boundaries.
 
 ### Requirement and representation shifts
 
-The second reserved evaluation contains 756 decisions from two unseen origins.
-It changes wording and RTL representation through internal storage, inverted
-storage, and rotate/debug update structures:
+The historical Contract-1 checkpoint was also evaluated on 756 authored
+requirement and representation shifts. It scored 330/756, with 25/252
+false-safe violations and 12/252 complete triplets. Its satisfies, violates,
+and context recalls were 80/252, 225/252, and 25/252 respectively.
 
-| Metric | Result |
-|---|---:|
-| Overall accuracy | 330/756, 43.65% |
-| Satisfies recall | 80/252, 31.75% |
-| Violates recall | 225/252, 89.29% |
-| Insufficient-context recall | 25/252, 9.92% |
-| False-safes | 25/252 violations, 9.92% |
-| Whole triplets correct | 12/252, 4.76% |
-| Negative log likelihood | 3.9405 |
-| Brier score, sum over classes | 1.0421 |
-| Expected calibration error, 10 bins | 50.16% |
-
-| True \ predicted | Satisfies | Violates | Insufficient context |
-|---|---:|---:|---:|
-| Satisfies | 80 | 159 | 13 |
-| Violates | 25 | 225 | 2 |
-| Insufficient context | 49 | 178 | 25 |
-
-The model predicted `violates_requirement` on 562/756 rows (74.34%). This
-prediction bias accompanies low satisfies and context recall. Violation recall
-alone therefore overstates performance across the three-way task.
-
-| Shifted group | Accuracy | Satisfies recall | Violates recall | Insufficient recall |
-|---|---:|---:|---:|---:|
-| Internal storage | 45.24% | 38.10% | 85.71% | 11.90% |
-| Inverted storage | 45.24% | 34.52% | 91.67% | 9.52% |
-| Rotate/debug updates | 40.48% | 22.62% | 90.48% | 8.33% |
-
-All three groups show a substantial transfer limitation. Whole-triplet accuracy
-falls from 61.46% in the four-family qualification to 4.76% here. The separate
-requirement-stress development view reaches 6.10%. These measurements motivate
-testing related satisfying, violating, and incomplete cases together.
-
-The row-level Wilson interval is 40.16% to 47.21%. Only two independent origin
-groups contribute the 756 rows, which is insufficient for a reliable
-group-clustered uncertainty interval.
-
-### Confidence is not reliability
-
-Correct and incorrect predictions can both receive high raw scores:
-
-| Score diagnostic | Four-family qualification | Requirement/context shift |
-|---|---:|---:|
-| Mean winning score on correct decisions | 99.28% | 93.64% |
-| Mean winning score on incorrect decisions | 91.62% | 92.30% |
-| Errors with winning score at least 90% | 28/39 | 346/426 |
-| False-safes with winning score at least 90% | No false-safes observed | 17/25 |
-
-The shift population has little separation between the mean scores of correct
-and incorrect predictions. The NLL, Brier, and ECE values in the population
-tables quantify this calibration limitation. Retain all three scores in reports
-and do not use a high winning score as a substitute for property verification.
-No confidence threshold has been qualified here as a safe acceptance rule.
-
-## Coverage that has not been established
-
-The following areas have not been qualified by these evaluations. They are
-coverage gaps, distinct from the measured errors above:
-
-| Area | Scope requiring separate evidence |
-|---|---|
-| Design scale | Arbitrary OpenTitan IP, arbitrary HardSecBench designs, complete subsystems, full-chip and hierarchical information flow |
-| Temporal and clock behavior | Liveness, long or unbounded sequences, CDC, asynchronous logic, and metastability |
-| Logic and implementation semantics | Four-state `X`/`Z` behavior under two-state contracts, synthesis, place-and-route, and physical effects |
-| Broader security mechanisms | Analog behavior, timing and power leakage, side channels, fault injection, and firmware/hardware interactions beyond the input |
-| Additional tasks | General CWE classification, vulnerability localization, automatic root-cause identification, and repair correctness |
-
-Training labels describe one registered property under declared assumptions.
-The solver-backed data covers local, bounded, reset-conditioned contracts under
-the checker's supported semantics. Related decisions can share a source design
-through mutations, rewrites, and missing-context completions. Row counts are
-therefore not counts of independent designs. CWE identifiers describe source
-provenance rather than a separately trained classification head. Likewise,
-OpenTitan-derived measurements apply to their extracted contracts, not an
-OpenTitan-wide security assessment.
-
-Extending the operating scope requires independent source families,
-representative missing-context and multi-writer cases, and family-level
-uncertainty estimates. A broader release should also qualify its confidence or
-refusal policy, demonstrate SDK parity, and publish the corresponding parent,
-runtime, dataset, and evaluation identities. The
-[study walkthrough](study-walkthrough.md) describes the training and acceptance
-controls for that work.
-
-## Reproducibility notes
-
-### Model and evaluation identity
-
-Contract-1's measurements bind these inference settings to its released weights:
-
-| Field | Evaluated value |
-|---|---|
-| Release | SiliconShield-RTL Contract-1 (C1) |
-| Weights | [debjyotikm/siliconshield-rtl-contract-1](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1) |
-| Question contract | `siliconshield-requirement-context-v1` |
-| Adapter metadata | 28 residual-adapter layers, rank 256, scale 8 |
-| Evaluation precision | BF16 model inference, FP32 probabilities and metrics |
-| Input budgets | `max_len=1536`, `head_max_len=256` for the question and options |
-
-Changing the question contract, label order, runtime behavior, or checkpoint
-changes the evaluated system. Contract-2 has its own release and measured
-profiles. The [release guide](releases.md) records the loading configuration.
-The router derives capability tiers from the deployed inference identity and
-matching measurements rather than inheriting them from a historical table.
-
-The recorded aggregates were reconciled against saved evaluation receipts kept
-outside the source tree. Public weights and the development benchmark are
-available through Hugging Face. The [benchmark guide](benchmark.md) identifies
-the public population. Private qualification and shift rows and complete historical logits
-are not included, so the public benchmark cannot reproduce every table here.
-
-Campaign/SDK scoring and single-row workers can use different batch, padding,
-and runtime paths. Report those settings with each result. In a development
-reconciliation, the local SDK and trainer agreed on all 288 rows. A comparison
-across GPU architectures using BF16 differed on one low-margin context row.
-The broader 4,095-row view agreed on every prediction. Marginal differences
-therefore need to be assessed under matched inference conditions.
-
-<details>
-<summary>Qualification reporting provenance</summary>
-
-The first counterbalanced qualification attempt completed inference but could
-not write metrics because its reporting recipe omitted a source mass for the
-authored source. The retry kept the model, data, precision, option order, and
-runtime inputs unchanged and supplied the reporting recipe. The first attempt
-produced no score and was not combined with the retry.
-
-</details>
+Those measurements concern that earlier model under deliberately changed
+inputs. They have not been reproduced as a qualification of the current
+Glimmer skills or the fine-tuned Glimmer adapter. The relevant next step for
+those systems is their own independent shift evaluation, not inheriting either
+the older model's strengths or its errors.

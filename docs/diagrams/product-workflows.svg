@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; background-color: light-dark(#ffffff, #121212);" version="1.1" width="1200px" height="610px" viewBox="0 0 1200 610" role="img" aria-labelledby="figure-title figure-description">
-  <title id="figure-title">RTL investigation and model development</title>
-  <desc id="figure-description">Two separate workflows. RTL and a requirement pass through the router, local decision models, and Muse to a finding with next checks. Reviewed data is used to train and evaluate a candidate for promotion or retention. Muse proposes further experiments within the study budget.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" style="background: #ffffff; background-color: light-dark(#ffffff, #121212);" version="1.1" width="1200px" height="272px" viewBox="0 0 1200 272" role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">RTL Investigation</title>
+  <desc id="figure-description">RTL and a requirement pass through the router, Contract skills, and Muse to a finding with next checks.</desc>
   <defs />
   <rect fill="#ffffff" width="100%" height="100%" x="0" y="0" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
   <g>
@@ -8,7 +8,7 @@
       <g data-cell-id="1">
         <g data-cell-id="canvas">
           <g>
-            <rect x="0" y="0" width="1200" height="610" fill="#ffffff" stroke="none" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
+            <rect x="0" y="0" width="1200" height="272" fill="#ffffff" stroke="none" pointer-events="all" style="fill: light-dark(rgb(255, 255, 255), rgb(18, 18, 18));" />
           </g>
         </g>
         <g data-cell-id="assessment-title">
@@ -17,23 +17,8 @@
           </g>
           <g>
             <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="26px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-              <text x="32" y="50">Investigate a design</text>
+              <text x="32" y="50">RTL Investigation</text>
             </g>
-          </g>
-        </g>
-        <g data-cell-id="training-title">
-          <g>
-            <rect x="32" y="282" width="1000" height="40" fill="none" stroke="none" pointer-events="all" />
-          </g>
-          <g>
-            <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="26px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-              <text x="32" y="314">Develop a decision model</text>
-            </g>
-          </g>
-        </g>
-        <g data-cell-id="divider">
-          <g transform="translate(0.5,0.5)">
-            <path d="M 32 266 L 1168 266" fill="none" stroke="#d7d7d7" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(215, 215, 215), rgb(52, 52, 52));" />
           </g>
         </g>
         <g data-cell-id="input">
@@ -74,7 +59,7 @@
             <g>
               <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="22px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
                 <text x="350" y="127">Router +</text>
-                <text x="350" y="153">decision models</text>
+                <text x="350" y="153">Contract skills</text>
               </g>
             </g>
           </g>
@@ -142,112 +127,6 @@
             </g>
           </g>
         </g>
-        <g data-cell-id="data">
-          <g transform="translate(0.5,0.5)">
-            <rect x="32" y="348" width="242" height="156" rx="7.8" ry="7.8" fill="#f8f8f8" stroke="#c2c2c2" stroke-width="1.3" pointer-events="all" style="fill: light-dark(rgb(248, 248, 248), rgb(24, 24, 24)); stroke: light-dark(rgb(194, 194, 194), rgb(70, 70, 70));" />
-          </g>
-          <g data-cell-id="data-title">
-            <g>
-              <rect x="52" y="364" width="202" height="60" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="22px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-                <text x="52" y="391">Reviewed</text>
-                <text x="52" y="417">training data</text>
-              </g>
-            </g>
-          </g>
-          <g data-cell-id="data-detail">
-            <g>
-              <rect x="52" y="440" width="202" height="46" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#505050" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(80, 80, 80), rgb(168, 168, 168));">
-                <text x="52" y="460.5">Solver checks</text>
-                <text x="52" y="480.5">Semantic review</text>
-              </g>
-            </g>
-          </g>
-        </g>
-        <g data-cell-id="train">
-          <g transform="translate(0.5,0.5)">
-            <rect x="330" y="348" width="242" height="156" rx="7.8" ry="7.8" fill="#f8f8f8" stroke="#c2c2c2" stroke-width="1.3" pointer-events="all" style="fill: light-dark(rgb(248, 248, 248), rgb(24, 24, 24)); stroke: light-dark(rgb(194, 194, 194), rgb(70, 70, 70));" />
-          </g>
-          <g data-cell-id="train-title">
-            <g>
-              <rect x="350" y="364" width="202" height="60" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="22px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-                <text x="350" y="391">Train a</text>
-                <text x="350" y="417">candidate</text>
-              </g>
-            </g>
-          </g>
-          <g data-cell-id="train-detail">
-            <g>
-              <rect x="350" y="440" width="202" height="46" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#505050" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(80, 80, 80), rgb(168, 168, 168));">
-                <text x="350" y="470.5">Frozen recipe + budget</text>
-              </g>
-            </g>
-          </g>
-        </g>
-        <g data-cell-id="evaluate">
-          <g transform="translate(0.5,0.5)">
-            <rect x="628" y="348" width="242" height="156" rx="7.8" ry="7.8" fill="#f8f8f8" stroke="#c2c2c2" stroke-width="1.3" pointer-events="all" style="fill: light-dark(rgb(248, 248, 248), rgb(24, 24, 24)); stroke: light-dark(rgb(194, 194, 194), rgb(70, 70, 70));" />
-          </g>
-          <g data-cell-id="evaluate-title">
-            <g>
-              <rect x="648" y="364" width="202" height="60" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="22px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-                <text x="648" y="391">Evaluate</text>
-                <text x="648" y="417">improvement</text>
-              </g>
-            </g>
-          </g>
-          <g data-cell-id="evaluate-detail">
-            <g>
-              <rect x="648" y="440" width="202" height="46" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#505050" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(80, 80, 80), rgb(168, 168, 168));">
-                <text x="648" y="460.5">New capability</text>
-                <text x="648" y="480.5">Retained capability</text>
-              </g>
-            </g>
-          </g>
-        </g>
-        <g data-cell-id="selection">
-          <g transform="translate(0.5,0.5)">
-            <rect x="926" y="348" width="242" height="156" rx="7.8" ry="7.8" fill="#f8f8f8" stroke="#777777" stroke-width="1.3" pointer-events="all" style="fill: light-dark(rgb(248, 248, 248), rgb(24, 24, 24)); stroke: light-dark(rgb(119, 119, 119), rgb(135, 135, 135));" />
-          </g>
-          <g data-cell-id="selection-title">
-            <g>
-              <rect x="946" y="364" width="202" height="60" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="22px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-                <text x="946" y="391">Promote</text>
-                <text x="946" y="417">or retain</text>
-              </g>
-            </g>
-          </g>
-          <g data-cell-id="selection-detail">
-            <g>
-              <rect x="946" y="440" width="202" height="46" fill="none" stroke="none" pointer-events="all" />
-            </g>
-            <g>
-              <g fill="#505050" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(80, 80, 80), rgb(168, 168, 168));">
-                <text x="946" y="470.5">Apply the study criteria</text>
-              </g>
-            </g>
-          </g>
-        </g>
         <g data-cell-id="input-models">
           <g>
             <path d="M 274 162 L 319.82 162" fill="none" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
@@ -264,50 +143,6 @@
           <g>
             <path d="M 870 162 L 915.82 162" fill="none" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
             <path d="M 924.32 162 L 915.82 166.25 L 915.82 157.75 Z" fill="#424242" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(66, 66, 66), rgb(180, 180, 180)); stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-          </g>
-        </g>
-        <g data-cell-id="data-train">
-          <g>
-            <path d="M 274 426 L 319.82 426" fill="none" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-            <path d="M 328.32 426 L 319.82 430.25 L 319.82 421.75 Z" fill="#424242" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(66, 66, 66), rgb(180, 180, 180)); stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-          </g>
-        </g>
-        <g data-cell-id="train-evaluate">
-          <g>
-            <path d="M 572 426 L 617.82 426" fill="none" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-            <path d="M 626.32 426 L 617.82 430.25 L 617.82 421.75 Z" fill="#424242" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(66, 66, 66), rgb(180, 180, 180)); stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-          </g>
-        </g>
-        <g data-cell-id="evaluate-selection">
-          <g>
-            <path d="M 870 426 L 915.82 426" fill="none" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="stroke" style="stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-            <path d="M 924.32 426 L 915.82 430.25 L 915.82 421.75 Z" fill="#424242" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(66, 66, 66), rgb(180, 180, 180)); stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-          </g>
-        </g>
-        <g data-cell-id="experiment-feedback">
-          <g>
-            <path d="M 833.7 504 L 833.7 580 L 366.3 580 L 366.3 514.18" fill="none" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" stroke-dasharray="9 6" pointer-events="stroke" style="stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-            <path d="M 366.3 505.68 L 370.55 514.18 L 362.05 514.18 Z" fill="#424242" stroke="#424242" stroke-width="1.5" stroke-miterlimit="10" pointer-events="all" style="fill: light-dark(rgb(66, 66, 66), rgb(180, 180, 180)); stroke: light-dark(rgb(66, 66, 66), rgb(180, 180, 180));" />
-          </g>
-        </g>
-        <g data-cell-id="feedback-title">
-          <g>
-            <rect x="392" y="520" width="416" height="26" fill="none" stroke="none" pointer-events="all" />
-          </g>
-          <g>
-            <g fill="#353535" font-family="Inter, Arial, sans-serif" text-anchor="middle" font-size="18px" style="fill: light-dark(rgb(53, 53, 53), rgb(192, 192, 192));">
-              <text x="600" y="541">Muse proposes the next experiment</text>
-            </g>
-          </g>
-        </g>
-        <g data-cell-id="feedback-budget">
-          <g>
-            <rect x="392" y="548" width="416" height="23" fill="none" stroke="none" pointer-events="all" />
-          </g>
-          <g>
-            <g fill="#616161" font-family="Inter, Arial, sans-serif" text-anchor="middle" font-size="16px" style="fill: light-dark(rgb(97, 97, 97), rgb(154, 154, 154));">
-              <text x="600" y="566.5">Within the study budget</text>
-            </g>
           </g>
         </g>
       </g>

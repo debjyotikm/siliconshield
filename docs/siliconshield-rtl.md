@@ -1,9 +1,13 @@
-# SiliconShield-RTL decision models: Contract-1 and Contract-2
+# SiliconShield-RTL model card: Contract-1 and Contract-2
 
 [Documentation index](README.md) · [Router](router.md) ·
-[Training recipes](training-recipes.md) · [Capabilities and limitations](LIMITATIONS.md)
+[Capabilities and limitations](LIMITATIONS.md)
 
-SiliconShield-RTL is a family of local decision models for assessing RTL against
+> Scope: this is the model card for previously published weights on the
+> retained local research path. That path is disabled by default and is not
+> part of the shipped product, which uses Glimmer and the Contract skills.
+
+SiliconShield-RTL is a family of retained local models for assessing RTL against
 explicit requirements. Verification always judges an implementation against an
 intended policy. These models take both as input: an RTL region, an English
 requirement, and the assumptions that bound it. The same RTL can then receive
@@ -18,12 +22,12 @@ through training studies on local GPU hardware.
 
 | Artifact | Purpose |
 |---|---|
-| [Contract-1 decision model](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1) | Local guard, register-write, clear-enable, and exact-address triage |
-| [Contract-2 decision model](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2) | Focused temporal triage for FIFO, counter, and arbitration contracts |
+| [Contract-1 weights](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1) | Local guard, register-write, clear-enable, and exact-address triage |
+| [Contract-2 weights](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2) | Focused temporal triage for FIFO, counter, and arbitration contracts |
 | [RTL training collection](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-training) | 19,050 rows, with direct-training and follow-up-study provenance |
 | [RTL benchmark](https://huggingface.co/datasets/debjyotikm/siliconshield-rtl-benchmark) | 5,589 development decisions across 11 design areas |
 
-The models run on the compatible LAYA runtime. SiliconShield supplies the
+The models run on a compatible local model runtime. SiliconShield supplies the
 specialized training, input contracts, worker integration, capability routing,
 and evaluation tools. Weights and datasets are distributed on Hugging Face,
 separately from this source-only repository.
@@ -52,12 +56,11 @@ Training labels use registered solver-backed contracts. A satisfies label
 requires an established proof over the extracted local model. A violates label
 requires a reachable counterexample. A missing-context label requires compatible
 completions with opposing established outcomes. Inference does not rerun
-those solvers. Use the [investigation workflow](releases.md#real-muse-repair)
-when independent executable checks are available.
+those solvers. Run independent executable checks when they are available.
 
 ## Contract-1: local guard analysis
 
-Contract-1 is a decision model for local register protection. It assesses
+Contract-1 is a retained local model for local register protection. It assesses
 whether a visible state update respects the supplied requirement, with a focus
 on privilege checks, lock guards, clear enables, and exact-address qualification.
 Its practical role in an agentic workflow is to give Muse a requirement-specific
@@ -91,7 +94,7 @@ failure areas. Even a correct local lock guard can produce a false alarm.
 The full [requirement and representation shift evaluation](LIMITATIONS.md#requirement-and-representation-shifts)
 retains the accuracy, false-safe counts, class recalls, and confusion matrix
 for those conditions. See [capabilities and limitations](LIMITATIONS.md) for
-concrete examples and the [research white paper](whitepaper.md#9-contract-1-useful-local-reasoning-with-a-measured-shift-boundary)
+concrete examples and the [research white paper](whitepaper.md)
 for the experimental analysis.
 
 ## Contract-2: focused temporal analysis
@@ -140,18 +143,17 @@ with dissent and open questions. That conclusion remains a model assessment.
 A shared mistake is possible even when experts agree.
 
 Multi-expert consultation and arbitration are available through the experts
-CLI and Python API.
-The [qualification guide](expert-qualification.md) describes how to add future
+CLI and Python API. Plan how to add future
 models or retain an older release for rollback.
 
 ## Run locally
 
-Prepare a compatible Torch/LAYA inference environment and download an immutable
-export generation from the model's Hub repository. Record the Hub revision and
-verify the export manifest before registering it. Follow the [pinned release setup](releases.md).
+Prepare a compatible Torch inference environment with the local model
+runtime and download an immutable export generation from the model's Hub
+repository. Record the Hub revision and
+verify the export manifest before registering it.
 
-Create model entries and attach measured capability profiles using
-[decision-model qualification](expert-qualification.md), then follow the
+Create model entries and attach measured capability profiles, then follow the
 [router assessment walkthrough](router.md#run-one-assessment). Each release has
 its own export, profile, and execution identity. The router consults relevant
 specialists and optionally requests Muse arbitration over their evidence.
@@ -173,13 +175,11 @@ A custom design receives no inherited testbench.
 
 ## Training lineage and reproducibility
 
-Both releases derive from LAYA with residual adaptation and a security decision
+Both releases derive from the open-source base with residual adaptation and a security decision
 head. Their ancestors and optimization histories differ. Contract-1 continues
 broad security and OpenTitan training into a compact counterbalanced specialist.
 Contract-2 follows a separate fresh-encoder study, focused temporal adaptation,
-and triplet continuation. It is not fine-tuned from Contract-1. The
-[white-paper ancestry diagram](whitepaper.md#6-model-ancestry-and-reproducible-recipes)
-shows the two paths.
+and triplet continuation. It is not fine-tuned from Contract-1.
 
 The published training collection has two subsets:
 
@@ -189,9 +189,7 @@ The published training collection has two subsets:
 | `contract-2-direct` | 2,700 | Training population used in the Contract-2 continuation |
 
 These are not the full ancestor corpora. Registered rows and delivered exposure
-at the selected update are also different quantities. Consult
-[training recipes](training-recipes.md) for schedules, sampling, selection,
-and the boundary between shipped trainer features and versioned study code.
+at the selected update are also different quantities.
 
 The public benchmark supports reproducible development comparison through
 `python -m siliconshield.benchmark`. It does not replace the private,
@@ -206,8 +204,6 @@ inference settings before comparing counts.
 | Question contract | `siliconshield-requirement-context-v1` | `siliconshield-requirement-context-v1` |
 | Model computation | BF16 in the reported evaluations | BF16 in the reported evaluations |
 | Input budgets | `max_len=1536`, `head_max_len=256` | `max_len=1536`, `head_max_len=256` |
-
-See [training recipes](training-recipes.md) for training lineage.
 
 The [release manifest](../configs/model-releases.toml) records model-file and
 question-contract identities. Contract-1's export records 28 residual-adapter
@@ -228,10 +224,11 @@ separate release terms on their Hub pages, with upstream terms retained.
 Both public model cards declare Apache-2.0, verified on 3 November 2026.
 The earlier Contract-1 metadata discrepancy is resolved. The declaration is
 recorded in each Hub card, rather than a standalone LICENSE file in the model
-repository. See [release terms](releases.md#release-terms) for publication
+repository. The Hub cards record publication
 status and the distinction between current Hub metadata and pinned inference
-revisions, and [NOTICE.md](../NOTICE.md) for attribution.
+revisions. See [NOTICE.md](../NOTICE.md) for attribution.
 
 The [limitations](LIMITATIONS.md) record contains examples of both strengths
-and failures. [Evaluation](evaluation.md) distinguishes development selection,
-independent qualification, infrastructure checks, and deployment acceptance.
+and failures. The [research white paper](whitepaper.md) distinguishes
+development selection, independent qualification, infrastructure checks, and
+deployment acceptance.

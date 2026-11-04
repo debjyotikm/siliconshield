@@ -11,11 +11,9 @@ figure number in the corresponding specification.
 
 ## Product overview
 
-[Product workflows](product-workflows.svg) is the front-page figure. Two lanes
-show the path from an RTL requirement to a finding, and from reviewed training
-data to a candidate selection. The training feedback arrow shows Muse proposing
-the next experiment within the study budget. Assessment and model development
-remain separate workflows.
+[RTL Investigation](product-workflows.svg) is the front-page figure. It
+shows how RTL and a requirement pass through the router, Contract skills,
+and Muse to a finding with relevant logic and next checks.
 
 The editable source is [product-workflows.drawio](product-workflows.drawio),
 with an SVG rendered from its native shapes and connectors. Both use the same
@@ -28,7 +26,7 @@ steps belong in the architecture specifications linked below.
 |---|---|---|---|
 | 01 | Three execution paths and interfaces I01–I06 | [SVG](system-overview.svg) | [System architecture](../architecture.md) |
 | 02 | Expert assessment request/reply sequence | [SVG](expert-assessment.svg) | [Router](../router.md#assessment-transaction) |
-| 03 | Persisted training-round lifecycle and promotion | [SVG](decision-study.svg) | [Multi-round campaigns](../campaigns.md#round-lifecycle) |
+| 03 | Persisted training-round lifecycle and promotion | [SVG](decision-study.svg) | Lifecycle phases and promotion evidence |
 
 **Editable source:** [siliconshield-architecture.drawio](siliconshield-architecture.drawio)
 contains all three pages as native editable shapes and connectors. Open it in
@@ -42,7 +40,7 @@ from the page without assigning meaning through color. Labels, interface IDs,
 arrow direction, and line patterns carry the technical meaning.
 
 Figure 01 uses three lanes for agent-assisted assessment, direct Python
-inference, and decision-model training. Solid connectors show request, result,
+inference, and retained-model training. Solid connectors show request, result,
 or stage progression. Interface IDs map to the architecture specification.
 Benchmarking and structured arbitration are noted separately because neither
 is an automatic step in every lane. Each lane can span multiple processes
@@ -97,6 +95,6 @@ satisfies-class panel shows the constraint missed by every trained checkpoint.
 No curve is inferred between missing measurements. The line segments connect
 recorded evaluations for readability.
 
-The [case study](../case-study-decision-model-training-with-glimmer.md) owns the protocol and
+The [case study](../case-study-training-with-glimmer.md) owns the protocol and
 interpretation. Inspect at normal document width after regeneration, including
 axis labels and threshold annotations.

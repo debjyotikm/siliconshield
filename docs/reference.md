@@ -18,7 +18,7 @@ Prefix module names below with `python -m`.
 | `siliconshield.benchmark` | List areas, score models, or sample routing. | `areas`, `run --registry --out-dir`, `router-eval --registry --out`, optional `--dataset` |
 | `siliconshield.training.laya.build_source_security` | Build verified source-catalog data. | `--catalog`, `--output`, `--verification`, solver paths |
 | `siliconshield.training.laya.build_security_data` | Build catalog cases. | `--sources`, `--cases-manifest`, output/evidence paths |
-| `siliconshield.training.laya.security_train` | Distributed decision-model trainer. Also supports direct script launch. | `--model`, `--data`, `--output`, `--run-id` |
+| `siliconshield.training.laya.security_train` | Distributed retained-model trainer. Also supports direct script launch. | `--model`, `--data`, `--output`, `--run-id` |
 | `siliconshield.training.laya.security_campaign` | Training/finalization campaign configuration. | `--config` |
 | `siliconshield.research_loop.execution.security_jobs` | Prepare a job. Add `--launch` to submit it. | `--profile`, `--experiment-id`, optional `--overrides`, `--launch` |
 | `siliconshield.research_loop.execution.glimmer_operator` | Bounded live Glimmer operator. | `--config` |
@@ -37,7 +37,7 @@ Prefix module names below with `python -m`.
 `proposer_ingest`, `decision_study`, and `study_contract` are Python
 integration APIs, not equivalent launch CLIs.
 `owned_job` is the operator's execution worker, not an alternative way to bypass
-preparation. See [campaigns](campaigns.md).
+preparation.
 
 ## Decision and worker contracts
 
@@ -81,11 +81,8 @@ including requirement checks and candidate repair acceptance. See
 [router](router.md), [repair report contract](#repair-report-contract), and
 [response types](../siliconshield/experts/responses.py).
 
-The runnable onboarding examples are maintained in
-[decision-model qualification](expert-qualification.md#register-and-measure-the-published-models),
-[study assembly](study-walkthrough.md), and
-[local Glimmer operation](decision-model-training-with-glimmer.md). This reference owns field
-and interface semantics, rather than repeating those procedures.
+Runnable onboarding examples live alongside their guides. This reference owns
+field and interface semantics, rather than repeating those procedures.
 
 ### Pre-submit data validation
 
@@ -93,8 +90,7 @@ and interface semantics, rather than repeating those procedures.
 sampler checks from the training environment. Its required input is `--data`.
 Use `--question-contract`, `--pools`, `--recipe`, `--seed`, `--global-batch`,
 `--world`, `--max-updates` and `--output-receipt` to bind the registered plan.
-This is not a GPU launch or semantic-review approval. The complete command is
-in [local training](decision-model-training-with-glimmer.md#validate-the-data-on-cpu).
+This is not a GPU launch or semantic-review approval.
 
 ## Configuration boundaries
 
@@ -123,7 +119,7 @@ object does not mean an arbitrary JSON file is a valid deployment configuration.
 
 | Variable | Consumer / purpose |
 |---|---|
-| `LAYA_ROOT` | Compatible external decision-model runtime checkout. |
+| `LAYA_ROOT` | Compatible external local-model runtime checkout. |
 | `SILICONSHIELD_SECURITY_PYTHON` | Interpreter used by the application assessment worker. |
 | `SILICONSHIELD_SECURITY_CHECKPOINT` | Selected security-model export used by the application. |
 | `SILICONSHIELD_LAYA_PYTHON`, `SILICONSHIELD_LAYA_CHECKPOINT` | Legacy aliases, lower priority than the security names. |
@@ -177,7 +173,7 @@ New studies use `siliconshield-decision-study-v2`. Version 1 records are
 historical evidence and must be re-frozen before using the enforced launch
 path. Existing jobs without a study binding retain their legacy behavior and
 do not acquire the study's additional validation by running through the same
-infrastructure. Use the [walkthrough](study-walkthrough.md) for new work.
+infrastructure.
 
 ## Selection compatibility reference
 
@@ -228,8 +224,7 @@ comparisons, not Glimmer training.
 ## Repair report contract
 
 The optional `siliconshield.app` path runs supplied Verilator checks and can
-request a repair. It is separate from multi-model routing. See the
-[release example](releases.md#real-muse-repair) for model and proposer setup.
+request a repair. It is separate from multi-model routing.
 Custom RTL has no inherited demonstration testbenches. Without supplied checks,
 its requirement remains `requirement_not_verified`.
 

@@ -114,7 +114,6 @@ def test_wheel_installs_and_runs_outside_checkout(tmp_path):
         "siliconshield.research_loop.controller.serve_fast",
         "siliconshield.research_loop.procedures.muse_harness2",
         "siliconshield.web_demo",
-        "siliconshield.web_demo.toy_runner",
     ):
         entry = run(
             [sys.executable, "-m", dotted, "--help"], cwd=outside, env=env
@@ -126,7 +125,7 @@ def test_wheel_installs_and_runs_outside_checkout(tmp_path):
             "-c",
             "from importlib.resources import files; "
             "p = files('siliconshield.web_demo'); "
-            "assert 'Decision Model Lab' in p.joinpath('static/index.html').read_text(); "
+            "assert 'Specialist Assessment' in p.joinpath('static/index.html').read_text(); "
             "assert 'fifo-simultaneous-guarded' in p.joinpath('examples.example.json').read_text(); "
             "import siliconshield.web_demo.server",
         ],

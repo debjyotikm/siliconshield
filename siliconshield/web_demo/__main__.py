@@ -25,7 +25,7 @@ def main() -> None:
         parser.error(str(exc))
     if args.check:
         print(
-            f"Configuration valid: {len(config['entries'])} registered models; training enabled: {config['training_enabled']}"
+            f"Configuration valid: {len(config['entries'])} registered specialists; glimmer configured: {bool(config['glimmer'])}"
         )
         return
     from siliconshield.web_demo.server import serve

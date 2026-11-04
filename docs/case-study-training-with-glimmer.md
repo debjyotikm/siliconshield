@@ -1,4 +1,4 @@
-# Decision-model training under a local Muse Glimmer operator
+# Retained-model training under a local Muse Glimmer operator
 
 ## Case study: two Glimmer-operated training runs on local hardware
 
@@ -6,10 +6,14 @@ Scientific case study | 2 November 2026
 
 [Documentation index](README.md)
 
+> Scope: this case study records Glimmer-operated training runs for the
+> retained local research path. That path is disabled by default and is not
+> part of the shipped product, which uses Glimmer and the Contract skills.
+
 ### Abstract
 
 This report asks whether a locally served Muse Glimmer
-model can operate a complete decision-model training loop with no
+model can operate a complete retained-model training loop with no
 cloud dependency and no human turn inside the loop. Two exhibits
 answer two halves of the question. Exhibit A runs the smallest
 complete loop: 24 authored decisions (18 TRAIN rows and 6 development rows),
@@ -30,7 +34,7 @@ It does not establish model quality, which is covered by the
 
 ### 1 Research question
 
-SiliconShield trains small decision models that check RTL against
+SiliconShield trains small retained models that check RTL against
 security requirements. Training runs are long, GPU-backed, and
 stateful, so they are managed by a bounded operator loop: submit
 an owned job, observe its receipts, invite bounded model
@@ -54,8 +58,7 @@ Orchestration ran on the workstation. No cloud service took part
 in training, serving, or decisions.
 
 The software path is the repository training flow described in
-[Training](security-model-training.md) and
-[Evaluation](evaluation.md). A campaign driver submits one
+[Training](security-model-training.md). A campaign driver submits one
 fitting arm, promotes the recipe by measured TRAIN gain, then
 runs one development round. The operator prepares, preflights,
 submits, observes, and finalizes owned systemd jobs. Preflight
@@ -268,14 +271,14 @@ verification script, and the written verdict. Both records
 live outside Git with the research artifacts. Model
 weights from the toy runs were pruned after verification
 to reclaim disk, with all predictions and receipts kept.
-The [local training guide](decision-model-training-with-glimmer.md) maintains
-the CPU validation and owned GPU launch procedures. Its configuration and
+CPU validation and owned GPU launch procedures are maintained
+with the training procedures. Configuration and
 closeout instructions distinguish input validation from job submission.
 
 ### 8 Conclusion
 
 A locally served Muse Glimmer model operated a complete
-decision-model training loop on local hardware twice: once to a fully
+retained-model training loop on local hardware twice: once to a fully
 verified toy closeout and once to an honestly reported
 null result at real scale with a preserved deviated
 observation. The loop contributed the safety: frozen

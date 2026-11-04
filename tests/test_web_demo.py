@@ -1,22 +1,20 @@
-"""Browser transport and real-router boundaries on synthetic inputs."""
+"""Browser transport and Glimmer specialist boundaries on synthetic inputs."""
 
 import copy
 import hashlib
 import http.client
 import json
-import sys
 import threading
 import time
 from pathlib import Path
 from typing import Any
 
 import pytest
-from test_multi_expert import _rated, _result, _write_registry
 
-from siliconshield.web_demo import backend, config, toy_runner
+from siliconshield.experts.service import InferenceService
+from siliconshield.web_demo import backend, config
 from siliconshield.web_demo.glimmer_client import LocalGlimmerClient
 from siliconshield.web_demo.server import DemoServer
-from siliconshield.web_demo.toy_data import create_dataset
 
 BODY = {
     "model": "contract-1",
@@ -26,6 +24,22 @@ BODY = {
     "assumptions": "Two-state logic.",
     "scope": "fifo",
 }
+
+FINGERPRINT = "ab" * 32
+
+GLIMMER = {
+    "endpoint": "http://127.0.0.1:18400/v1/chat/completions",
+    "model": "synthetic-glimmer",
+    "fingerprint": FINGERPRINT,
+}
+
+VERDICT_TEXT = """Synthetic specialist reasoning.
+
+VERDICT: satisfies_requirement
+CONFIDENCE: 0.9
+EVIDENCE: synthetic guard present
+OPEN QUESTIONS: none
+"""
 
 
 def settings(tmp_path: Path, **values: Any) -> dict[str, Any]:
@@ -82,73 +96,96 @@ def http_api(demo):
     thread.join(timeout=5)
 
 
-class FixturePool:
-    """Replace only model execution, keeping real router and result validation."""
+class StubChat:
+    """Canned Glimmer completions; records skill and state per call."""
 
-    seen = []
-    truncated = False
+    text = VERDICT_TEXT
 
-    def __init__(self, extra_env=None):
-        self.env = extra_env
-        self._workers = {}
+    def __init__(self, endpoint, model, ssh_host=None):
+        self.endpoint = endpoint
+        self.model = model
+        self.ssh_host = ssh_host
+        self.calls = []
 
-    def load(self, entry):
-        self.entry = entry
-
-    def __contains__(self, model):
-        return True
-
-    def ready(self, model):
-        return {"device": self.entry["device"]}
-
-    def analyze(self, model, state):
-        self.seen.append((model, state, self.env))
-        result = _result(state=state, model_id=model)
-        result["coverage"]["truncated"] = self.truncated
-        return result
-
-    def close(self):
-        pass
+    def complete(self, messages, tools=()):
+        self.calls.append(messages)
+        return {"content": StubChat.text}
 
 
-def add_models(demo, tmp_path, monkeypatch):
+def _skill_dir(tmp_path, name):
+    skill = tmp_path / name
+    skill.mkdir(exist_ok=True)
+    (skill / "SKILL.md").write_text("Synthetic %s skill." % name)
+    return skill
+
+
+def _glimmer_profile(model_id, mechanisms):
     from siliconshield.schemas import EXPERT_CAPABILITY_SCHEMA
 
-    profile = _rated("contract-1", ["fifo"], {"fifo": 90})
-    profile["schema"] = EXPERT_CAPABILITY_SCHEMA
-    checkpoint = tmp_path / "checkpoint"
-    checkpoint.mkdir()
-    registry = _write_registry(
-        tmp_path,
-        profile,
-        {"id": "contract-1", "checkpoint": str(checkpoint)},
-    )
-    raw = json.loads(Path(registry).read_text())
-    second = {
-        **copy.deepcopy(raw["models"][0]),
-        "id": "contract-2",
-        "profile": "second.json",
+    return {
+        "schema": EXPERT_CAPABILITY_SCHEMA,
+        "id": model_id,
+        "release": "glimmer-specialist-v1",
+        "checkpoint_sha256": FINGERPRINT,
+        "question_contract": "glimmer-specialist-v1",
+        "strengths": ["synthetic strength"],
+        "weaknesses": ["synthetic weakness"],
+        "supported_mechanisms": mechanisms,
+        "known_failures": ["synthetic failure"],
+        "qualification_ref": "synthetic probe",
+        "measurements": [{"eval": "synthetic", "correct": 2, "total": 3}],
     }
-    (tmp_path / "second.json").write_text(
-        json.dumps(
+
+
+def _glimmer_registry(tmp_path):
+    from siliconshield.schemas import GUI_MODEL_REGISTRY_SCHEMA
+
+    models = []
+    for model_id, mechanisms in (
+        ("contract-1", ["ot-access-control"]),
+        ("contract-2", ["fifo", "counter", "arbitration"]),
+    ):
+        skill = _skill_dir(tmp_path, model_id)
+        digest = hashlib.sha256((skill / "SKILL.md").read_bytes()).hexdigest()
+        profile_path = tmp_path / ("%s.profile.json" % model_id)
+        profile_path.write_text(
+            json.dumps(_glimmer_profile(model_id, mechanisms))
+        )
+        models.append(
             {
-                **_rated("contract-2", ["fifo"], {"fifo": 80}),
-                "schema": EXPERT_CAPABILITY_SCHEMA,
+                "id": model_id,
+                "kind": "glimmer",
+                "display_name": model_id + " specialist",
+                "checkpoint": str(skill),
+                "expected_files": {
+                    "model.safetensors": FINGERPRINT,
+                    "SKILL.md": digest,
+                },
+                "device": "synthetic-spark",
+                "profile": str(profile_path),
+                "release": "glimmer-specialist-v1",
+                "question_contract": "glimmer-specialist-v1",
+                "qualification": "synthetic probe",
             }
         )
+    registry_path = tmp_path / "models.json"
+    registry_path.write_text(
+        json.dumps({"schema": GUI_MODEL_REGISTRY_SCHEMA, "models": models})
     )
-    raw["models"].append(second)
-    Path(registry).write_text(json.dumps(raw))
-    new = settings(tmp_path, registry=registry)
+    return str(registry_path)
+
+
+def add_specialists(demo, tmp_path, monkeypatch):
+    registry = _glimmer_registry(tmp_path)
+    new = settings(tmp_path, registry=registry, glimmer=dict(GLIMMER))
     demo.config = new
     demo.entries = {entry["id"]: entry for entry in new["entries"]}
-    FixturePool.seen = []
-    FixturePool.truncated = False
-    monkeypatch.setattr(backend, "WorkerPool", FixturePool)
+    StubChat.text = VERDICT_TEXT
+    monkeypatch.setattr(backend, "ChatClient", StubChat)
 
 
 def wait_job(http_api, job_id):
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         _, job = http_api("/api/jobs/" + job_id)
         if job["status"] != "running":
@@ -157,20 +194,34 @@ def wait_job(http_api, job_id):
     pytest.fail("Fixture request did not terminate")
 
 
-def test_import_and_empty_configuration_do_not_need_models_or_gpu(tmp_path):
+def test_import_and_empty_configuration_needs_no_specialists(tmp_path):
     cfg = settings(tmp_path)
-    assert cfg["entries"] == [] and cfg["gpu"] is None
-    assert cfg["glimmer"] is None and cfg["training_enabled"] is False
+    assert cfg["entries"] == [] and cfg["glimmer"] is None
+    assert "gpu" not in cfg and "training_enabled" not in cfg
 
 
 @pytest.mark.parametrize(
     "values",
     [
+        {"gpu": 0},
         {"gpu": True},
-        {"gpu": -1},
         {"port": 0},
-        {"training": {"enabled": "false"}},
+        {"training": {"enabled": False}},
         {"source": "/unexpected"},
+        {"glimmer": {}},
+        {
+            "glimmer": {
+                "endpoint": "http://127.0.0.1:1/chat/completions",
+                "model": "synthetic",
+            }
+        },
+        {
+            "glimmer": {
+                "endpoint": "http://127.0.0.1:1/chat/completions",
+                "model": "synthetic",
+                "fingerprint": "not-hex",
+            }
+        },
     ],
 )
 def test_configuration_refuses_malformed_authority(tmp_path, values):
@@ -186,15 +237,14 @@ def test_relative_paths_are_relative_to_config_not_working_directory(
     assert cfg["state_dir"] == str(tmp_path / "session")
 
 
-def test_http_bootstrap_and_assets_work_without_private_configuration(http_api):
+def test_http_bootstrap_and_assets_work_without_private_configuration(
+    http_api,
+):
     status, data = http_api("/api/bootstrap")
-    assert status == 200 and data["default_device"] == "cpu"
-    assert data["devices"] == [{"id": "cpu", "label": "CPU · server"}]
-    assert (
-        data["training_enabled"] is False
-        and data["glimmer_configured"] is False
-    )
+    assert status == 200 and data["title"] == "SiliconShield"
+    assert data["glimmer_configured"] is False
     assert len(data["examples"]) == 7
+    assert data["token"]
     for name in ("/", "/app.js", "/style.css", "/favicon.svg"):
         code, text = http_api(name)
         assert code == 200 and text
@@ -215,239 +265,483 @@ def test_http_rejects_foreign_mutations_before_dispatch(
     monkeypatch.setattr(
         demo, "submit_task", lambda *args: pytest.fail("Forbidden dispatch")
     )
-    code, _ = http_api(
-        "/api/training/start", {"confirm": True}, headers=headers
-    )
+    code, _ = http_api("/api/assess", dict(BODY), headers=headers)
     assert code == 403
 
 
-def test_disabled_training_and_browser_recipe_overrides_never_launch(
-    http_api, demo, monkeypatch
-):
-    monkeypatch.setattr(
-        demo, "prepare_training", lambda *args: pytest.fail("Training launched")
-    )
-    assert http_api("/api/training/start", {"confirm": True})[0] == 400
-    demo.config["training_enabled"] = True
-    assert (
-        http_api("/api/training/start", {"confirm": True, "max_updates": 1000})[
-            0
-        ]
-        == 400
-    )
+def test_removed_worker_and_training_routes_are_unknown(http_api):
+    for path, body in [
+        ("/api/models/load", {"model": "contract-1"}),
+        ("/api/models/unload", {"model": "contract-1"}),
+        ("/api/training/start", {"confirm": True}),
+        ("/api/training/stop", {}),
+    ]:
+        code, result = http_api(path, body)
+        assert code == 400
+        assert result["error"] == "Unknown action."
+    assert http_api("/api/training")[0] == 404
 
 
-def test_cpu_assessment_uses_real_validation_and_preserves_input(
+def test_assess_consults_glimmer_specialist_and_preserves_input(
     http_api, demo, tmp_path, monkeypatch
 ):
-    add_models(demo, tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        backend,
-        "run_command",
-        lambda *args, **kwargs: pytest.fail(
-            "CPU inference called a hardware command"
-        ),
-    )
+    add_specialists(demo, tmp_path, monkeypatch)
+    seen = []
+    real_init = StubChat.__init__
+
+    def capture(self, endpoint, model, ssh_host=None):
+        real_init(self, endpoint, model, ssh_host=ssh_host)
+        seen.append(self)
+
+    monkeypatch.setattr(StubChat, "__init__", capture)
     code, submitted = http_api("/api/assess", BODY)
     assert code == 202
     job = wait_job(http_api, submitted["job_id"])
     assert job["status"] == "complete"
-    assert job["result"]["label"] == "satisfies_requirement"
-    assert set(job["result"]["scores"]) == set(backend.LABELS)
-    assert job["result"]["input"]["rtl"] == BODY["rtl"]
-    assert FixturePool.seen[0][2]["CUDA_VISIBLE_DEVICES"] == ""
-    assert FixturePool.seen[0][1] == backend.state_text(BODY)
+    result = job["result"]
+    assert result["label"] == "satisfies_requirement"
+    assert set(result["scores"]) == set(backend.LABELS)
+    assert abs(sum(result["scores"].values()) - 1.0) < 1e-6
+    assert result["scores"]["satisfies_requirement"] == pytest.approx(0.9)
+    assert result["input"]["rtl"] == BODY["rtl"]
+    assert result["glimmer_model"] == GLIMMER["model"]
+    assert result["truncated"] is False
+    calls = result["glimmer_calls"]
+    assert len(calls) == 1
+    assert calls[0]["kind"] == "chat"
+    assert calls[0]["endpoint"] == GLIMMER["endpoint"]
+    assert calls[0]["model"] == GLIMMER["model"]
+    assert calls[0]["seconds"] >= 0
+    assert "VERDICT" in calls[0]["response"]
+    assert (
+        calls[0]["skill_sha256"]
+        == hashlib.sha256(
+            (tmp_path / "contract-1" / "SKILL.md").read_bytes()
+        ).hexdigest()
+    )
+    assert [message["role"] for message in calls[0]["request_messages"]] == [
+        "system",
+        "user",
+    ]
+    assert len(seen) == 1 and len(seen[0].calls) == 1
+    system, user = seen[0].calls[0]
+    assert system["role"] == "system"
+    assert "Synthetic contract-1 skill." in system["content"]
+    assert user["role"] == "user" and BODY["rtl"] in user["content"]
 
 
-def test_truncated_worker_result_is_error_without_verdict(
-    http_api, demo, tmp_path, monkeypatch
-):
-    add_models(demo, tmp_path, monkeypatch)
-    FixturePool.truncated = True
-    _, submitted = http_api("/api/assess", BODY)
-    job = wait_job(http_api, submitted["job_id"])
-    assert job["status"] == "error" and "truncated" in job["error"]
-    assert "result" not in job
+def test_assess_without_registry_is_an_error(demo):
+    with pytest.raises(ValueError, match="Register specialists"):
+        demo.assess(dict(BODY), lambda text: None)
 
 
-def test_real_router_consults_both_workers_and_preserves_agent_error(
+def test_assess_without_glimmer_is_an_error(demo, tmp_path):
+    registry = _glimmer_registry(tmp_path)
+    new = settings(tmp_path, registry=registry)
+    demo.config = new
+    demo.entries = {entry["id"]: entry for entry in new["entries"]}
+    with pytest.raises(ValueError, match="Configure the Glimmer endpoint"):
+        demo.assess(dict(BODY), lambda text: None)
+
+
+def test_transport_refuses_local_worker_entries(demo):
+    demo.config["glimmer"] = dict(GLIMMER)
+
+    class _Service:
+        expert_ids = ["contract-1"]
+
+        def model_entry(self, _model_id):
+            return {"id": "contract-1"}
+
+    with pytest.raises(ValueError, match="local-worker entries are not served"):
+        demo._engine_transport(_Service())
+
+
+ADAPTER_FINGERPRINT = "cd" * 32
+
+ADAPTER_GLIMMER = {
+    "endpoint": "http://127.0.0.1:18401/score",
+    "model": "synthetic-adapter",
+    "fingerprint": ADAPTER_FINGERPRINT,
+}
+
+
+def _adapter_profile(model_id):
+    from siliconshield.schemas import EXPERT_CAPABILITY_SCHEMA
+
+    return {
+        "schema": EXPERT_CAPABILITY_SCHEMA,
+        "id": model_id,
+        "release": "synthetic-adapter",
+        "checkpoint_sha256": ADAPTER_FINGERPRINT,
+        "question_contract": "siliconshield-adapter-scoring-v1",
+        "strengths": ["synthetic strength"],
+        "weaknesses": ["synthetic weakness"],
+        "supported_mechanisms": ["fifo"],
+        "known_failures": ["synthetic failure"],
+        "qualification_ref": "synthetic probe",
+        "measurements": [{"eval": "synthetic", "correct": 2, "total": 3}],
+    }
+
+
+def _adapter_registry(tmp_path):
+    from siliconshield.schemas import GUI_MODEL_REGISTRY_SCHEMA
+
+    models = []
+    for model_id in ("contract-1", "contract-2"):
+        skill = tmp_path / ("adapter-" + model_id)
+        skill.mkdir(exist_ok=True)
+        (skill / "SKILL.md").write_text("Synthetic %s adapter doc." % model_id)
+        digest = hashlib.sha256((skill / "SKILL.md").read_bytes()).hexdigest()
+        profile_path = tmp_path / ("adapter-%s.profile.json" % model_id)
+        profile_path.write_text(json.dumps(_adapter_profile(model_id)))
+        models.append(
+            {
+                "id": model_id,
+                "kind": "adapter",
+                "display_name": model_id + " adapter",
+                "checkpoint": str(skill),
+                "expected_files": {
+                    "adapter_model.safetensors": ADAPTER_FINGERPRINT,
+                    "SKILL.md": digest,
+                },
+                "device": "synthetic gpus",
+                "profile": str(profile_path),
+            }
+        )
+    registry_path = tmp_path / "adapters.json"
+    registry_path.write_text(
+        json.dumps({"schema": GUI_MODEL_REGISTRY_SCHEMA, "models": models})
+    )
+    return str(registry_path)
+
+
+def add_adapters(demo, tmp_path):
+    registry = _adapter_registry(tmp_path)
+    new = settings(tmp_path, registry=registry, glimmer=dict(ADAPTER_GLIMMER))
+    demo.config = new
+    demo.entries = {entry["id"]: entry for entry in new["entries"]}
+
+
+def test_engine_transport_selects_the_adapter(demo, tmp_path):
+    from siliconshield.research_loop.procedures.adapter_specialists import (
+        AdapterTransport,
+    )
+
+    add_adapters(demo, tmp_path)
+    service = InferenceService(demo.config["registry"])
+    transport, recorder = demo._engine_transport(service)
+    assert isinstance(transport, AdapterTransport)
+    assert recorder.calls == []
+
+
+def test_glimmer_engine_transport_labels_the_ssh_hop(
     demo, tmp_path, monkeypatch
 ):
-    add_models(demo, tmp_path, monkeypatch)
+    add_specialists(demo, tmp_path, monkeypatch)
+    demo.config["glimmer"] = {**GLIMMER, "ssh_host": "spark"}
+    service = InferenceService(demo.config["registry"])
+    transport, _recorder = demo._engine_transport(service)
+    assert transport._device_type == "ssh:spark"
+
+
+def test_engine_transport_refuses_mixed_registries(demo, tmp_path):
+    add_adapters(demo, tmp_path)
+
+    class _Service:
+        expert_ids = ["contract-1", "contract-2"]
+
+        def model_entry(self, model_id):
+            return {
+                "id": model_id,
+                "kind": "adapter" if model_id == "contract-1" else "glimmer",
+            }
+
+    with pytest.raises(ValueError, match="one engine"):
+        demo._engine_transport(_Service())
+
+
+def test_fingerprint_mismatch_yields_no_verdict(demo, tmp_path, monkeypatch):
+    add_specialists(demo, tmp_path, monkeypatch)
+    demo.config["glimmer"] = {**GLIMMER, "fingerprint": "cd" * 32}
+    with pytest.raises(RuntimeError, match="returned no verdict"):
+        demo.assess(dict(BODY), lambda text: None)
+
+
+def test_malformed_verdict_yields_no_verdict(demo, tmp_path, monkeypatch):
+    add_specialists(demo, tmp_path, monkeypatch)
+    StubChat.text = "no verdict block here"
+    with pytest.raises(RuntimeError, match="returned no verdict"):
+        demo.assess(dict(BODY), lambda text: None)
+
+
+def test_route_consults_routed_specialists_and_preserves_agent_error(
+    demo, tmp_path, monkeypatch
+):
+    add_specialists(demo, tmp_path, monkeypatch)
+
+    def outage(*args, **kwargs):
+        raise RuntimeError("synthetic agent outage")
+
+    monkeypatch.setattr(backend, "arbitrate_assessment", outage)
     result = demo.route({**BODY, "arbitrate": True}, lambda text: None)
-    assert len(result["assessment"]["responses"]) == 2
+    responses = result["assessment"]["responses"]
+    assert [item["expert_id"] for item in responses] == ["contract-2"]
     assert not result["assessment"]["errors"]
-    assert {row[0] for row in FixturePool.seen} == {"contract-1", "contract-2"}
-    assert (
-        "arbitration" not in result
-        and "Configure local Glimmer" in result["arbitration_error"]
-    )
+    assert len(result["glimmer_calls"]) == 1
+    assert result["arbitration_requested"] is True
+    assert "arbitration" not in result
+    assert result["arbitration_error"] == "synthetic agent outage"
     assert result["input"]["rtl"] == BODY["rtl"]
 
 
-def test_route_evicts_dead_pool_and_recovers(demo, tmp_path, monkeypatch):
-    add_models(demo, tmp_path, monkeypatch)
-    calls = {"count": 0}
-    real_analyze = FixturePool.analyze
+def test_recording_client_keeps_failed_calls():
+    class _Outage:
+        def complete(self, messages, tools=()):
+            raise RuntimeError("synthetic outage")
 
-    def flaky(self, model, state):
-        calls["count"] += 1
-        if calls["count"] == 1:
-            raise RuntimeError("synthetic worker death")
-        return real_analyze(self, model, state)
-
-    monkeypatch.setattr(FixturePool, "analyze", flaky)
-    first = demo.route(dict(BODY), lambda text: None)
-    assert len(first["assessment"]["errors"]) == 1
-    assert "contract-1" not in demo.pools
-    assert "contract-1" not in demo.loaded
-    second = demo.route(dict(BODY), lambda text: None)
-    assert len(second["assessment"]["responses"]) == 2
-    assert not second["assessment"]["errors"]
-
-
-def test_foreign_gpu_process_blocks_loading(demo, monkeypatch):
-    demo.config["gpu"] = 0
-    demo.entries = {"contract-1": {}}
-    monkeypatch.setattr(
-        backend, "run_command", lambda *args, **kwargs: "12345\n"
+    lines = []
+    recorder = backend._RecordingChatClient(
+        _Outage(),
+        "http://127.0.0.1:1/v1/chat/completions",
+        "synthetic",
+        progress=lines.append,
     )
-    with pytest.raises(RuntimeError, match="unrelated"):
-        demo.load("contract-1", lambda text: None, "cuda:0")
-    assert not demo.pools
+    with pytest.raises(RuntimeError, match="synthetic outage"):
+        recorder.complete([{"role": "user", "content": "hi"}])
+    assert recorder.calls[0]["error"] == "synthetic outage"
+    assert any("failed" in line for line in lines)
 
 
-def test_controller_failure_keeps_live_owned_job_active(
-    demo, tmp_path, monkeypatch
-):
-    demo.training = {
-        "directory": str(tmp_path),
-        "status": "error",
-        "unit": "owned",
-    }
-    (tmp_path / "controller-result.json").write_text('{"status":"error"}')
-    monkeypatch.setattr(demo, "owned_job_running", lambda path: True)
-    assert demo.training_active() is True
-    monkeypatch.setattr(demo, "owned_job_running", lambda path: False)
-    assert demo.training_active() is False
+def test_recording_client_streams_call_lifecycle():
+    class _Slow:
+        def complete(self, messages, tools=()):
+            time.sleep(0.3)
+            return {"content": VERDICT_TEXT}
 
-
-def test_corrupt_restart_pointer_refuses_instead_of_forgetting_job(tmp_path):
-    cfg = settings(tmp_path)
-    state = Path(cfg["state_dir"])
-    state.mkdir()
-    (state / "active-training.json").write_text("{")
-    with pytest.raises(ValueError):
-        backend.Demo(cfg, health_poll=False)
-
-
-def test_toy_dataset_balances_complete_disjoint_groups(tmp_path):
-    create_dataset(tmp_path / "toy")
-    splits = {
-        name: [
-            json.loads(line)
-            for line in (tmp_path / "toy" / f"{name}.jsonl")
-            .read_text()
-            .splitlines()
+    lines = []
+    recorder = backend._RecordingChatClient(
+        _Slow(),
+        "http://127.0.0.1:1/v1/chat/completions",
+        "synthetic",
+        progress=lines.append,
+        heartbeat_seconds=0.05,
+    )
+    recorder.complete(
+        [
+            {"role": "system", "content": "skill text"},
+            {"role": "user", "content": "state text"},
         ]
-        for name in ("train", "dev")
-    }
-    assert [len(splits[name]) for name in ("train", "dev")] == [18, 6]
-    assert not {r["split_group_id"] for r in splits["train"]} & {
-        r["split_group_id"] for r in splits["dev"]
-    }
-    for rows in splits.values():
-        for group in {r["pair_id"] for r in rows}:
-            assert {
-                r["expected"]["security"] for r in rows if r["pair_id"] == group
-            } == set(backend.LABELS)
-    with pytest.raises(FileExistsError):
-        create_dataset(tmp_path / "toy")
-
-
-def test_training_preparation_binds_real_fixture_and_owned_command(
-    demo, tmp_path, monkeypatch
-):
-    parent = tmp_path / "parent"
-    parent.mkdir()
-    (parent / "weights").write_bytes(b"synthetic-parent")
-    demo.entries = {
-        "contract-1": {
-            "checkpoint": str(parent),
-            "expected_files": {
-                "weights": hashlib.sha256(b"synthetic-parent").hexdigest()
-            },
-        }
-    }
-    demo.config.update(
-        training_enabled=True,
-        gpu=0,
-        glimmer={
-            "endpoint": "http://127.0.0.1:18400/v1/chat/completions",
-            "model": "synthetic",
-        },
-        training_root=str(tmp_path / "runs"),
-        training_python=sys.executable,
-        training_runtime=str(tmp_path / "runtime"),
-        resource_root=str(tmp_path / "leases"),
     )
-    monkeypatch.setattr(demo, "glimmer_health", lambda: {"status": "ready"})
-    monkeypatch.setattr(
-        backend.shutil,
-        "disk_usage",
-        lambda path: type("Usage", (), {"free": 100 * 1024**3})(),
-    )
-    commands = []
-
-    def command(argv, **kwargs):
-        commands.append(argv)
-        if "--output-receipt" in argv:
-            Path(argv[argv.index("--output-receipt") + 1]).write_text(
-                '{"result":"pass"}'
-            )
-        return ""
-
-    monkeypatch.setattr(backend, "run_command", command)
-    record = demo.prepare_training(lambda text: None)
-    folder = Path(record["directory"])
-    profile = json.loads((folder / "profile.json").read_text())
-    assert profile["model"] == str(parent) and profile["gpus"] == [0]
-    assert profile["defaults"]["max_updates"] == 3
-    assert profile["defaults"]["freeze_encoder"] is True
-    assert json.loads((folder / "recipe.json").read_text())["source_mass"] == {
-        "toy-synthetic": 1.0
-    }
-    assert sum(argv[0] == "systemd-run" for argv in commands) == 1
-    assert "siliconshield.web_demo.toy_runner" in commands[-1]
-    demo._validate_training_pointer(record)
+    assert lines[0].startswith("Call 1: POST http://127.0.0.1:1")
+    assert any("still waiting" in line for line in lines)
+    assert lines[-1].startswith("Call 1 finished in")
 
 
-def test_training_rejects_changed_parent_before_submission(
-    demo, tmp_path, monkeypatch
-):
-    parent = tmp_path / "parent"
-    parent.mkdir()
-    (parent / "weights").write_bytes(b"changed")
-    demo.entries = {
-        "contract-1": {
-            "checkpoint": str(parent),
-            "expected_files": {"weights": "a" * 64},
-        }
-    }
-    demo.config.update(
-        training_enabled=True, gpu=0, training_root=str(tmp_path / "runs")
-    )
-    monkeypatch.setattr(demo, "glimmer_health", lambda: {"status": "ready"})
-    monkeypatch.setattr(demo, "check_storage", lambda: tmp_path / "runs")
+def test_assess_streams_call_progress_to_job_log(demo, tmp_path, monkeypatch):
+    add_specialists(demo, tmp_path, monkeypatch)
+    lines = []
+    demo.assess(dict(BODY), lines.append)
+    assert any(line.startswith("Call 1: POST") for line in lines)
+    assert any(line.startswith("Call 1 finished in") for line in lines)
+
+
+def test_route_without_arbitration_skips_the_agent(demo, tmp_path, monkeypatch):
+    add_specialists(demo, tmp_path, monkeypatch)
     monkeypatch.setattr(
         backend,
-        "run_command",
-        lambda argv, **kwargs: ""
-        if argv[0] == "nvidia-smi"
-        else pytest.fail("Submission attempted"),
+        "arbitrate_assessment",
+        lambda *args, **kwargs: pytest.fail("Agent consulted"),
     )
-    with pytest.raises(ValueError, match="registered export"):
-        demo.prepare_training(lambda text: None)
+    result = demo.route(dict(BODY), lambda text: None)
+    assert result["arbitration_requested"] is False
+    assert "arbitration" not in result
+    assert "arbitration_error" not in result
+    assert result["assessment"]["responses"]
+
+
+def test_route_arbitration_prefers_the_arbiter_service(
+    demo, tmp_path, monkeypatch
+):
+    add_specialists(demo, tmp_path, monkeypatch)
+    demo.config["arbiter"] = {
+        "endpoint": "http://127.0.0.1:18400/v1/chat/completions",
+        "model": "synthetic-arbiter",
+        "ssh_host": "spark",
+    }
+    captured: dict[str, Any] = {}
+
+    class _Client:
+        def __init__(self, endpoint, model, ssh_host=None, **kwargs):
+            captured.update(endpoint=endpoint, model=model, ssh_host=ssh_host)
+
+    monkeypatch.setattr(backend, "LocalGlimmerClient", _Client)
+    monkeypatch.setattr(
+        backend,
+        "arbitrate_assessment",
+        lambda *args, **kwargs: kwargs["client_factory"]() or {},
+    )
+    demo.route({**BODY, "arbitrate": True}, lambda text: None)
+    assert captured == {
+        "endpoint": "http://127.0.0.1:18400/v1/chat/completions",
+        "model": "synthetic-arbiter",
+        "ssh_host": "spark",
+    }
+
+
+def test_route_spark_arbiter_uses_default_spark_model(
+    demo, tmp_path, monkeypatch
+):
+    add_specialists(demo, tmp_path, monkeypatch)
+    demo.config["arbiter"] = {
+        "engine": "spark",
+        "model": "muse-spark-1.3-contributor",
+    }
+    captured: dict[str, Any] = {}
+    monkeypatch.setattr(
+        backend,
+        "arbitrate_assessment",
+        lambda *args, **kwargs: captured.update(kwargs) or {},
+    )
+    lines: list[str] = []
+    result = demo.route({**BODY, "arbitrate": True}, lines.append)
+    assert "client_factory" not in captured
+    assert captured["model"] == "muse-spark-1.3-contributor"
+    assert result["arbitration_model"] == "muse-spark-1.3-contributor"
+    assert any("muse-spark-1.3-contributor" in line for line in lines)
+    assert any("validated arbitration response" in line for line in lines)
+
+
+def test_call_with_heartbeat_logs_start_and_returns():
+    lines: list[str] = []
+    result = backend._call_with_heartbeat(
+        lines.append, "start now", "wait %d", lambda: "done"
+    )
+    assert result == "done"
+    assert lines == ["start now"]
+
+
+def test_call_with_heartbeat_releases_on_error():
+    lines: list[str] = []
+
+    def _boom() -> None:
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError, match="boom"):
+        backend._call_with_heartbeat(
+            lines.append, "start now", "wait %d", _boom
+        )
+    assert lines == ["start now"]
+
+
+def test_route_without_any_arbiter_reports_cleanly(demo, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    add_specialists(demo, tmp_path, monkeypatch)
+    demo.config["glimmer"] = None
+    monkeypatch.setattr(
+        demo,
+        "_engine_transport",
+        lambda service, log: (object(), SimpleNamespace(calls=[])),
+    )
+
+    class _Service:
+        broken_experts: dict[str, Any] = {}
+        unprofiled_experts: list[str] = []
+
+        def assess(
+            self, scope: Any, text: str, transport: Any
+        ) -> dict[str, Any]:
+            return {
+                "scope": scope,
+                "routing": {"experts": []},
+                "responses": [],
+                "errors": [],
+            }
+
+    monkeypatch.setattr(
+        backend, "InferenceService", lambda registry: _Service()
+    )
+    result = demo.route({**BODY, "arbitrate": True}, lambda text: None)
+    assert result["arbitration_requested"] is True
+    assert "arbitration" not in result
+    assert "arbiter" in result["arbitration_error"]
+
+
+def test_route_without_arbiter_refuses_scoring_arbitration(demo, tmp_path):
+    add_adapters(demo, tmp_path)
+    demo.config["glimmer"]["endpoint"] = "http://127.0.0.1:9/score"
+    result = demo.route({**BODY, "arbitrate": True}, lambda text: None)
+    assert result["arbitration_requested"] is True
+    assert "arbitration" not in result
+    assert "arbiter" in result["arbitration_error"]
+
+
+def test_shim_health_checks_the_model_list(demo, tmp_path, monkeypatch):
+    add_adapters(demo, tmp_path)
+
+    class _Reply:
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return self.body
+
+    seen = []
+
+    def fake_open(url, timeout=None):
+        seen.append(url)
+        return _Reply(b'{"data": [{"id": "synthetic-adapter"}]}')
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_open)
+    health = demo.glimmer_health()
+    assert health["status"] == "ready"
+    assert health["transport"] == "Loopback scoring"
+    assert seen == ["http://127.0.0.1:18401/v1/models"]
+
+    def missing(url, timeout=None):
+        return _Reply(b'{"data": []}')
+
+    monkeypatch.setattr("urllib.request.urlopen", missing)
+    with pytest.raises(RuntimeError, match="not served"):
+        demo.glimmer_health()
+
+
+def test_changed_skill_is_refused_before_any_consult(tmp_path):
+    _glimmer_registry(tmp_path)
+    (tmp_path / "contract-1" / "SKILL.md").write_text("Edited skill text.")
+    with pytest.raises(ValueError, match="skill digest"):
+        settings(tmp_path, registry=str(tmp_path / "models.json"))
+
+
+def test_status_reports_specialist_skill_binding(demo, tmp_path, monkeypatch):
+    add_specialists(demo, tmp_path, monkeypatch)
+    status = demo.status()
+    assert status["registry_error"] is None
+    assert status["glimmer_configured"] is True
+    rows = {row["id"]: row for row in status["models"]}
+    assert set(rows) == {"contract-1", "contract-2"}
+    for row in rows.values():
+        assert row["kind"] == "glimmer"
+        assert row["profile"] is not None
+    skill = tmp_path / "contract-1" / "SKILL.md"
+    expected = hashlib.sha256(skill.read_bytes()).hexdigest()
+    assert rows["contract-1"]["skill_sha256"] == expected
+
+
+def test_status_survives_a_missing_registry(demo, tmp_path):
+    demo.config["registry"] = str(tmp_path / "missing.json")
+    status = demo.status()
+    assert status["registry_error"].startswith(
+        ("ValueError", "OSError", "FileNotFoundError")
+    )
+    assert status["models"] == []
 
 
 def test_glimmer_native_tool_arguments_and_budgets(monkeypatch):
@@ -530,37 +824,6 @@ def test_glimmer_malformed_responses_raise_value_errors(monkeypatch):
     for _ in bodies:
         with pytest.raises(ValueError):
             client.complete([])
-
-
-def test_toy_controller_stop_prevents_next_phase(tmp_path, monkeypatch):
-    path = tmp_path / "campaign.json"
-    path.write_text(
-        json.dumps(
-            {
-                "operator": {
-                    "endpoint": "http://127.0.0.1:18400/v1/chat/completions",
-                    "model": "synthetic",
-                }
-            }
-        )
-    )
-    (tmp_path / "cancel.request").touch()
-    monkeypatch.setattr(toy_runner, "run_campaign", lambda cfg, run: run({}))
-    toy_runner.execute(path)
-    assert (
-        json.loads((tmp_path / "controller-result.json").read_text())["status"]
-        == "stopped"
-    )
-
-
-def test_closed_session_cannot_spawn_more_workers(demo, tmp_path, monkeypatch):
-    add_models(demo, tmp_path, monkeypatch)
-    demo.load("contract-1", lambda _: None, "cpu")
-    demo.close()
-    assert not demo.pools
-    assert not demo.loaded
-    with pytest.raises(ValueError, match="stopping"):
-        demo.load("contract-1", lambda _: None, "cpu")
 
 
 def test_final_operator_acknowledgement_is_requested_from_glimmer(monkeypatch):
@@ -655,13 +918,117 @@ def test_empty_transfer_encoding_is_rejected(http_api):
     assert code == 400
 
 
-def test_glimmer_config_needs_endpoint_and_model(tmp_path):
+def test_adapter_endpoints_use_the_scoring_path(tmp_path):
+    registry = _adapter_registry(tmp_path)
+    cfg = settings(
+        tmp_path,
+        registry=registry,
+        glimmer=dict(ADAPTER_GLIMMER),
+    )
+    assert cfg["glimmer"]["endpoint"].endswith("/score")
+    with pytest.raises(ValueError, match="/score"):
+        settings(
+            tmp_path,
+            registry=registry,
+            glimmer={
+                **ADAPTER_GLIMMER,
+                "endpoint": "http://127.0.0.1:18401/chat/completions",
+            },
+        )
+    with pytest.raises(ValueError, match="ssh_host"):
+        settings(
+            tmp_path,
+            registry=registry,
+            glimmer={**ADAPTER_GLIMMER, "ssh_host": "spark"},
+        )
+
+
+def test_mixed_engine_registries_are_refused(tmp_path):
+    from siliconshield.schemas import GUI_MODEL_REGISTRY_SCHEMA
+
+    _adapter_registry(tmp_path)
+    skill = tmp_path / "adapter-contract-1"
+    digest = hashlib.sha256((skill / "SKILL.md").read_bytes()).hexdigest()
+    path = tmp_path / "mixed.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": GUI_MODEL_REGISTRY_SCHEMA,
+                "models": [
+                    {
+                        "id": "contract-1",
+                        "kind": "adapter",
+                        "display_name": "adapter",
+                        "checkpoint": str(skill),
+                        "expected_files": {
+                            "adapter_model.safetensors": ADAPTER_FINGERPRINT,
+                            "SKILL.md": digest,
+                        },
+                        "device": "synthetic gpus",
+                    },
+                    {
+                        "id": "contract-2",
+                        "kind": "glimmer",
+                        "display_name": "glimmer",
+                        "checkpoint": str(skill),
+                        "expected_files": {
+                            "model.safetensors": "ab" * 32,
+                            "SKILL.md": digest,
+                        },
+                        "device": "synthetic spark",
+                    },
+                ],
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="one engine"):
+        settings(tmp_path, registry=str(path))
+
+
+def test_arbiter_section_is_validated(tmp_path):
+    arbiter = {
+        "endpoint": "http://127.0.0.1:18400/v1/chat/completions",
+        "model": "synthetic-arbiter",
+        "ssh_host": "spark",
+    }
+    assert settings(tmp_path, arbiter=dict(arbiter))["arbiter"] == arbiter
+    with pytest.raises(ValueError, match="arbiter needs"):
+        settings(tmp_path, arbiter={"model": "synthetic-arbiter"})
+    with pytest.raises(ValueError, match="arbiter accepts"):
+        settings(tmp_path, arbiter={**arbiter, "fingerprint": "ab" * 32})
+
+
+def test_spark_arbiter_section_is_validated(tmp_path):
+    arbiter = {"engine": "spark", "model": "muse-spark-1.3-contributor"}
+    assert settings(tmp_path, arbiter=dict(arbiter))["arbiter"] == arbiter
+    with pytest.raises(ValueError, match="spark arbiter needs"):
+        settings(tmp_path, arbiter={"engine": "spark"})
+
+
+def test_shipped_example_config_selects_spark_final_assessment():
+    root = Path(__file__).resolve().parent.parent
+    cfg = config.load_config(root / "configs" / "web-demo.example.json")
+    assert cfg["arbiter"] == {
+        "engine": "spark",
+        "model": "muse-spark-1.3-contributor",
+    }
+
+
+def test_glimmer_config_needs_endpoint_model_and_fingerprint(tmp_path):
     with pytest.raises(ValueError, match="endpoint and model"):
         settings(tmp_path, glimmer={})
     with pytest.raises(ValueError, match="endpoint and model"):
         settings(
             tmp_path,
             glimmer={"endpoint": "http://127.0.0.1:1/chat/completions"},
+        )
+    with pytest.raises(ValueError, match="fingerprint"):
+        settings(
+            tmp_path,
+            glimmer={
+                "endpoint": "http://127.0.0.1:1/chat/completions",
+                "model": "synthetic",
+            },
         )
 
 
@@ -676,16 +1043,6 @@ def test_glimmer_budgets_validated_at_construction():
         LocalGlimmerClient(**good, max_tokens=0)
     with pytest.raises(ValueError, match="timeout"):
         LocalGlimmerClient(**good, timeout=-1)
-
-
-def test_toy_study_rejects_non_integer_cycles():
-    from siliconshield.web_demo import toy_runner
-
-    with pytest.raises(ValueError, match="max_cycles"):
-        toy_runner.max_calls_for_cycles("6")
-    with pytest.raises(ValueError, match="max_cycles"):
-        toy_runner.max_calls_for_cycles(0)
-    assert toy_runner.max_calls_for_cycles(6) == 72
 
 
 def _await_quiet(demo, timeout=10):
@@ -721,6 +1078,12 @@ def test_close_drains_running_jobs(demo):
     assert (demo.state / ("request-%s.json" % receipt["job_id"])).exists()
 
 
+def test_close_is_idempotent(demo):
+    demo.close()
+    demo.close()
+    assert demo.stopping is True
+
+
 def test_terminal_jobs_evicted_from_memory_and_disk(demo):
     for _ in range(2):
         for _ in range(5):
@@ -729,27 +1092,6 @@ def test_terminal_jobs_evicted_from_memory_and_disk(demo):
     with demo.lock:
         assert len(demo.jobs) <= 8
     assert len(list(demo.state.glob("request-*.json"))) <= 8
-
-
-def test_status_read_never_rewrites_training_pointer(
-    demo, tmp_path, monkeypatch
-):
-    folder = tmp_path / "run"
-    (folder / "runs").mkdir(parents=True)
-    pointer = demo.state / "active-training.json"
-    saved = {
-        "id": "synthetic-run",
-        "directory": str(folder),
-        "unit": "synthetic-unit",
-        "status": "running",
-    }
-    pointer.write_text(json.dumps(saved))
-    demo.training = dict(saved)
-    before = pointer.read_bytes()
-    monkeypatch.setattr(backend, "run_command", lambda *args, **kwargs: "")
-    status = demo.training_status()
-    assert status["active"] is False
-    assert pointer.read_bytes() == before
 
 
 def test_rejected_glimmer_input_keeps_its_budget(tmp_path):
@@ -768,46 +1110,6 @@ def test_route_scope_is_validated_synchronously(http_api):
     code, result = http_api("/api/route", {**BODY, "scope": "not-a-domain"})
     assert code == 400
     assert "measured routing domain" in result["error"]
-
-
-def test_status_survives_a_missing_registry(demo, tmp_path):
-    demo.config["registry"] = str(tmp_path / "missing.json")
-    status = demo.status()
-    assert status["registry_error"].startswith(
-        ("ValueError", "OSError", "FileNotFoundError")
-    )
-    assert status["models"] == []
-
-
-def test_device_change_unloads_and_logs(demo, monkeypatch):
-    demo.entries = {"contract-1": {"device": "cpu"}}
-    demo.config["gpu"] = 0
-    monkeypatch.setattr(backend, "run_command", lambda *a, **k: "")
-    monkeypatch.setattr(backend, "WorkerPool", FixturePool)
-    lines = []
-    demo.ensure_model("contract-1", lines.append, "cpu")
-    demo.ensure_model("contract-1", lines.append, "cuda:0")
-    assert any("Unloading contract-1" in line for line in lines)
-    assert demo.loaded["contract-1"]["device"] == "cuda:0"
-
-
-def test_close_does_not_wait_out_a_stuck_job(demo, monkeypatch):
-    pool = FixturePool()
-    calls = []
-    pool.close = lambda: calls.append(1)
-    demo.pools["contract-1"] = pool
-
-    class StuckLock:
-        def acquire(self, timeout=None):
-            assert timeout == 30
-            return False
-
-        def release(self):  # pragma: no cover - never acquired
-            raise AssertionError("not acquired")
-
-    monkeypatch.setattr(demo, "inference_lock", StuckLock())
-    demo.close()
-    assert calls == [1]
 
 
 def test_evicted_jobs_leave_tombstones(demo):
@@ -831,39 +1133,6 @@ def test_evicted_job_polls_as_expired(demo, http_api):
     assert "expired" in result["error"]
     code, _ = http_api("/api/jobs/" + "0" * 32)
     assert code == 404
-
-
-def test_pointer_with_non_string_directory_is_a_value_error(tmp_path):
-    cfg = settings(tmp_path)
-    cfg["training_root"] = str(tmp_path / "runs")
-    Path(cfg["state_dir"]).mkdir(parents=True, exist_ok=True)
-    pointer = Path(cfg["state_dir"]) / "active-training.json"
-    pointer.write_text(
-        json.dumps(
-            {
-                "id": "20240101-000000-abcdef",
-                "directory": 123,
-                "unit": "siliconshield-web-toy-20240101-000000-abcdef",
-            }
-        )
-    )
-    with pytest.raises(ValueError, match="Malformed training pointer"):
-        backend.Demo(cfg, health_poll=False)
-
-
-def test_training_status_reports_only_the_log_tail(demo, tmp_path):
-    folder = tmp_path / "run"
-    folder.mkdir()
-    (folder / "controller-result.json").write_text(
-        json.dumps({"status": "complete"})
-    )
-    head = "H" * 8000
-    tail = "T" * 12000
-    (folder / "controller.log").write_text(head + tail)
-    demo.training = {"directory": str(folder), "status": "complete"}
-    value = demo.training_status()
-    assert value["log"] == tail
-    assert "H" not in value["log"]
 
 
 def test_malformed_history_never_breaks_the_recorded_scan(monkeypatch):
@@ -897,43 +1166,8 @@ def test_malformed_history_never_breaks_the_recorded_scan(monkeypatch):
     assert len(seen) == 3
 
 
-def test_stop_reports_without_experiment_id(demo, tmp_path, monkeypatch):
-    import siliconshield.web_demo.backend as backend_mod
-
-    folder = tmp_path / "run"
-    run = folder / "runs" / "r1"
-    run.mkdir(parents=True)
-    (folder / "profile.json").write_text("{}")
-    (run / "run-manifest.json").write_text('{"phase": "observe"}')
-    demo.training = {"directory": str(folder), "status": "running"}
-
-    class FakeOperator:
-        def __init__(self, profile):
-            self.stopped = []
-
-        def observe(self, manifest):
-            return manifest
-
-        def intervene(self, manifest, action):
-            self.stopped.append(action)
-
-    fake = FakeOperator("x")
-    monkeypatch.setattr(backend_mod, "Operator", lambda profile: fake)
-    result = demo.stop_training()
-    assert result["status"] == "stop_requested"
-    assert fake.stopped == ["stop"]
-    assert len(result["messages"]) == 1
-    assert "r1" in result["messages"][0]
-
-
 def test_backend_rejects_malformed_inputs(tmp_path):
-    from siliconshield.web_demo import backend
-
     assert backend.read_json(5, "fallback") == "fallback"
-    with pytest.raises(ValueError, match="argument list"):
-        backend.run_command("echo hi")
-    with pytest.raises(ValueError, match="timeout must be positive"):
-        backend.run_command(["echo", "hi"], timeout="x")
     with pytest.raises(ValueError, match="must be an object"):
         backend.state_text(["x"])
     with pytest.raises(ValueError, match="must be an object"):
@@ -949,116 +1183,16 @@ def test_backend_rejects_malformed_inputs(tmp_path):
         {"state_dir": str(tmp_path / "s"), "entries": []},
         health_poll=False,
     )
-    with pytest.raises(ValueError, match="Unknown execution device"):
-        demo.device_name("cuda")
-    with pytest.raises(ValueError, match="Unknown execution device"):
-        demo.device_name(5)
-    assert demo.device_name("cpu") == "CPU"
-    assert demo.device_name("cuda:2") == "GPU 2"
-    assert demo.inference_device() == "cpu"
     assert demo.glimmer_health() == {"status": "not configured"}
+    assert demo.status()["models"] == []
 
 
 def test_demo_config_accepts_string_paths(tmp_path):
-    from siliconshield.web_demo import config as demo_config
-
     path = tmp_path / "demo.json"
     path.write_text("{}")
-    assert demo_config.load_config(str(path))["port"] == 8765
+    assert config.load_config(str(path))["port"] == 8765
     with pytest.raises(ValueError, match="must be a path"):
-        demo_config.load_config(5)
-
-
-def test_toy_runner_rejects_malformed_campaigns(tmp_path):
-    from siliconshield.web_demo import toy_runner
-
-    with pytest.raises(ValueError, match="must be a path"):
-        toy_runner.execute(5)
-    bad = tmp_path / "bad.json"
-    bad.write_text("[1]")
-    with pytest.raises(ValueError, match="operator object"):
-        toy_runner.execute(bad)
-    bad.write_text('{"x": 1}')
-    with pytest.raises(ValueError, match="operator object"):
-        toy_runner.execute(bad)
-    bad.write_text('{"operator": {"endpoint": 5}}')
-    with pytest.raises(ValueError, match="needs text endpoint"):
-        toy_runner.execute(bad)
-
-
-def test_training_status_survives_corrupt_receipts(tmp_path):
-    import json
-
-    from siliconshield.web_demo import backend
-
-    root = tmp_path / "runs"
-    run_id = "20261104-120000-abcdef"
-    folder = root / run_id
-    (folder / "runs" / "job-a").mkdir(parents=True)
-    (folder / "campaign").mkdir(parents=True)
-    (folder / "controller-result.json").write_text("[1, 2]")
-    (folder / "campaign" / "campaign-status.json").write_text("[1]")
-    (folder / "profile.json").write_text('{"defaults": [1]}')
-    (folder / "runs" / "job-a" / "run-manifest.json").write_text("[1]")
-    (folder / "runs" / "job-a" / "events.jsonl").write_text(
-        '5\n{"event": "train", "step": 1}\n'
-        '{"event": "evaluation", "metrics": [1]}\n'
-    )
-    (folder / "campaign" / "x").mkdir(parents=True)
-    (folder / "campaign" / "x" / "operator-status.json").write_text(
-        '{"experiment": "e", "cycles": [5, {"step": 1}]}'
-    )
-    state = tmp_path / "state"
-    state.mkdir()
-    pointer = {
-        "id": run_id,
-        "directory": str(folder),
-        "unit": "siliconshield-web-toy-" + run_id,
-        "status": "complete",
-    }
-    (state / "active-training.json").write_text(json.dumps(pointer))
-    demo = backend.Demo(
-        {
-            "state_dir": str(state),
-            "entries": [],
-            "training_root": str(root),
-            "training_enabled": False,
-        },
-        health_poll=False,
-    )
-    assert demo.training["id"] == run_id
-    status = demo.training_status()
-    assert status["active"] is False
-    assert status["jobs"][0]["events"] == [
-        {
-            "event": "train",
-            "step": 1,
-            "loss": None,
-            "step_seconds": None,
-            "time": None,
-        }
-    ]
-    assert status["operator_cycles"] == [{"experiment": "e", "step": 1}]
-    assert status["campaign"] == {}
-    stopped = demo.stop_training()
-    assert stopped["status"] == "stop_requested"
-    assert stopped["messages"][0].startswith("Unreadable launch profile: ")
-    import sys
-
-    (folder / "profile.json").write_text(
-        json.dumps(
-            {
-                "python": sys.executable,
-                "source": str(tmp_path),
-                "model": str(tmp_path),
-                "data": str(tmp_path),
-                "runs": str(folder / "runs"),
-                "defaults": {"max_updates": 10},
-            }
-        )
-    )
-    stopped = demo.stop_training()
-    assert stopped["messages"] == ["Unreadable run manifest: run-manifest.json"]
+        config.load_config(5)
 
 
 def test_glimmer_client_rejects_malformed_arguments():
@@ -1072,12 +1206,3 @@ def test_glimmer_client_rejects_malformed_arguments():
     client = glimmer_client.LocalGlimmerClient(endpoint, "model")
     with pytest.raises(ValueError, match="tools must be a list"):
         client.complete([], tools=5)
-
-
-def test_toy_dataset_rejects_malformed_root(tmp_path):
-    from siliconshield.web_demo import toy_data
-
-    with pytest.raises(ValueError, match="must be a path"):
-        toy_data.create_dataset(5)
-    summary = toy_data.create_dataset(str(tmp_path / "toy"))
-    assert summary["train"] == 18

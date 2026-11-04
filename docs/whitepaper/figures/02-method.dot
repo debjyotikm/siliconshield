@@ -1,0 +1,6 @@
+digraph G { graph [rankdir=LR,bgcolor="white",pad="0.3",nodesep="0.4",ranksep="0.55"]; node [shape=box,style="rounded,filled",fillcolor="#f2f5f9",color="#516172",fontname="Helvetica",fontsize=12,margin="0.18,0.13"]; edge [color="#516172",arrowsize=0.7]; data [label="RTL + requirement
++ execution assumptions"]; base [label="Muse Glimmer 30B
+Frozen language model",fillcolor="#e5edf6"]; adapter [label="Trainable LoRA
+Attention + MLP projections",fillcolor="#e4f1ec"]; scores [label="Native answer-token scores
+Satisfies | Violates | Context"]; loss [label="TRAIN labels
+Full-vocabulary cross-entropy"]; data -> base; adapter -> base [label="residual updates",fontname="Helvetica",fontsize=10]; base -> scores; loss -> adapter [label="gradient",fontname="Helvetica",fontsize=10]; }

@@ -52,12 +52,29 @@ def _read_local(path: str) -> tuple[list[dict[str, Any]], str]:
         text = blob.decode()
     except UnicodeDecodeError as exc:
         raise ValueError("Benchmark %s is not UTF-8: %s" % (path, exc)) from exc
-    try:
-        rows = [json.loads(line) for line in text.splitlines() if line.strip()]
-    except ValueError as exc:
-        raise ValueError(
-            "Benchmark %s has invalid JSON: %s" % (path, exc)
-        ) from exc
+    stripped = text.strip()
+    if stripped.startswith("["):
+        try:
+            rows = json.loads(stripped)
+        except ValueError as exc:
+            raise ValueError(
+                "Benchmark %s has invalid JSON: %s" % (path, exc)
+            ) from exc
+        if not isinstance(rows, list) or not all(
+            isinstance(row, dict) for row in rows
+        ):
+            raise ValueError(
+                "Benchmark %s must hold a JSON array of rows." % path
+            )
+    else:
+        try:
+            rows = [
+                json.loads(line) for line in text.splitlines() if line.strip()
+            ]
+        except ValueError as exc:
+            raise ValueError(
+                "Benchmark %s has invalid JSON: %s" % (path, exc)
+            ) from exc
     digest = hashlib.sha256(blob).hexdigest()
     return rows, digest
 

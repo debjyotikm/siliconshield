@@ -30,5 +30,5 @@ from this repository.
 The owner has selected Apache-2.0 for the SiliconShield Contract-1 weight
 release, consistent with Contract-2. Foundation weights and source-derived
 material retain their upstream terms. The owner decision is distinct from
-publication of corrected Hub metadata. See docs/releases.md for the pinned
-artifacts and synchronization status.
+publication of corrected Hub metadata. Pinned
+artifacts and synchronization status are recorded with the Hub releases.

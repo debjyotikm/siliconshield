@@ -37,7 +37,7 @@
           </g>
           <g>
             <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="18px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-              <text x="40" y="104">Local decision models. Explicit agent tools. Controlled training and selection.</text>
+              <text x="40" y="104">Retained local models. Explicit agent tools. Controlled training and selection.</text>
             </g>
           </g>
         </g>
@@ -82,7 +82,7 @@
           </g>
           <g>
             <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="16px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-              <text x="835" y="179.5">03  DECISION-MODEL TRAINING</text>
+              <text x="835" y="179.5">03  RETAINED-MODEL TRAINING</text>
             </g>
           </g>
         </g>
@@ -289,7 +289,7 @@
           </g>
           <g>
             <g fill="#202020" font-family="Inter, Arial, sans-serif" font-weight="bold" text-anchor="start" font-size="19px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-              <text x="461" y="550">Decision-model worker</text>
+              <text x="461" y="550">Retained-model worker</text>
             </g>
           </g>
         </g>
@@ -300,7 +300,7 @@
           <g>
             <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
               <text x="461" y="584.5">CPU or CUDA interpreter</text>
-              <text x="461" y="604.5">Immutable export + LAYA runtime</text>
+              <text x="461" y="604.5">Immutable export + model runtime</text>
             </g>
           </g>
         </g>
@@ -439,7 +439,7 @@
           </g>
           <g>
             <g fill="#202020" font-family="Inter, Arial, sans-serif" text-anchor="start" font-size="17px" style="fill: light-dark(rgb(32, 32, 32), rgb(210, 210, 210));">
-              <text x="851" y="584.5">Decision-model optimizer updates</text>
+              <text x="851" y="584.5">Retained-model optimizer updates</text>
               <text x="851" y="604.5">Checkpoints and recovery receipts</text>
             </g>
           </g>

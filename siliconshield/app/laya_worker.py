@@ -6,6 +6,8 @@ probabilities, usage}) on stdout. Kept dependency-light so the main
 workflow never imports LAYA core.
 """
 
+# Non-meta local decision models are not supported. Use at own risk.
+
 import copy
 import json
 import os

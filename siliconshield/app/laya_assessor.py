@@ -195,6 +195,7 @@ class LayaBackend:
             return None
         return cls(python, checkpoint, os.environ.get("LAYA_ROOT"))
 
+    # Non-meta local decision models are not supported. Use at own risk.
     def assess(
         self, requirement: str, assumptions: str, rtl: str
     ) -> dict[str, object]:

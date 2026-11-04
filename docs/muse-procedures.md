@@ -2,7 +2,7 @@
 
 [Documentation index](README.md#advanced-integrations)
 
-This optional integration is not required for decision-model inference, router
+This optional integration is not required for retained local inference, router
 assessment, or basic local training. It lets the Muse coding agent refine how it reads training
 evidence. Harness² proposes and tests prompt advice. The campaign supervisor
 can use qualified advice in later sessions. It does not train Muse weights or
@@ -138,7 +138,7 @@ and model settings. That pin is stricter than ordinary session-boundary reload.
 Replacing the bundle at the pinned path changes a study input and blocks further
 bound launches until the study is amended. Keep the pinned generation immutable
 and publish new trial results elsewhere when an ongoing study must continue
-unchanged. See [study walkthrough](study-walkthrough.md).
+unchanged.
 
 ## Inspect and test
 

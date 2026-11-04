@@ -2,15 +2,13 @@
 
 [Documentation index](README.md)
 
-Muse Glimmer runs locally as an agent for RTL assessment and decision-model
+Muse Glimmer runs locally as an agent for RTL assessment and retained-model
 training. It reads evidence and requests actions through controlled tools.
-The decision models receive optimizer updates during authorized training.
+The retained models receive optimizer updates during authorized training.
 Glimmer's weights remain unchanged.
 
-For Contract-1 and Contract-2 inference, use the [router guide](router.md) and
-[decision-model qualification](expert-qualification.md). For Glimmer-operated training,
-use the [local training guide](decision-model-training-with-glimmer.md).
-The [case study](case-study-decision-model-training-with-glimmer.md) records the
+For Contract-1 and Contract-2 inference, use the [router guide](router.md).
+The [case study](case-study-training-with-glimmer.md) records the
 measured operator scope. Serving health, successful tool execution, and
 qualification of an agent role are separate results.
 
@@ -26,7 +24,7 @@ than treating a healthy endpoint as sufficient evidence.
 | Transformers reference server | Repository Dockerfile with pinned dependencies | Reference execution, one request at a time |
 | Native vLLM server | Separately qualified build supporting `muse_glimmer` tool-call and reasoning parsers | Concurrent requests and optional speculative decoding |
 
-Keep serving separate from the decision-model training environment. The
+Keep serving separate from the retained-model training environment. The
 repository image installs the reference stack, not vLLM.
 
 ## Image and workspace
@@ -167,7 +165,7 @@ to first token. Lifetime speculation acceptance on that server is
 23.3% (107,252 accepted of 459,675 proposed draft tokens), measured
 across all requests since the server started rather than on this
 probe alone. These figures describe one short-prompt probe at server
-defaults, not operator-prompt throughput; remeasure on the intended
+defaults, not operator-prompt throughput. Remeasure on the intended
 workload before quoting them elsewhere.
 
 ## Timing
@@ -222,9 +220,8 @@ not excuse a failure in another.
 
 Harness² can propose and replay procedural guidance without changing model
 weights or authorizing jobs. See [Muse procedures](muse-procedures.md) for
-bundle provenance and adoption rules. Decision-model jobs remain subject to
-the [study requirements](study-walkthrough.md#study-requirements) and
-[campaign controls](campaigns.md).
+bundle provenance and adoption rules. Retained-model jobs remain subject to
+the study requirements and campaign controls.
 
 ## Controller evaluation
 

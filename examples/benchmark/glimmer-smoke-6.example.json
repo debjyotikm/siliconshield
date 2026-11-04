@@ -1,0 +1,86 @@
+[
+  {
+    "benchmark_area": "ot-access-control",
+    "benchmark_source": "glimmer-smoke-6",
+    "expected": {
+      "security": "satisfies_requirement"
+    },
+    "id": "priv-smoke-1-sat",
+    "mechanism_id": "access-control-guard",
+    "pair_id": "priv-smoke-1",
+    "questions": [
+      "security"
+    ],
+    "state": "REQUIREMENT\nOutside reset, cfg_reg may change only when privileged is asserted.\nASSUMPTIONS\nTwo-state synchronous logic. Inputs are defined and may vary independently. Reset is exempt from the requirement.\nRTL\nmodule topmodule(\ninput logic clk, rst_n, wr_en, privileged,\ninput logic [7:0] wdata,\noutput logic [7:0] cfg_reg\n);\nalways_ff @(posedge clk) begin\nif (!rst_n)\ncfg_reg <= 8'h00;\nelse if (wr_en && privileged)\ncfg_reg <= wdata;\nend\nendmodule"
+  },
+  {
+    "benchmark_area": "ot-access-control",
+    "benchmark_source": "glimmer-smoke-6",
+    "expected": {
+      "security": "violates_requirement"
+    },
+    "id": "priv-smoke-1-vio",
+    "mechanism_id": "access-control-guard",
+    "pair_id": "priv-smoke-1",
+    "questions": [
+      "security"
+    ],
+    "state": "REQUIREMENT\nOutside reset, cfg_reg may change only when privileged is asserted.\nASSUMPTIONS\nTwo-state synchronous logic. Inputs are defined and may vary independently. Reset is exempt from the requirement.\nRTL\nmodule topmodule(\ninput logic clk, rst_n, wr_en, privileged,\ninput logic [7:0] wdata,\noutput logic [7:0] cfg_reg\n);\nalways_ff @(posedge clk) begin\nif (!rst_n)\ncfg_reg <= 8'h00;\nelse if (wr_en)\ncfg_reg <= wdata;\nend\nendmodule"
+  },
+  {
+    "benchmark_area": "ot-access-control",
+    "benchmark_source": "glimmer-smoke-6",
+    "expected": {
+      "security": "insufficient_context"
+    },
+    "id": "priv-smoke-1-mc",
+    "mechanism_id": "access-control-guard",
+    "pair_id": "priv-smoke-1",
+    "questions": [
+      "security"
+    ],
+    "state": "REQUIREMENT\nOutside reset, cfg_reg may change only when the lock is released.\nASSUMPTIONS\nTwo-state synchronous logic. Reset is exempt from the requirement.\nRTL\nmodule topmodule(\ninput logic clk, rst_n, wr_en,\ninput logic [7:0] wdata,\noutput logic [7:0] cfg_reg\n);\nalways_ff @(posedge clk) begin\nif (!rst_n)\ncfg_reg <= 8'h00;\nelse if (wr_en && lock_q)\ncfg_reg <= wdata;\nend\nendmodule"
+  },
+  {
+    "benchmark_area": "counter",
+    "benchmark_source": "glimmer-smoke-6",
+    "expected": {
+      "security": "satisfies_requirement"
+    },
+    "id": "counter-smoke-1-sat",
+    "mechanism_id": "counter-hold",
+    "pair_id": "counter-smoke-1",
+    "questions": [
+      "security"
+    ],
+    "state": "REQUIREMENT\nOutside reset, when push and pop are both asserted, count must remain unchanged.\nASSUMPTIONS\nTwo-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently.\nRTL\nmodule topmodule(\n  input logic clk, rst_n, push, pop,\n  output logic [3:0] count\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n) count <= 4'd0;\n    else case ({push, pop})\n      2'b10: count <= count + 1'b1;\n      2'b01: count <= count - 1'b1;\n      default: count <= count;\n    endcase\n  end\nendmodule"
+  },
+  {
+    "benchmark_area": "counter",
+    "benchmark_source": "glimmer-smoke-6",
+    "expected": {
+      "security": "violates_requirement"
+    },
+    "id": "counter-smoke-1-vio",
+    "mechanism_id": "counter-hold",
+    "pair_id": "counter-smoke-1",
+    "questions": [
+      "security"
+    ],
+    "state": "REQUIREMENT\nOutside reset, when push and pop are both asserted, count must remain unchanged.\nASSUMPTIONS\nTwo-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement. Inputs may vary independently.\nRTL\nmodule topmodule(\n  input logic clk, rst_n, push, pop,\n  output logic [3:0] count\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n) count <= 4'd0;\n    else case ({push, pop})\n      2'b10: count <= count + 1'b1;\n      2'b01: count <= count - 1'b1;\n      2'b11: count <= count + 1'b1;\n      default: count <= count;\n    endcase\n  end\nendmodule"
+  },
+  {
+    "benchmark_area": "counter",
+    "benchmark_source": "glimmer-smoke-6",
+    "expected": {
+      "security": "insufficient_context"
+    },
+    "id": "counter-smoke-1-mc",
+    "mechanism_id": "counter-hold",
+    "pair_id": "counter-smoke-1",
+    "questions": [
+      "security"
+    ],
+    "state": "REQUIREMENT\nOutside reset, when push and pop are both asserted, count must remain unchanged.\nASSUMPTIONS\nTwo-state synchronous logic sampled at the rising clock edge. Reset is exempt from the requirement.\nRTL\nmodule topmodule(\n  input logic clk, rst_n, push, pop,\n  output logic [3:0] count\n);\n  always_ff @(posedge clk) begin\n    if (!rst_n) count <= 4'd0;\n    else case ({push, pop})\n      2'b10: count <= count + 1'b1;\n      2'b01: count <= count - 1'b1;\n      2'b11: count <= mode ? count : count + 1'b1;\n      default: count <= count;\n    endcase\n  end\nendmodule"
+  }
+]

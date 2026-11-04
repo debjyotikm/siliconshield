@@ -1,0 +1,31 @@
+{
+  "schema": "siliconshield-gui-model-registry-v1",
+  "models": [
+    {
+      "id": "contract-1",
+      "kind": "glimmer",
+      "display_name": "Contract 1 Glimmer specialist",
+      "checkpoint": "/path/to/siliconshield/.agents/skills/contract-1",
+      "expected_files": {
+        "model.safetensors": "<serving fingerprint from the deployment receipt>",
+        "SKILL.md": "<sha256 of the skill file, see docs/router.md>"
+      },
+      "device": "dgx-spark",
+      "release": "glimmer-specialist-v1",
+      "question_contract": "glimmer-specialist-v1"
+    },
+    {
+      "id": "contract-2",
+      "kind": "glimmer",
+      "display_name": "Contract 2 Glimmer specialist",
+      "checkpoint": "/path/to/siliconshield/.agents/skills/contract-2",
+      "expected_files": {
+        "model.safetensors": "<serving fingerprint from the deployment receipt>",
+        "SKILL.md": "<sha256 of the skill file, see docs/router.md>"
+      },
+      "device": "dgx-spark",
+      "release": "glimmer-specialist-v1",
+      "question_contract": "glimmer-specialist-v1"
+    }
+  ]
+}

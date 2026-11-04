@@ -1,1130 +1,297 @@
-# SiliconShield
+# SiliconShield: adapting Muse Glimmer for RTL requirement decisions
 
-## Muse-guided research and specialist decision models for RTL security
-
-Scientific white paper | 1 November 2026
+Scientific research report | 4 November 2026
 
 [Documentation index](README.md)
 
-### Abstract
+## Abstract
 
-RTL security review is a specification problem. An update that is correct under
-one policy can violate another, and an omitted driver can make either conclusion
-unjustified. SiliconShield studies whether small, local decision models can
-provide useful requirement-conditioned assessments while a Muse agent manages
-the surrounding investigation and model-development process. The system
-separates three responsibilities: executable construction of training labels,
-neural classification of an RTL requirement, and evidence-based agent decisions
-about experiments and findings.
+Hardware review asks a conditional question: does this implementation satisfy this requirement under these assumptions? We study supervised adaptation of Muse Glimmer 30B to answer that question with three decisions: satisfies requirement, violates requirement, or insufficient context. The experiment reuses the final specialization population associated with Contract-1 and the focused training population associated with Contract-2. It trains a single low-rank adapter on the Meta language model, rather than transferring the encoder weights or decision heads of the earlier open-source models.
 
-The research produced two specialist RTL decision models. Contract-1 addresses
-visible local guards and register-update conditions. It scores 257/288 on
-counterbalanced development, including 191/192 fully specified cases, and 249/288
-on a four-family reserved qualification population, with no false-safe prediction
-among 96 violations. A separate wording and representation shift lowers accuracy
-to 330/756. Contract-2 addresses bounded FIFO, counter, and arbitration
-contracts. It scores 203/234 and completes 51/78 linked triplets on its
-repeatedly used development population. Its release was an explicit research
-selection after three frozen promotion gates failed.
+The available training population contains 3,276 decisions arranged in 1,092 balanced triplets. At the frozen candidate's 199th optimizer update, 1,194 distinct training decisions had been delivered. On a preselected 144-decision development monitor, the frozen model classified 141/144 decisions correctly: 72/72 local-guard decisions and 69/72 focused temporal decisions. It completed 45/48 whole triplets correctly. One temporal violation remained incorrectly labeled satisfying.
 
-The experimental record also includes OpenTitan coverage expansion, unsuccessful
-preservation and full-fine-tuning trials, a distributed-gradient defect, and
-bounded Muse-led research campaigns. The campaign controller preserves the
-incumbent when a candidate fails registered constraints and uses completed
-evidence to guide the next experiment. Experiments used three NVIDIA RTX PRO
-4000 Blackwell GPUs and an NVIDIA DGX Spark. The principal result is a
-reproducible specialist-development method with useful measured capabilities and
-explicit failure boundaries. It is not a claim of general RTL verification or
-autonomous security sign-off.
+After freezing, a fresh process scored the candidate on all 522 development decisions. It achieved 280/288 (97.22%) on local guards and 223/234 (95.30%) on focused temporal contracts, with 88/96 and 67/78 whole triplets correct. The corresponding published open-source models reported 257/288 and 203/234 correct decisions. Temporal false-safes decreased from the published 17/78 to 5/78. Local-guard false-safes remained zero, although violation recall decreased from 95/96 to 93/96. This historical comparison supports stronger aggregate and triplet performance across both domains, not uniform superiority on every class.
 
-**Keywords:** RTL security, requirement-conditioned classification, Muse,
-residual adaptation, counterfactual data, temporal contracts, constrained model
-selection.
+Execution required diagnosis of corrupt cross-device tensor transfers and a later memory failure. CPU-staged device transfers restored finite forward and backward computation. The evaluated candidate was preserved before the memory failure and frozen at the owner's request. These results establish a promising supervised adaptation on existing development populations. They do not establish independent generalization, calibrated security probabilities, or formal correctness.
 
-**Evidence scope.** This paper synthesizes recorded experiments and selected
-underlying receipts. No training, inference, or solver run was performed to
-prepare it. Development, reserved evaluation, authored diagnostics, and
-execution qualification are identified separately throughout. Figures show
-reported measurements without invented learning-curve points or statistical
-error bars.
+**Keywords:** Muse Glimmer, RTL, security requirements, supervised fine-tuning, LoRA, counterfactual datasets, numerical reproducibility.
 
-## Reading map
+## 1. Research question and contribution
 
-| Question | Sections |
-|---|---|
-| What is assessed, and what does Muse do? | [Decision task and RTL example](#1-research-question-and-decision-task), [agent/model responsibilities](#2-muse-and-the-decision-models-have-different-responsibilities) |
-| How are labels and models constructed? | [Label construction](#3-constructing-labels-that-depend-on-the-requirement), [data scale](#4-dataset-scale-coverage-and-experimental-units), [architecture and compute](#5-architecture-numerical-method-and-compute), [recipes](#6-model-ancestry-and-reproducible-recipes) |
-| What was measured? | [Evaluation method](#7-measuring-learning-without-rewarding-the-wrong-error), [OpenTitan expansion](#8-broad-security-learning-and-opentitan-expansion), [Contract-1](#9-contract-1-useful-local-reasoning-with-a-measured-shift-boundary), [Contract-2 and FIFO example](#11-contract-2-narrowing-temporal-reasoning-to-learnable-local-contracts) |
-| What failed, and why? | [Fitting and transfer](#10-why-more-training-was-not-enough), [preservation](#12-preservation-strength-must-be-measured-behaviorally), [numerics](#13-numerical-execution-and-inference-reproducibility), [execution defects](#14-execution-defects-that-changed-the-scientific-interpretation) |
-| How should the results be used? | [Research loop](#15-a-bounded-negative-feedback-research-loop), [routing](#16-specialist-routing-and-the-next-research-boundary), [validity and reproduction](#17-validity-reproducibility-and-conclusions) |
+The earlier SiliconShield work trained models built on another open-source foundation for visible guards and focused temporal contracts. This study asks a different architectural question: can a general Muse language model acquire the same three-way decision interface through a small supervised adaptation, using the existing task data?
 
-### Experiment index
+The contribution is an evaluated candidate and a reproducible account of its construction. The study combines native language-model token prediction, a plain-English specification interface, counterbalanced examples, whole-triplet measurement, and explicit separation between training, development selection, and verification of the saved artifact. It also records failures that would otherwise make the apparent training trajectory misleading.
 
-| Experiment | Main observation | Evidence role |
-|---|---|---|
-| Broad security learning and local OpenTitan expansion | Wider source coverage improved local-contract development performance | Development selection and separately identified reserved evaluations |
-| Contract-1 specialization | Strong visible-guard behavior, with a large wording/representation shift gap | Development, four-family qualification and shifted evaluation |
-| Broad temporal continuation | Training fit and delivered exposure did not establish transfer | Diagnostic negative results |
-| Full encoder fine-tuning and preservation arms | More plasticity and aggregate accuracy could reduce violation recall | Controlled development comparisons |
-| Focused temporal specialization | Narrowing to FIFO/counter/arbitration improved the task, but final promotion gates still failed | Reused development evidence and an owner-selected research release |
-| Preservation-weight probes | Weighted loss share differed from behavioral constraint strength | TRAIN-only calibration, not model-quality evaluation |
-| Distributed-gradient investigation | Incoherent rank states invalidated affected gathered evaluations | Execution diagnosis, with coherent exported-model diagnostics kept separate |
+Muse Glimmer is the model being adapted in this study. This is different from earlier experiments in which Glimmer operated a training workflow while another model learned the decision task. The focused experiment used a scripted trainer and automated evaluation. It does not establish that Glimmer autonomously designed or operated its own adaptation.
 
-The experiments are not interchangeable benchmarks. Their populations, selection
-rules and inference paths are specified in the corresponding sections.
-
-## 1. Research question and decision task
-
-Hardware correctness depends on what a state element is allowed to do. A
-configuration register may accept a normal write but reject an unprivileged
-write. A FIFO may accept a push when space exists but hold occupancy when full.
-Those distinctions depend on the requirement, every relevant update path, and
-the supplied assumptions. Recognizing familiar signal names is insufficient.
-
-SiliconShield represents one decision as x = (D, R, A), where D is a
-self-contained RTL region, R is an explicit requirement, and A contains the
-assumptions needed to interpret it. The model produces a distribution over three
-labels and selects its largest score. It does not generate RTL or execute a
-proof during this forward pass.
-
-| Label | Semantic interpretation |
-|---|---|
-| Satisfies requirement (S) | The supplied implementation meets the stated local requirement under the assumptions. |
-| Violates requirement (V) | A behavior of the supplied implementation contradicts that requirement under the assumptions. |
-| Insufficient context (I) | Missing implementation or policy information can change the correct answer. |
-
-These are the intended label meanings. A neural output is a prediction of a
-label, not established evidence that its meaning holds. In particular,
-insufficient context is a semantic class, not a general out-of-distribution
-detector. Low confidence, a failed compiler, and a clipped input are different
-conditions.
-
-The research asks four questions. Can solver-backed, counterbalanced examples
-teach dependence on both RTL and requirements? Can additional training improve a
-specialist without degrading protected behavior? Which failures arise from data
-coverage, optimization, implementation, or evaluation? Can Muse operate a
-bounded research loop while deterministic checks retain authority over
-admission, launch, and promotion?
-
-The scope is local digital behavior under registered assumptions. The
-experiments do not establish whole-chip security, arbitrary vulnerability
-discovery, unbounded liveness, clock-domain-crossing correctness, cryptographic
-correctness, or analog and physical-fault behavior. CWE identifiers describe
-source provenance. No separate CWE classifier or vulnerability-localization head
-was trained and validated.
-
-### 1.1 Worked example: a privileged configuration register
-
-Consider a configuration register that controls a hardware block. The security
-requirement is plain English: **outside reset, the register must hold its value
-unless a write is requested by a privileged requester.** Assume one rising-edge
-clock, a synchronous active-low reset, a trusted privilege indication, and no
-other writer to this register. Reset is explicitly exempt from the write rule.
-
-```systemverilog
-module guarded_cfg (
-    input  logic       clk, rst_n,
-    input  logic       wr_en, privileged,
-    input  logic [7:0] wdata,
-    output logic [7:0] cfg_reg
-);
-    always_ff @(posedge clk) begin
-        if (!rst_n)
-            cfg_reg <= 8'h00;
-        else if (wr_en && privileged)
-            cfg_reg <= wdata;
-    end
-endmodule
-```
-
-The absent final `else` is intentional. A clocked register retains its value
-when no assignment executes. The privilege condition therefore protects the
-only non-reset update path in this complete example.
-
-| Supplied update condition | Contract outcome | Reason |
-|---|---|---|
-| `wr_en && privileged` | Satisfies requirement | Every non-reset write requires privilege. |
-| `wr_en` | Violates requirement | An unprivileged write can change the register. |
-| `wr_en && allow_write`, with the definition of `allow_write` omitted from the supplied region | Insufficient context, if opposing completions are established | Defining `allow_write` as `privileged` enforces the policy. Defining it as constant one permits an unprivileged write. |
-
-A concrete violating trace takes `rst_n = 1`, `wr_en = 1`,
-`privileged = 0`, an old register value of `8'h12`, and `wdata = 8'hA5`.
-At the next rising edge, the guarded design retains `8'h12`. The missing-guard
-variant writes `8'hA5`. The difference is an unauthorized state transition, not
-a stylistic coding issue.
-
-The missing-context row describes an **incomplete excerpt**, not a complete
-module with an unconstrained authorization input. Its label requires two
-compatible implementations of the omitted logic that change the answer. A low
-model score or an unfamiliar signal name is not enough. If a second writer,
-such as a debug path, is present, it must satisfy the same requirement too.
-
-These are explanatory RTL constructions, not new model-evaluation cases. They
-show what the three labels mean. They also show why the requirement matters:
-the missing-privilege variant violates this security policy even though it may
-implement an ordinary unrestricted-write specification correctly.
-
-## 2. Muse and the decision models have different responsibilities
-
-SiliconShield combines a language-model agent with non-generative decision
-specialists. Muse can inspect experiment evidence, propose a hypothesis, prepare
-a bounded study, and interpret specialist outputs. Contract-1 and Contract-2
-score the supplied RTL question. A deterministic controller validates the
-proposal and applies the registered rules. This separation makes the agent's
-reasoning inspectable without making its prose the final authority for labels or
-promotions.
+Figure 1 shows how the adapter is used. The capability router sends a
+declared scope to the specialist for the matching contract domain, and Muse
+reviews the returned evidence with its open questions.
 
 ![Figure 1. Specialist assessment architecture.](whitepaper/figures/01-system.svg)
 
-*Figure 1. Measured capability profiles guide scope-based specialist selection.
-Each local worker returns its own scores and execution evidence. Optional Muse
-review interprets that evidence without turning a prediction into a verified
-property. The model-development loop is separate and appears in Figure 9.*
+*Figure 1. Assessment architecture: the router consults the specialist for the matching contract domain and Muse reviews the returned evidence.*
 
-[Editable draw.io source](whitepaper/figures/01-system.drawio).
+## 2. Decision semantics and digital-design examples
 
-The Muse coding agent performed research and campaign work under an
-owner-defined charter. Harness² supplied a procedure-learning integration that
-can propose and evaluate instruction changes [7]. Changes to agent instructions
-and updates to decision-model weights are distinct interventions, each requiring
-its own evaluation.
+An input consists of an RTL region, an English requirement, and execution assumptions. The three classes have the following intended meanings.
 
-The current router uses requested mechanism scopes and measured capability
-profiles. It preserves individual specialist scores, execution errors, coverage
-gaps, and disagreements. Optional Muse arbitration returns a provisional
-assessment with supporting evidence and open questions. This is
-application-level expert routing, not a jointly trained neural mixture of
-experts. Its advantage over the best single specialist has not been established
-by a controlled evaluation.
+| Class | Dataset semantics |
+|---|---|
+| Satisfies requirement | The requirement holds for the allowed behaviors under the assumptions. |
+| Violates requirement | An allowed behavior contradicts the requirement. |
+| Insufficient context | Omitted information admits compatible completions with different outcomes. |
 
-A separate repair workflow can execute unchanged requirement and regression
-checks against an original and candidate design. Authored repairs exercise that
-workflow. They do not establish live Muse repair quality. The scientific results
-below concern decision models, operational behavior, and training methodology
-rather than an unmeasured end-to-end bug-finding rate.
+At inference these are model predictions. The model does not run a solver. Insufficient context is not interchangeable with uncertainty, unfamiliar syntax, or a tool error.
 
-## 3. Constructing labels that depend on the requirement
-
-### 3.1 Source extraction and executable admission
-
-The source-backed collections use HardSecBench and OpenTitan [3, 4]. Builders
-extract local cones of RTL, expose boundary signals, register a requirement and
-assumptions, and generate mutations, rewrites, and requirement counterfactuals.
-Icarus compilation and Yosys SAT checks support admission [10]. The verification
-applies to the constructed local model, not automatically to the original
-upstream IP.
-
-![Figure 2. Dataset admission and partition discipline.](whitepaper/figures/02-data.svg)
-
-*Figure 2. Dataset admission separates proof, counterexample, and opposing
-completion evidence. An unestablished result refuses admission. Semantic review,
-lineage isolation, leakage checks, and complete input encoding must also pass
-before the split-bound release is frozen. Related variants stay together.*
-
-[Editable draw.io source](whitepaper/figures/02-data.drawio).
-
-A satisfying label requires the registered property to hold under the proof
-procedure. A violating label requires a reachable counterexample. Conditional
-temporal properties need a reachable antecedent to avoid vacuity.
-Missing-context labels require a declared omission and compatible satisfying and
-violating completions. Solver failure or an unestablished verdict refuses
-admission rather than becoming insufficient context.
-
-Completion construction exposed a substantive implementation problem. Textually
-replacing a missing wire with an expression can change precedence and width
-semantics. The corrected adapter retains the declared wire and adds a checked
-assignment to it. The fill is then evaluated at the declared width, and existing
-uses retain their grouping. Expression restrictions reject injected statements
-and self-reference. Separate discriminating solver cases checked precedence and
-truncation behavior.
-
-### 3.2 Semantic and leakage review
-
-Solver correctness for an assertion does not guarantee that its English
-requirement says the same thing. Review packets therefore bind the requirement,
-assumptions, property, and rendered bytes. One expert-data release reconciled
-785 source packets into 770 distinct final templates and narrowed 136
-requirement texts to the supported property. That review was owner-authorized
-model self-review, not independent human review.
-
-Source relatives, rewrites, specializations, and counterfactual variants remain
-in common lineage groups. Admission checks exact and normalized overlap against
-protected populations, removes label-revealing comments, and runs the real
-input-preparation path to reject truncation. Counterfactual policies reuse RTL
-under different requirements. This prevents code-only classification from
-solving the complete task, although requirement wording and generation templates
-can still create shortcuts.
-
-## 4. Dataset scale, coverage, and experimental units
-
-The first broad collection contains 23,310 balanced decisions. Its training
-partition has 15,894 decisions, development 2,610, calibration 2,214, and test
-2,592. Across those partitions there are 262 split groups and 5,124 distinct RTL
-bodies. The 15,894 training decisions represent 173 groups and 3,486 RTL bodies.
-Decisions, source files, and independent design lineages must not be counted
-interchangeably.
-
-Training initially combines 15,048 HardSecBench-derived decisions and 846
-OpenTitan-derived decisions. The broader source collection spans 257
-HardSecBench modules and 40 CWE provenance categories. Initial OpenTitan
-training covers five source files and 13 mechanism identifiers. Its early test
-coverage is only one OpenTitan mechanism in a 90-decision group. Development and
-calibration in that first collection contain HardSecBench material only.
-
-| Training collection | Decisions | Purpose and coverage |
-|---|---:|---|
-| Initial source-backed training | 15,894 | Local security contracts, counterfactual requirements, mutations, and omissions |
-| Combined OpenTitan expansion | 27,033 | 15,048 HardSecBench, 6,516 OpenTitan, 5,469 authored-transfer decisions |
-| Fresh-foundation pilot | 10,104 | 3,368 triplets curated for new foundation-based training |
-| Paths expert release | 3,816 | Multiple writers, helper indirection, and storage representations |
-| Broad temporal expert release | 7,101 | State updates and bounded temporal control |
-| Contract-1 final specialization | 576 | 192 counterbalanced local-write triplets |
-| Focused temporal pilot | 2,691 | 1,719 FIFO, 900 counter, and 72 arbitration decisions |
-| Contract-2 continuation | 2,700 | Focused pilot plus nine verified arbitration siblings |
-
-These collections overlap and belong to different studies. Their counts must not
-be summed as unique training data. The OpenTitan expansion adds 5,670 training
-decisions from 51 source files, increasing combined OpenTitan training coverage
-to 56 files. Its new development, calibration, and test partitions contain 180,
-234, and 108 decisions, respectively, with three source groups in each.
-
-The added OpenTitan contracts cover register and bus control, FIFOs, counters,
-arbitration, reset, memory control, lifecycle and debug policy, alerts, entropy,
-and local properties in cryptographic and key-management blocks. Coverage of a
-source block means local extracted contracts, not verification of its full
-security behavior.
-
-The focused temporal population has 897 training triplets and 78 development
-triplets. Its training and development groups are disjoint within that
-construction, but both are assembled from historical training material. The
-234-row development result is therefore an objective-selection measurement, not
-fresh independent generalization.
-
-The public training collection contains 19,050 rows. Its Contract-1 subset
-includes 576 specialization rows and 15,774 follow-up-study rows that did not
-replace the released model. Its Contract-2 subset contains 2,700 rows. The
-public 5,589-decision benchmark includes development material across 11 design
-areas. Neither public collection should be mistaken for an untouched evaluation
-or the complete ancestry of both models [1, 2].
-
-## 5. Architecture, numerical method, and compute
-
-### 5.1 Decision-model architecture
-
-The specialists use the LAYA decision runtime and a ModernBERT-large encoder [5,
-6]. The inspected encoder configuration has 28 layers, hidden width 1,024, 16
-attention heads, and feed-forward intermediate width 2,624. Full attention
-occurs every third layer, with local attention in the intervening layers. A
-question-and-option decision head scores the three alternatives. The configured
-head has two layers. The unused action head is frozen in the security studies.
-
-Residual bottleneck adapters are attached across all 28 encoder layers, with
-bottleneck width 256 and scale 8 in Contract-1. Conceptually, an adapted hidden
-state adds a learned bottleneck transformation to the layer output.
-
-Training explicitly selects which parameters can change. Full-core runs train
-encoder and decision head with adapters disabled. Adapter runs freeze the
-encoder and train residual adapters plus the head. Partial-plasticity arms
-unfreeze upper encoder blocks. Contract-1's final specialization trains the full
-encoder, existing adapters, and decision head. Contract-2's final continuation
-freezes the encoder.
-
-Reported model evaluation uses BF16 computation and FP32 probability and metric
-calculation. The security input budget is 1,536 tokens, with 256 tokens for
-question and options. Training uses AdamW, gradient accumulation, clipping,
-shuffled option order, and registered learning-rate schedules. Historical
-software snapshots vary. Reproduction must match the objective implementation
-and runtime, not only the learning rate.
-
-### 5.2 Hardware used
-
-| Platform | Configuration used | Research role |
-|---|---|---|
-| RTX workstation | Three NVIDIA RTX PRO 4000 Blackwell GPUs, 24 GB GDDR7 each | Three-rank distributed continuation, then separate single-GPU arms for controlled comparisons |
-| NVIDIA DGX Spark | GB10 Grace Blackwell, 128 GB unified system memory | Contract-1 specialization, foundation and residual-adapter experiments |
-
-The device specifications are consistent with NVIDIA's published descriptions
-[8, 9]. The three RTX memories are separate device memories, not one
-transparently pooled 72 GB allocation. Spark's unified memory is also not
-directly comparable to discrete GPU VRAM.
-
-Three-GPU decision-model runs commonly use 48 rows per optimizer update. Later
-single-device triplet studies use microbatches of three and 16 accumulation
-steps to preserve the same 48 row-visits. Contract-1 uses microbatches of six.
-Grouped sampling keeps related decisions together and assigns explicit source or
-mechanism mass. A row-visit budget is not proof of unique-row coverage.
-
-## 6. Model ancestry and reproducible recipes
-
-![Figure 3. Distinct model ancestries.](whitepaper/figures/03-lineage.svg)
-
-*Figure 3. Contract-1 and Contract-2 share a foundation but follow different
-training histories. Contract-2 is not a continuation of Contract-1. Counts
-beside stages describe registered training populations and are not additive
-unique-example counts.*
-
-[Graphviz DOT source](whitepaper/figures/03-lineage.dot).
-
-### 6.1 Contract-1 specialization
-
-The final local-guard run starts from the OpenTitan-expanded security
-checkpoint. It uses 576 training decisions, a 288-row group-disjoint development
-view, and ordinary three-way cross-entropy. All encoder, residual-adapter, and
-decision-head parameters are trainable. Learning rate is 2 × 10⁻⁶ for those
-groups, with ten warmup updates and cosine decay to one tenth of peak. The
-effective batch is 48, clipping norm 1.0, seed 3301, and the ceiling is 250
-updates. Evaluation and snapshot retention occur every 25 updates.
-
-Eligibility requires at most eight false-safes, at least 48/96 correct in each
-class, at least 10/96 whole triplets, and at least 159/288 correct overall.
-Feasible candidates rank by fewer false-safes, stronger weakest-class count,
-more whole triplets, more correct rows, and lower NLL. The released candidate
-records 257 correct, class counts 96/95/66, and 66 whole triplets. Terminal
-TRAIN fit reaches 576/576, which is a fitting result for a different training
-position rather than an independent release metric.
-
-### 6.2 Contract-2 continuation
-
-Contract-2 inherits a frozen encoder trained from untouched foundation weights
-on the combined Paths and broad-temporal curriculum. New temporal adapters were
-then trained on the focused 2,691-row curriculum. Low-rate continuation,
-semantic-margin experiments, and teacher-correct preservation produced the
-parent of the final triplet study.
-
-The final study trains adapters and the decision head at 1 × 10⁻⁷, with five
-warmup updates and a hold-decay schedule ending at one fifth of peak. It uses
-2,700 rows, seed 7502, effective batch 48, microbatch three, and evaluations
-every ten updates. The horizon is 300 updates, with a minimum of 150 before an
-exposure-aware plateau stop. The objective adds a worst-member triplet term of
-weight 0.5 to row cross-entropy. Sampling weights are 4/3/1/7/1 for FIFO,
-counter, arbitration, hard-triplet replay, and new siblings.
-
-The owner selected an intermediate candidate after 70 updates for research
-release. The trainer's protected selector retained its parent. The public source
-documents the historical objective, but exact reproduction of this experiment
-also needs the study-specific trainer that implemented it. Later general-purpose
-trainer code must not be assumed to contain every historical auxiliary term.
-
-## 7. Measuring learning without rewarding the wrong error
-
-Let C be a confusion matrix in semantic order S, V, I, with true classes on
-rows. Accuracy is the diagonal sum divided by N. Class recall divides each
-diagonal entry by that class's support. A false-safe is C(V,S), a violation
-predicted satisfying. A false violation is C(S,V), a satisfying case predicted
-violating. Both matter, but they have different consequences in security triage.
-
-Whole-triplet accuracy gives credit only when all three linked members are
-correct:
-
-$$T = \frac{1}{G}\sum_{g=1}^{G}\quad\prod_{i\in g}\mathbf{1}[\hat y_i=y_i].$$
-
-A model that predicts every case as insufficient context can avoid false-safes
-while failing the task. A model that predicts violation almost everywhere can
-have high violation recall but little useful discrimination. Class recalls and
-complete triplets expose both behaviors. A two-member satisfies/violates pair
-metric is different from the three-member triplet metric.
-
-Probability metrics include negative log likelihood, multiclass Brier score
-summed over the three classes, and expected calibration error over ten bins.
-They are computed from full-precision scores, not rounded display probabilities.
-NLL and accuracy can move in opposite directions. Confidence is not a calibrated
-correctness probability.
-
-### 7.1 Selection as a constrained decision
-
-A candidate must first satisfy the registered constraints. These can include
-false-safe budgets, per-class floors, whole-triplet floors, family caps, and
-retention requirements. A ranking orders candidates only under the declared
-policy. Some studies preserve the initialization when no candidate is feasible.
-Other studies explicitly retain the least-infeasible research candidate. A
-research selection, automatic promotion, operational acceptance, and independent
-qualification are separate outcomes.
-
-One autonomous campaign initially chose lower transfer NLL over better retained
-classification. Recovery of a saved intermediate checkpoint and a revised shared
-ranking fixed that mismatch. The trainer and campaign now need the same frozen
-reference and arithmetic. Family caps must name their population. Once a
-protected view is perfect, a strictly positive gain requirement is unsatisfiable
-and must be changed prospectively through an explicit policy amendment, never
-silently after seeing a result.
-
-### 7.2 Statistical unit and evaluation reuse
-
-The independent unit is the design lineage or split group, not each rewritten
-decision. Confidence intervals should resample whole groups when the group count
-permits. Four qualification families, two shifted origins, or three held-out
-source groups provide limited uncertainty estimates even when they generate
-hundreds of rows. Kish effective sample size describes weighting dispersion, not
-independence.
-
-Repeated development selection is adaptive evaluation. It does not become an
-untouched test because gradients never use its labels. A reserved population
-becomes spent when its outcomes inform later work. The focused temporal
-development set also has historical training exposure in its ancestry. No error
-bar can repair that distinction. The paper therefore makes no
-statistical-significance claim for small candidate improvements.
-
-## 8. Broad security learning and OpenTitan expansion
-
-The early source-backed model achieved 2,583/2,592, or 99.65%, on its historical
-test. HardSecBench contributed 2,500/2,502 correct and no false-safes among 834
-violations. OpenTitan contributed 83/90 correct, with seven false-safes among 30
-violations, all within one mechanism. The same checkpoint scored only 27/93 on
-an authored unfamiliar screen. Forty-seven of its 66 errors had confidence of at
-least 90%. High familiar accuracy did not establish broad semantic transfer.
-
-A transfer-focused continuation increased development accuracy from 46.22% to
-94.36% and missing-context recall to 100%. It still failed a complete-clear
-family cap and degraded retention. A subsequent autonomous campaign completed 15
-rounds, preserving a recovered candidate with 621/621 transfer decisions and
-2,604/2,610 retention decisions. Additional state-summary and raw-RTL
-augmentations did not remove three persistent false-safes in one retention
-family. The recorded campaign includes one recovered agent failure. This is
-evidence of bounded execution and refusal, not uninterrupted scientific
-progress.
-
-### 8.1 Source coverage expansion produced a useful continuation
-
-The OpenTitan expansion continued from that recovered candidate on 27,033
-training decisions. It used three RTX GPUs, BF16 DDP, fresh optimizer state, a
-200-update ceiling, and evaluation every 25 updates. Grouped triplet sampling
-allocated 18 of every 48 rows to new OpenTitan, 15 to HardSecBench, 12 to
-authored transfer, and three to earlier OpenTitan material. The selected
-checkpoint occurred after 175 updates.
-
-| Frozen development view | Parent | Expanded candidate |
-|---|---:|---:|
-| Transfer correct | 621/621 | 621/621 |
-| Retention correct | 2,604/2,610 | 2,605/2,610 |
-| Retention false-safes | 3/870 | 3/870 |
-| OpenTitan correct | 170/180 | 180/180 |
-| OpenTitan false-safes | 10/60 | 0/60 |
-| OpenTitan complete triplets | 50/60 | 60/60 |
-
-All ten OpenTitan development false-safes were in the I2C group and were
-corrected. On the 5,670 new TRAIN rows, correct decisions increased from 5,281
-to 5,663 and false-safes fell from 319 to seven. That TRAIN improvement is
-separate from the held-out evidence.
-
-The candidate scored 234/234 on new calibration and 108/108 on new test, each
-containing three component groups. Later recorded parent scores were 229/234 and
-99/108. These small local-contract populations support a component-scoped gain,
-not OpenTitan-wide competence. Their results are now spent for subsequent
-adaptive work. A fresh SDK reload reproduced the candidate's recorded frozen
-development predictions, whose accuracy was 3,226/3,231. Accuracy and replay
-agreement are different quantities.
-
-## 9. Contract-1: useful local reasoning with a measured shift boundary
-
-Contract-1's specialization corrects a concrete weakness: a model can perform
-well on source-style data yet misread short prose-conditioned guards. The final
-training population counterbalances the same local write situations across
-requirements, rather than treating a familiar RTL pattern as universally good or
-bad.
-
-![Figure 4. Contract-1 metrics by evaluation population.](whitepaper/figures/04-contract-one.svg)
-
-*Figure 4. Contract-1 development and reserved evaluations on a common
-percentage scale. Direct labels show both percentages and exact counts. Decision,
-class-recall, and whole-triplet denominators differ. The qualification and
-shifted populations were scored under frozen protocols and are now spent. They
-are not additional development views.*
-
-| Population | Correct | Violation recall | False-safes | Whole triplets |
-|---|---:|---:|---:|---:|
-| Counterbalanced development | 257/288 | 95/96 | 0/96 | 66/96 |
-| Four-family qualification | 249/288 | 92/96 | 0/96 | 59/96 |
-| Requirement/context shift | 330/756 | 225/252 | 25/252 | 12/252 |
-
-Development contains 191/192 correct fully specified decisions, or 99.48%. That
-is a useful scoped result, not the accuracy over all three classes. The full
-development accuracy is 89.24%. Reserved qualification reaches 86.46%, with
-satisfies recall 84.38%, violation recall 95.83%, and context recall 79.17%. Its
-four family accuracies range from 83.33% to 90.28%.
-
-The shifted evaluation reaches 43.65%. It changes requirement phrasing, omitted
-context, helper structure, and state representation. Context recall falls to
-9.92%, while the model predicts violation on 562/756 rows. Thus 89.29% violation
-recall under shift is partly a strong violation bias. The result does not
-support general RTL reasoning.
-
-On familiar retained development, Contract-1 scores 2,601/2,610 on
-HardSecBench-derived contracts, 180/180 on OpenTitan local contracts, and
-561/567 on authored transfer. It reaches only 340/738 on a
-requirement-understanding stress view. The combined 3,682/4,095, or 89.91%, must
-not conceal that weak slice.
-
-### 9.1 Confidence and practical failure modes
-
-![Figure 5. Contract-1 confusion matrices.](whitepaper/figures/05-confusion.svg)
-
-*Figure 5. Confusion matrices show counts and percentages within each true
-class. Both panels use the same 0–100% color scale. S denotes satisfies,
-V violates, and I insufficient context. The outlined V-to-S cell identifies
-false-safes. Qualification has 96 examples per class and shifted evaluation has
-252. The dominant shift error is predicting violation for satisfying and
-incomplete inputs.*
-
-| Probability diagnostic | Qualification | Shifted evaluation |
-|---|---:|---:|
-| NLL | 0.7566 | 3.9405 |
-| Brier score, summed over classes | 0.2360 | 1.0421 |
-| ECE, ten bins | 12.13% | 50.16% |
-| Errors with score at least 0.90 | 28/39 | 346/426 |
-
-Zero observed false-safes in 96 qualification violations is encouraging within
-that population. It does not establish a zero error rate. Under shift, 17 of 25
-false-safes also carry scores above 0.90. A confidence threshold alone is
-therefore not a demonstrated safety mechanism.
-
-Authored diagnostics make the boundary concrete. A privilege-protected normal
-write combined with an unprotected debug write was predicted satisfying at
-99.74%. A clean lock-respecting design was predicted violating at 99.96%. A
-small screen of unfamiliar missing-context patterns scored zero of six.
-Conversely, six curated examples covering direct privilege guards, clear
-enables, and exact-address conditions were all classified correctly. Those six
-examples illustrate measured strengths, not unseen accuracy.
-
-A separate 48-case presentation diagnostic on an earlier full-fine-tuned
-checkpoint varied RTL form, requirement phrasing, and assumptions across two
-mechanisms. It scored 31/48 and only nine of 24 matched pairs. Equivalent
-simulated behavior changed predictions across direct and helper-wire renderings.
-This supports representation sensitivity for that checkpoint. It does not prove
-that every subsequent model has the same failure or that one syntax change is
-universally harmful.
-
-The practical operating envelope is a small, explicit contract with the relevant
-writers and guard conditions visible. Multiple writers, indirect state updates,
-hidden policy, and unfamiliar encodings remain important failure areas. Muse
-interpretation should expose these gaps rather than convert a specialist's high
-score into a verified finding.
-
-## 10. Why more training was not enough
-
-### 10.1 Fitting, exposure, and transfer were separate bottlenecks
-
-Several temporal runs fit TRAIN pairs while barely improving development pairs.
-One early continuation reached 379/432 TRAIN temporal pairs but only 3/108
-development pairs. A coverage audit then found that a planned long horizon had
-delivered only 1,938/3,393 hard examples before plateau stopping. The revised
-recipe delivered all hard examples, but development remained at six of 108
-pairs. Coverage was a real confound, yet fixing it did not solve transfer.
-
-![Figure 6. Training fit and development transfer.](whitepaper/figures/06-learning-gap.svg)
-
-*Figure 6. Two separate diagnostic comparisons retain their original units and
-supports. Panel A contrasts complete temporal S/V pairs on TRAIN and development
-for an early continuation. Panel B contrasts individual decision accuracy for
-the coherent terminal replay discussed in Section 14.1. These are different
-experiments, not a controlled comparison between models. Neither high fitting
-score establishes development transfer.*
-
-Requirements also shifted style. In one plain-English campaign, the strongest
-checkpoint reached 705/756 decisions and 203/252 whole triplets. Forty-nine of
-its 51 errors occurred in a function-style subset, while the training population
-contained no function declarations. Later helper augmentation changed replay
-proportions and worsened both function and task-style performance. This supports
-a data-support hypothesis, but the changes were confounded. No matched
-replay-restoration control established a single cause.
-
-### 10.2 Full fine-tuning changed the model, but not uniformly for the better
-
-A fresh-foundation study trained encoder and decision head with residual
-adapters disabled. After 750 updates on 10,104 rows, its selected candidate
-scored 3,134/4,095 with 476 false-safes and 586/1,365 whole triplets. A second
-round trained on 16,071 rows for 1,250 updates. Its selected candidate reached
-3,384/4,095 with 385 false-safes and 880 triplets, but failed protected-source
-and product checks. TRAIN fit reached 96.5%. The model was learning its
-curriculum, but useful transfer and retention remained incomplete.
-
-This trajectory refutes a simple “the optimizer cannot move the model”
-diagnosis. It does not demonstrate that full fine-tuning is inferior in general.
-The starting point, curriculum, schedule, and evaluation distribution all
-matter. A matched 50-update initializer probe for the later local specialist
-favored the OpenTitan-trained ancestor over a fresh-study intermediate: 149/288
-versus 130/288 correct, zero versus 29 false-safes, and four versus two
-triplets. That result justified the ancestor used for Contract-1's next study.
-
-### 10.3 More plasticity did not repair violation recall
-
-Three Contract-1 continuation arms trained adapters only, adapters plus the top
-eight encoder blocks, and the full encoder. Their mixture emphasized requirement
-and helper examples. Across 12 selection-eligible evaluations, none passed the
-frozen gates. Target violation count remained 88/96 against a floor of 95, and
-broad false-safes were 40–44 against a budget of 29. Training accuracy improved
-to 87–89%, but training false-safes also rose.
-
-The supported conclusion is a class tradeoff under that curriculum, not a proven
-representation ceiling. Satisfaction and context gains did not compensate for
-poorer violation recognition. The unchanged parent was the correct export under
-the registered policy.
-
-## 11. Contract-2: narrowing temporal reasoning to learnable local contracts
-
-### 11.1 Worked example: occupancy at a FIFO boundary
-
-A FIFO stores a bounded number of items. Its occupancy counter must describe
-accepted operations, rather than blindly count requests. For a four-entry
-queue, use this requirement: **occupancy stays between zero and four. A write
-request is accepted only when the queue is not full, and a read request only
-when it is not empty. Increase occupancy for an accepted write alone, decrease
-it for an accepted read alone, and otherwise hold.**
-
-The example uses one rising-edge clock and a synchronous active-low reset.
-Acceptance is computed from occupancy immediately before the edge. Thus a
-simultaneous push and pop at full occupancy accepts only the pop under this
-particular policy. A design that permits replacement at full occupancy needs a
-different acceptance rule. Neither policy should be inferred from the word
-“FIFO” alone.
+### 2.1 Privilege-qualified register writes
 
 ```systemverilog
-module fifo_occupancy (
-    input  logic       clk, rst_n, push, pop,
-    output logic [2:0] count
+module topmodule(
+  input logic clk, rst_n, wr_en, privileged,
+  input logic [7:0] wdata,
+  output logic [7:0] cfg_reg
 );
-    logic push_ok, pop_ok;
-    assign push_ok = push && (count < 3'd4);
-    assign pop_ok  = pop  && (count != 3'd0);
-
-    always_ff @(posedge clk) begin
-        if (!rst_n)
-            count <= 3'd0;
-        else begin
-            case ({push_ok, pop_ok})
-                2'b10:   count <= count + 3'd1;
-                2'b01:   count <= count - 3'd1;
-                default: count <= count;
-            endcase
-        end
-    end
+  always_ff @(posedge clk) begin
+    if (!rst_n) cfg_reg <= 8'h00;
+    else if (wr_en && privileged) cfg_reg <= wdata;
+  end
 endmodule
 ```
 
-| Occupancy before edge | Push / pop requests | Accepted operations | Occupancy after edge |
-|---:|---|---|---:|
-| 0 | 1 / 0 | Write only | 1 |
-| 4 | 1 / 0 | Neither | 4 |
-| 0 | 0 / 1 | Neither | 0 |
-| 2 | 1 / 1 | Both | 2 |
-| 4 | 1 / 1 | Read only | 3 |
+**Requirement:** Outside reset, `cfg_reg` may change only when `privileged` is asserted.
 
-Removing the full condition by changing the write-acceptance assignment to
-`assign push_ok = push;` creates a boundary defect. Once occupancy is four,
-a write request without a read must leave the count at four. The altered
-implementation instead advances to five. The three-bit counter can represent
-five, so this failure does not depend on arithmetic wraparound.
+**Assumptions:** Two-state synchronous logic, defined inputs that may vary independently, and reset exempt from the requirement.
 
-This occupancy contract says nothing about stored data ordering, pointer
-synchronization, or an asynchronous FIFO. Those need their own supplied logic,
-assumptions, and requirements. If the implementation of the admission predicate
-is omitted, opposing compatible completions are needed before assigning
-insufficient context. The example explains the local transition reasoning the
-focused temporal curriculum seeks to teach.
+The complete guarded design satisfies this local requirement. Removing `&& privileged` permits an unauthorized update. For example, with reset inactive, `wr_en=1`, `privileged=0`, and write data different from the stored value, the next rising edge changes the register. Replacing the guard with an omitted authorization expression creates a context question only when permitted completions of that expression can change the outcome.
 
-### 11.2 From broad temporal scope to a focused task
+A request-enable check and a privilege check serve different purposes. The requirement concerns authorization, so detecting `wr_en` alone does not establish satisfaction. Every writer to the register must respect the same policy.
 
-Initial Contract-1 adapter continuations improved broad temporal row accuracy
-from 177/324 to 218/324, yet whole triplets stayed at 6/108. Context recognition
-improved while violation recognition degraded. A separate combined Paths and
-temporal study restarted from untouched foundation weights and selected a
-full-core checkpoint after 600 of 900 updates. Its temporal slice scored
-194/324, with class counts 19/69/106 and six whole triplets. New residual
-adapters on that encoder improved the slice to 219/324 and 15 triplets.
-Satisfaction recall was still only 25.93%.
+### 2.2 Simultaneous push and pop
 
-The next study narrowed the task to local FIFO, counter, and arbitration
-behavior. The structured objective kept row cross-entropy and added
-complete-versus-missing-context classification, complete-case compliance
-classification, smooth worst-member loss, and sibling ranking:
+```systemverilog
+module topmodule(
+  input logic clk, rst_n, push, pop,
+  output logic [3:0] count
+);
+  always_ff @(posedge clk) begin
+    if (!rst_n) count <= 4'd0;
+    else case ({push, pop})
+      2'b10: count <= count + 1'b1;
+      2'b01: count <= count - 1'b1;
+      default: count <= count;
+    endcase
+  end
+endmodule
+```
 
-$$L = L_{CE} + 0.20L_{context} + 0.20L_{compliance} + 0.10L_{worst} + 0.05L_{rank}.$$
+**Requirement:** Outside reset, when push and pop are both asserted, count must remain unchanged.
 
-For member losses l₁, l₂, l₃, the smooth worst-member term is τ[log Σ exp(lⱼ/τ)
-− log 3], with τ = 0.25. Sibling ranking uses a 0.20 margin. Contiguous triplets
-allow the loss to compare linked decisions directly. Training option
-permutations are restored to semantic class order before class-specific terms
-are applied.
+With two-state controls sampled on the rising edge, `2'b11` takes the default branch and preserves the count. Adding `2'b11: count <= count + 1'b1;` violates the requirement. Giving push priority in an `if`/`else if` chain also increments on simultaneous requests.
 
-Two single-device arms explored this formulation. Spark trained a full core from
-untouched foundation weights. RTX trained new adapters and the head over the
-previously trained frozen encoder. The Spark selected point reached 183/234 and
-32/78 triplets. The RTX selected point reached 198/234 and 47/78 triplets. These
-are not a controlled adapter-versus-full-fine-tuning comparison because their
-parent exposure, schedules, and budgets differ.
+This requirement does not specify overflow, underflow, full/empty handling, or correspondence between occupancy and stored data. Satisfying it cannot establish that an entire FIFO is correct. Although the dataset is called temporal, this study's scope is bounded local transition behavior and associated counter and arbitration contracts, not arbitrary multi-cycle temporal logic.
 
-### 11.3 The compliance boundary remained the difficult part
+These code examples explain the task. Separate authored inference checks are reported only when their execution completes.
 
-Within the RTX arm, an earlier checkpoint recognized 68/78 violations with ten
-false-safes. A later checkpoint recognized 57/78 violations with 21 false-safes,
-while gaining 13 satisfying decisions and lowering NLL. Context recall was
-already perfect. Learning to identify complete context was easier than deciding
-whether complete RTL complied with the requirement.
+## 3. Data construction and scope
 
-Follow-ups tested low learning rates, class margins, masked preservation,
-flatter exposure, symmetric margins, and hard-triplet replay. Several selected
-their initialization. A TRAIN audit of a strong temporal parent still found only
-522/897 whole triplets correct, with 229 false-safes. This was unfinished
-fitting as well as a transfer problem. It did not justify treating extra updates
-or a stronger penalty as a guaranteed solution.
+| Population | Training decisions | Training triplets | Development decisions | Development triplets |
+|---|---:|---:|---:|---:|
+| Contract-1 specialization anchor | 576 | 192 | 288 | 96 |
+| Contract-2 focused contracts | 2,700 | 900 | 234 | 78 |
+| Total | 3,276 | 1,092 | 522 | 174 |
 
-### 11.4 Contract-2 selection and the remaining tradeoff
+Each population is balanced over the three labels. The first population contains counterbalanced local write-path requirements. In those constructions, the same RTL can receive different labels when the requirement selects a different protected object. The second covers focused FIFO, counter, and arbitration contracts and includes verified sibling examples.
 
-![Figure 7. Temporal checkpoints against two selection gates.](whitepaper/figures/07-temporal.svg)
+This is not the complete historical training curriculum of either released open-source model. In particular, the earlier broad Contract-1 ancestry is not reproduced. The publicly released research collection is also larger than the population used here. Describing this run as training on all historical SiliconShield data would be incorrect.
 
-*Figure 7. Each row names a checkpoint on the same 234-decision development
-view. The left panel counts false-safes among 78 violations, with a maximum of
-14. The right panel counts correct whole triplets among 78, with a minimum of
-50. Dashed lines mark the limits, and explicit PASS/FAIL labels avoid relying on
-color. Contract-2 passes the triplet gate but misses the false-safe gate. No
-checkpoint shown meets both. These are separate training stages and recipes,
-not a controlled ablation. Class, NLL, and domain floors are additional gates.*
+Input construction passes only the state text, containing requirement, assumptions, and RTL, through a fixed prompt. Expected labels, proof records, source identifiers, and selection metadata are not model input. Curation checks confirmed complete triplets, balanced labels, accepted proof metadata, and no intersections between TRAIN and DEV in row identifiers, exact state text, or registered split groups. Accepted proof metadata was inherited from the source datasets. Solvers were not rerun for every row during this focused study.
 
-[Plot source and aggregate counts](whitepaper/figures/plot_temporal.py).
+The encoded TRAIN population contains 1,874,886 input tokens. The DEV population contains 276,892. The longest training input contains 766 tokens, below the 2,048-token rejection limit. Inputs were not shortened to fit. Exact disjointness checks do not establish independence from the base language model's pretraining corpus or exclude every form of semantic similarity.
 
-The final worst-triplet continuation produced Contract-2 at 203/234, or 86.75%,
-with class counts 64/61/78 and 51/78 whole triplets. It has 17 false-safes and
-14 false violations. All 31 errors are confusions between satisfies and
-violates, with no context error on this development population.
+## 4. Model and optimization
 
-| Domain | Correct | Accuracy | Evaluation support |
-|---|---:|---:|---|
-| FIFO | 97/108 | 89.81% | 36 decisions per class |
-| Counter | 92/108 | 85.19% | 36 decisions per class |
-| Arbitration | 14/18 | 77.78% | Six decisions per class |
+![Figure 2. Supervised decision adaptation.](whitepaper/figures/02-method.svg)
 
-Compared with its immediate parent, Contract-2 gains three correct decisions and
-three triplets, but loses one correct violation and adds one false-safe. NLL
-increases from approximately 0.3494 to 0.3554. It fails three of ten frozen
-floor checks: violations 61 below 64, false-safes 17 above 14, and NLL above its
-parent. The trainer retained initialization. The owner separately selected the
-intermediate candidate as a focused research release. Both facts are part of its
-result.
+*Figure 2. Native Glimmer text processing supplies three registered answer-token scores. Only LoRA parameters change. Dataset evidence remains outside the inference input.*
 
-The strongest measured scope is local occupancy and counter control, with
-limited arbitration support. Commit/hold, arbiter-tree, empty-data-blanking, and
-stored-word-hold cases remain difficult. On the broader 5,589-row benchmark,
-Contract-2 scores 2,510 correct compared with Contract-1's 4,351. This supports
-scoped specialist consultation rather than replacing the local-guard model with
-the temporal model. The benchmark itself includes development data.
+| Component | Configuration |
+|---|---|
+| Foundation | Muse Glimmer 30B |
+| Adapted path | 52-layer language decoder |
+| Frozen components | Base parameters and original vocabulary output head |
+| Trainable parameters | 47,923,200 LoRA parameters |
+| LoRA configuration | Rank 8, scale parameter alpha 16, dropout 0 |
+| Target projections | Attention query, key, value, output and MLP gate, up, down |
+| Numerical execution | BF16 base computation, higher-precision loss and adapter optimization |
+| Optimizer | AdamW, peak learning rate 0.0001, weight decay 0.01 |
+| Schedule | Ten-update warmup, wall-time cosine decay toward 20% of peak |
+| Effective batch | Six decisions, containing two complete triplets |
+| Microbatch | One initially, three after a qualified resume, then one after memory failure |
+| Gradient control | Activation checkpointing and global norm clipping at 1 |
+| Initialization | Original Glimmer base with newly initialized LoRA |
 
-No independent temporal qualification is claimed. New qualification must exclude
-the historical training ancestry and must be frozen before further optimization
-or selection.
+The native chat template fixes the system instructions, answer channel, date field, and reasoning-strength setting. The model is trained to predict one of three single-token answers. The loss is full-vocabulary next-token cross-entropy on the correct answer token:
 
-## 12. Preservation strength must be measured behaviorally
+$$
+\mathcal{L}(x,y)=-\log p_\theta(t_y\mid x).
+$$
 
-Distillation can preserve useful behavior, but a teacher can also preserve a
-wrong boundary. The preservation studies therefore mask the teacher term to rows
-where the frozen teacher's largest-probability label agrees with the verified
-TRAIN label. No teacher prediction replaces the target label. For mask mᵢ and
-temperature T, the term is:
+No rationale is supervised. No teacher, encoder, or decision head from the earlier open-source models is loaded. At inference the three registered token logits are normalized to produce decision scores:
 
-$$L_{pres,i} = m_i T^2 D_{KL}(p_{teacher}^{(T)}(x_i)\parallel p_{student}^{(T)}(x_i)).$$
+$$
+q_k=\frac{\exp z_{t_k}}{\sum_{j=1}^{3}\exp z_{t_j}}.
+$$
 
-The total loss adds W times the masked preservation loss. A correct teacher
-label does not prove that matching its entire distribution is optimal. The
-method prevents direct imitation of known wrong argmax targets, but still needs
-development tests for preservation and new learning.
+These conditional scores differ from full-vocabulary token probabilities. The evaluation also records the combined full-vocabulary mass of the three tokens. Neither form is a calibrated probability that the design is correct.
 
-![Figure 8. TRAIN-only preservation calibration.](whitepaper/figures/08-preservation.svg)
+Sampling shuffles complete triplets without replacement and interleaves one local-guard triplet with four focused-contract triplets while both pools remain. Six-row optimizer batches preserve complete triplets. The selected checkpoint had seen 1,194 unique rows, approximately 36.4% of the available TRAIN population. This is partial exposure, not a completed epoch. A wall-time learning-rate schedule means interruptions can change the rate used on a resumed update. This run is not a controlled microbatch-size ablation.
 
-*Figure 8. Five 50-update probes on the same 4,851-row TRAIN subset, summarized
-after warmup. The tested weights are discrete categories, with no fitted curve.
-Weighted KL divided by supervised CE is non-monotonic, while adapter movement
-decreases and teacher-correct agreement increases. Agreement was not recorded
-for the zero-weight control. These are optimization measurements, not accuracy
-or independent preservation results.*
+## 5. Hardware and execution failures
 
-| Weight | Weighted KL / CE | Adapter displacement | Teacher-correct agreement |
+Training used three NVIDIA RTX PRO 4000 Blackwell GPUs with approximately 24 GiB of memory each. The language decoder was partitioned across the devices, with 20, 20, and 12 layers respectively. Unused vision components remained on CPU. DGX Spark was not used for optimizer steps in this experiment. Existing local serving was preserved.
+
+The successful runtime used Python 3.11, Torch 2.14.0 with CUDA 13.0, Transformers 5.21.0, PEFT 0.21.2, and Accelerate 1.15.0. Optimizer updates operated on one partitioned model, not three independent replicas or a distributed data-parallel ensemble.
+
+### 5.1 Loading and numerical qualification
+
+Initial attempts produced nonfinite values and did not deliver valid optimizer updates. Both quantized and BF16 probes were affected. Full base-weight integrity checks agreed with the upstream artifacts. Moving the base from rotational storage to SSD reduced observed loading from roughly five minutes forty seconds to approximately eighteen to twenty-two seconds. That change improved startup time, not learning quality.
+
+Direct tensor-copy probes then identified a concrete execution defect. Transfers from a lower-numbered CUDA device to a higher-numbered device returned corrupted values in tested FP32, BF16, and integer tensors. Same-device and reverse-direction probes passed. Reported peer accessibility did not predict correct transfer behavior. The lower-level driver, interconnect, and mapping cause was not isolated, so the result must not be described as proven physical hardware failure.
+
+### 5.2 Transfer repair
+
+Cross-device tensors were staged through host memory. The differentiable copy path also carried backward transfers through the host. All nine source/destination combinations passed the implemented forward and backward probes. Global gradient norms were accumulated on CPU, avoiding another cross-device scalar transfer during clipping. Full-model checks then established finite outputs, finite gradients, and nonzero adapter parameter changes.
+
+This workaround is part of the evaluated execution configuration. Replacing it with direct peer copies on the affected environment requires new numerical qualification. It incurs transfer overhead and limits throughput. The evidence does not support extrapolating this fault to every earlier distributed experiment.
+
+### 5.3 Memory failure and preservation
+
+A larger microbatch passed the implemented longest-input qualification, but the subsequent run failed with a CUDA memory allocation error after update 217. A synthetic or selected-input memory probe did not guarantee sufficient headroom for the entire run. The evaluated update-199 checkpoint and optimizer state had already been written safely. Training resumed from that checkpoint with a one-row microbatch. Restored adapter tensors matched exactly and optimizer state was loaded.
+
+The owner then requested freezing the reported candidate. Update 199 was preserved separately. The resumed run stopped at update 217. Its terminal monitor scored 71/72 on local guards and 70/72 on temporal contracts, with zero and one false-safe respectively. The registered ranking preferred that terminal state through improved worst-domain triplet accuracy. The owner-frozen candidate remains update 199, which had been the reported candidate when freezing was requested. Later updates and terminal closeout results are not substituted for its reported metrics. This distinguishes the selected research artifact from the last model held in GPU memory.
+
+## 6. Evaluation protocol
+
+A seeded monitor selected 24 complete triplets from each domain before any model predictions. It contains 144 decisions. The candidate was scored using the registered prompt, answer tokens, precision, and execution path. Monitoring approximately every thirty-five minutes limits evaluation cost but leaves a sparse learning curve.
+
+The registered ranking first minimizes the largest domain false-safe rate, then maximizes the smaller domain whole-triplet accuracy, then the weakest class recall, mean domain accuracy, and finally mean negative log likelihood. The experimental protocol retained the original initialization as a fallback, but this paper reports the frozen fine-tuned candidate. This is a research ranking, not a production acceptance threshold.
+
+A false-safe is a violation predicted as satisfying. A violation predicted as insufficient context is also missed, but is counted separately. A whole triplet receives credit only if all three linked decisions are correct:
+
+$$
+T=\frac{1}{G}\sum_{g=1}^{G}\prod_{i\in g}\mathbf{1}[\hat y_i=y_i].
+$$
+
+Triplets and generated families create statistical dependence among rows. We report exact counts rather than attach unsupported independent-row confidence intervals. Development data informs candidate choice. The remaining development rows enlarge the measured population but do not become an independent final test.
+
+## 7. Frozen candidate: development-monitor results
+
+![Figure 3. Frozen-candidate development-monitor results.](whitepaper/figures/03-monitor.svg)
+
+*Figure 3. Accuracy, complete-triplet rate, and temporal class recall for the frozen fine-tuned model. Each domain contains 72 decisions and 24 triplets. These are selection-used development measurements.*
+
+| Domain | Correct decisions | False-safes | Whole triplets |
 |---|---:|---:|---:|
-| 0 | 0% | 0.0811 | Not measured |
-| 0.41 | 5.20% | 0.0750 | 96.7% |
-| 1 | 9.53% | 0.0679 | 97.2% |
-| 2 | 13.07% | 0.0600 | 97.6% |
-| 8 | 11.79% | 0.0424 | 99.2% |
+| Local guards | 72/72 | 0/24 violations | 24/24 |
+| Focused temporal | 69/72 | 1/24 violations | 21/24 |
+| Combined | 141/144 (97.92%) | 1/48 violations | 45/48 (93.75%) |
 
-The ratio is weighted KL divided by supervised CE, not its fraction of total
-loss and not a gradient ratio. Raw KL falls from about 0.202 at weight 0.41 to
-0.029 at weight eight. Pre-clip norm rises from roughly 67 to 146, and the
-control and strongest probe each clip all 26 post-warmup updates. AdamW and
-global clipping further separate scalar loss magnitude from parameter movement.
+| Domain | Satisfies recall | Violates recall | Context recall | Conditional NLL |
+|---|---:|---:|---:|---:|
+| Local guards | 24/24 | 24/24 | 24/24 | 0.0124 |
+| Focused temporal | 23/24 | 22/24 | 24/24 | 0.2564 |
 
-The strongest behavioral constraint in this sweep is weight eight despite its
-lower loss ratio than weight two. A repeated weight-two probe closely reproduces
-displacement and ratio. The longer control/moderate/strong study was recommended
-but not launched at the evidence cutoff. The finite sweep does not prove that
-any desired loss ratio is mathematically unreachable or that preservation will
-improve the final model.
+The three temporal errors comprise one satisfying case predicted violating, one violation predicted satisfying, and one violation predicted insufficient context. Mean label-token mass is approximately 0.9999 for local guards and 1.0000 for temporal examples. This indicates adherence to the three-token output format, not calibrated confidence.
 
-## 13. Numerical execution and inference reproducibility
+![Figure 4. Recorded training loss through the frozen checkpoint.](whitepaper/figures/04-training.svg)
 
-Numerical parity matters when comparing decision-model checkpoints. Some
-identical BF16 temporal weights differ by one decision between Spark and RTX
-execution. One Contract-1 local development replay similarly differs by one
-context decision, while its broader 4,095-row replay matches. Comparisons should
-name the runtime, precision, device, batch size, question contract, and option
-order. Stable labels on one population do not imply cross-device identity on all
-marginal cases.
+*Figure 4. Each point is a recorded six-example training batch. The trailing median summarizes noisy batch losses, not validation performance. The curve includes the checkpointed microbatch transition. Falling training loss alone does not establish transfer.*
 
-The documented release rehearsal uses Python 3.11.15, Torch 2.14.0 with CUDA
-13.0, Transformers 5.5.0, Safetensors 0.8.0, and NumPy 2.4.6 on RTX PRO 4000
-Blackwell. Historical training snapshots include other library versions. This
-release tuple describes tested inference, not a claim that every reported
-experiment used one universal environment.
+## 8. Fresh-process validation and practical examples
 
-## 14. Execution defects that changed the scientific interpretation
+The following results were recorded after the frozen adapter was reloaded and scored. This verification uses the frozen candidate, not the latest training checkpoint. It compares saved monitor predictions and probabilities against the fresh process. Six authored examples cover guarded and missing-guard writes, simultaneous push/pop hold and increment, and omitted helper definitions.
 
-### 14.1 Distributed backward coherence
+### 8.1 Full development evaluation after freezing
 
-A pair-loss implementation issued two backward calls per microbatch under DDP
-and produced rank divergence. A real three-GPU probe measured a maximum
-cross-rank gradient difference of approximately 0.183 and parameter difference
-of 0.020 after the first update. The rank-zero gradient differed from a combined
-single-device reference by 0.104. These were implementation errors, not evidence
-of unstable hardware or an inherently defective distributed-training method.
+| Domain | Frozen correct | False-safes | Whole triplets |
+|---|---:|---:|---:|
+| Local guards | 280/288 (97.22%) | 0/96 | 88/96 |
+| Focused temporal | 223/234 (95.30%) | 5/78 | 67/78 |
 
-The correction combines all loss terms into one scalar and calls backward once
-per microbatch. Non-final accumulation microbatches remain inside no_sync(). The
-corrected probe produces zero cross-rank differences and matches the
-single-device reference within 1.2 × 10⁻⁷ across the checked updates. A unit
-test over leaf tensors had not exercised the actual distributed reducer and was
-insufficient to detect the defect.
+The fresh process reproduced all 144 recorded monitor decisions. Probability parity failed: 22 rows exceeded the registered absolute tolerance of 0.00001, with a maximum difference of 0.03083. Adapter tensors matched exactly on load. The cause of probability drift remains unresolved, so this is decision agreement, not exact inference reproduction. No sealed test was evaluated.
 
-Affected gathered evaluations combined predictions from different rank-local
-models. They cannot be interpreted as the accuracy of one export. A coherent
-replay of the saved terminal rank-zero artifact scores 215/324, or 66.36%, while
-TRAIN fit reaches 7,079/7,101, or 99.69%. The fitting-to-transfer gap is real
-for that saved artifact, but mixed-rank events are excluded from model-quality
-comparisons. Not every earlier temporal failure used the affected
-implementation.
+### 8.2 Comparison with the published open-source models
 
-### 14.2 Other bottlenecks and corrections
+| Development domain | Model | Correct decisions | Violation recall | False-safes | Whole triplets |
+|---|---|---:|---:|---:|---:|
+| Local guards | Contract-1, published | 257/288 (89.24%) | 95/96 | 0/96 | 66/96 |
+| Local guards | Frozen Glimmer adapter | 280/288 (97.22%) | 93/96 | 0/96 | 88/96 |
+| Focused temporal | Contract-2, published | 203/234 (86.75%) | 61/78 | 17/78 | 51/78 |
+| Focused temporal | Frozen Glimmer adapter | 223/234 (95.30%) | 70/78 | 5/78 | 67/78 |
 
-| Bottleneck | Consequence | Correction or remaining boundary |
-|---|---|---|
-| Budget exit skipped final evaluation | A completed run could export a stale initial selection | Evaluate final weights before restoring the best checkpoint |
-| Duplicate optimizer-group log names | Adapter gradient norm was severely understated | Aggregate by module membership and record parameter displacement |
-| Semantic margin used shuffled slots | Class penalties could target the wrong alternative | Restore semantic order and test all six permutations |
-| Planned exposure exceeded executed horizon | “Full coverage” was claimed without all rows being drawn | Reconstruct delivered draws and gate plateau on measured coverage |
-| Display probabilities used for NLL | Rounded zero scores produced artificial infinite losses | Compute from full logits under the pinned scoring path |
-| Preferred snapshots were not retained | Retrospective selection could not recover the model | Save every evaluated candidate needed for later review |
-| SDK load modified export metadata | A later manifest bound transient bytes | Stage mutable configuration and verify immutable export contents |
-| Trainer and campaign ranked differently | Useful candidates could be lost or infeasible ones preferred | Freeze and share constraints, population references, and ranking |
+![Figure 5. Historical model results and the frozen Glimmer adapter.](whitepaper/figures/05-comparison.svg)
 
-The correction of execution defects improves the validity of later experiments.
-It does not retroactively make invalid measurements valid or turn a failed model
-into a successful one. Historical negative results remain separated by whether
-the implementation was coherent enough to support a scientific claim.
+*Figure 5. Earlier-model measurements and newly measured Glimmer results on the corresponding named development populations. This is a descriptive historical comparison, not a controlled architecture ablation or an independent qualification.*
 
-## 15. A bounded negative-feedback research loop
+Relative to the published open-source results, Glimmer changes the number of correct local-guard decisions by +23 and correct temporal decisions by +20. Complete-triplet counts change by +22 and +16, respectively. Temporal false-safes change from 17 to 5.
 
-The unattended controller treats training as a sequence of registered
-experiments. It observes the selected and terminal artifacts, audits fitting and
-exposure, computes fixed metrics, and asks Muse for a diagnosis and next
-proposal. The proposal can change only authorized fields. Deterministic
-admission, resource ownership, and promotion checks determine what actually
-executes.
+The central advantage demonstrated here is consolidation: one Muse Glimmer adapter supplies both decision domains through the same English-requirement interface. It reaches these results after 199 optimizer updates and partial exposure to the selected training population. That is evidence of effective task adaptation, rather than a need to train a new language model from scratch. The result motivates further research into Muse-based engineering decision systems.
 
-![Figure 9. Bounded research feedback.](whitepaper/figures/09-feedback.svg)
+There are meaningful tradeoffs. Glimmer uses a much larger base model and three GPUs in this experiment. No matched latency, memory-efficiency, or energy comparison was performed. The historical open-source models were not rerun here, and input formatting and model architectures differ. The published local-guard model has 95/96 violation recall and no false-safes. Any decrease in that recall must remain visible even if Glimmer improves overall accuracy or context handling. The historical results are sourced from the SiliconShield model card and prior white paper, not inferred from the new run.
 
-*Figure 9. The cycle separates owned training, evidence audits, frozen model
-selection, Muse diagnosis, and validation of the next proposal. Passing
-promotion gates can change the incumbent. Failing them preserves it. Invalid
-evidence, unauthorized proposals, and frozen stop rules end the loop. Feedback
-changes future experiments, not the current acceptance rule. This is an
-operational control analogy, not a formal stability proof.*
+### 8.3 Authored practical examples
 
-[Editable draw.io source](whitepaper/figures/09-feedback.drawio).
+| Example | Expected | Frozen prediction | Highest decision score |
+|---|---|---|---:|
+| privilege-guarded | satisfies_requirement | satisfies_requirement | 1.0000 |
+| privilege-missing | violates_requirement | violates_requirement | 1.0000 |
+| privilege-omitted-helper | insufficient_context | insufficient_context | 1.0000 |
+| push-pop-hold | satisfies_requirement | satisfies_requirement | 1.0000 |
+| push-pop-increments | violates_requirement | violates_requirement | 1.0000 |
+| push-pop-omitted-helper | insufficient_context | insufficient_context | 1.0000 |
 
-A round freezes the parent and incumbent, dataset and sampling pools, recipe,
-reporting contract, and policy. Owned systemd jobs and idempotent submission
-prevent duplicate work after controller failure. Recovery reads persisted state
-and requires compatible optimizer, position, best-checkpoint, and random-number
-state. Policy and input bindings are checked again after resource waits and
-before launch or promotion.
+All six authored cases were classified correctly, including the missing privilege guard and the simultaneous push/pop increment. These six cases are authored diagnostics, not a random benchmark. Scores are normalized over the answer tokens and are not calibrated correctness probabilities.
 
-The autonomous campaign's strongest demonstrated behavior was refusal. It
-preserved useful checkpoints when subsequent data doses increased dangerous
-errors, refused initialization-equivalent “improvements,” and stopped repeated
-ineffective interventions. That is valuable research infrastructure even when
-the next hypothesis fails. It is not evidence that negative feedback alone
-converges to a high-quality model.
+## 9. Interpretation and threats to validity
 
-The loop also exposed operational bottlenecks. Stale ownership checks,
-submitted-job reattachment, and report-phase recovery needed explicit fixes. A
-healthy watcher that never analyzes a completed job is not a productive research
-loop. Completion-to-analysis delay, delivered coverage, and repeated null
-outcomes belong in operational monitoring alongside GPU activity.
+The monitor result supports the feasibility of adapting a general Meta language model to a compact RTL decision interface. It does not isolate whether the gain arises from semantic reasoning, better alignment to the task wording, exploitation of generation regularities, or a combination of these effects. Counterbalanced requirements reduce code-only shortcuts but do not eliminate all template shortcuts.
 
-Model selection cannot be delegated to optimistic prose. The agent may explain
-why a trial was interesting, but a failed class floor or false-safe budget
-remains a failed gate. An owner may make a separate research-release decision,
-as with Contract-2, provided that the record preserves the distinction.
+The 144-row monitor is small and selection-used. The full development population is also historically reused. There is no new sealed qualification result in this study. The original models' published scores cannot be treated as a controlled head-to-head comparison because their prompts, inference architectures, and evaluation populations differ. No claim of superior latency, energy efficiency, or broad security detection follows from these results.
 
-## 16. Specialist routing and the next research boundary
+The frozen candidate received partial training exposure. It has not been validated for arbitrary RTL repositories, complex helper graphs, multiple clock domains, long sequences, liveness, analog effects, or vulnerability localization. A strong aggregate result can coexist with a dangerous false-safe. Confidence must not replace simulation, formal verification, or engineering review.
 
-The two released models support a practical architecture: route explicit local
-guards to Contract-1 and bounded FIFO, counter, and arbitration requirements to
-Contract-2, subject to measured capability profiles. A request outside both
-supported domains should remain visibly unsupported. Consulting two weak models
-does not create a qualified expert by aggregation.
+Execution repairs complicate reproducibility. Source weight identity alone did not ensure valid inference on this workstation. Transfer semantics, precision, batching, padding, prompt construction, label mapping, and runtime versions all belong in the reproduction contract. Public prose omits machine identifiers and private paths. The private evidence ledger retains the exact artifact bindings needed for an audit.
 
-The current implementation requires each selected profile to cover every
-requested scope tag. Partial coverage can motivate splitting the question, but
-is not treated as complete support. Profiles bind measurements to the executed
-model and inference configuration. Errors and missing capability data remain
-visible. Experts are consulted sequentially, and Muse can interpret their
-individual evidence without replacing it with an untraceable vote.
+## 10. Reproduction and next experiments
 
-The next controlled evaluation should compare a fixed single-model baseline,
-deterministic capability routing, and routing with Muse interpretation on the
-same new population. Outcomes should include correct decisions, false-safes,
-whole triplets, unsupported-scope handling, evidence fidelity, and latency. The
-requested scope should be supplied independently when measuring the router, and
-inferred-scope performance should be a separate condition. This would
-distinguish better specialist selection from better explanation.
+A reproduction should use the original Glimmer base, the selected TRAIN subsets and split definitions, the registered three-token prompt, and the stated LoRA recipe. It should qualify finite forward/backward computation, cross-device copies, global gradient clipping, and saved-adapter reload before spending the training budget. Record actual delivered examples rather than planned epochs. Retain class-wise confusion matrices and complete-triplet counts for the frozen adapter. Any future baseline comparison should use matched conditions.
 
-### 16.1 Data and optimization priorities
+The next scientific step is independent group-disjoint qualification with broader wording and structural variation. Useful controlled follow-ups include completed exposure versus partial exposure, joint versus separate domain adaptation, and a comparison of task-specific token scoring with unconstrained explanatory generation. Such experiments must freeze evaluation boundaries before observing outputs. They should not use the six illustrative examples as a substitute for new qualification data.
 
-Future data should vary semantics and representation independently. Add complete
-satisfying and violating examples for every omission pattern. Enumerate all
-writers, including debug and helper paths. Cover reset exemptions, priority,
-width, encoded storage, and helper definitions explicitly. Use new source
-lineages for qualification rather than renaming old training material.
+The present result is a frozen research decision adapter with strong full-development performance, all six authored demonstrations correct, and five temporal false-safes on the full development population. The practical contribution is the combination of a usable task interface, an explicit training record, and failure-aware execution checks.
 
-For the temporal model, prioritize the satisfies/violates boundary on FIFO
-occupancy, counter transitions, and grant conditions. Context recognition is
-already strong on the focused development view. A new objective should be
-compared against plain cross-entropy with matched initialization, sampling
-draws, update budget, and at least repeated seeds. Both false-safes and false
-violations must improve without relying on abstention.
+## Appendix: full-development confusion matrices
 
-## 17. Validity, reproducibility, and conclusions
+Rows are true classes and columns are predicted classes. S, V, and I denote satisfies, violates, and insufficient context.
 
-### 17.1 What the evidence supports
+| Model / domain | True class | Predicted S | Predicted V | Predicted I |
+|---|---|---:|---:|---:|
+| Frozen adapter, local guards | S | 91 | 0 | 5 |
+| Frozen adapter, local guards | V | 0 | 93 | 3 |
+| Frozen adapter, local guards | I | 0 | 0 | 96 |
+| Frozen adapter, temporal | S | 75 | 3 | 0 |
+| Frozen adapter, temporal | V | 5 | 70 | 3 |
+| Frozen adapter, temporal | I | 0 | 0 | 78 |
 
-The experiments establish that requirement-conditioned local RTL specialists can
-be trained on workstation-class hardware and integrated with Muse-mediated
-research and assessment. Contract-1 shows useful local-guard discrimination
-under a narrow independent qualification protocol. OpenTitan expansion improves
-measured local-contract coverage. Contract-2 improves a focused temporal
-development frontier while leaving a substantial compliance-error rate. The
-campaign record demonstrates recoverable execution and explicit refusal when
-candidates fail registered constraints.
 
-The record also establishes practical methodological lessons. Whole-triplet
-metrics reveal failures hidden by row accuracy. Delivered exposure must be
-measured. Prediction scores are poorly calibrated under shift. Teacher-correct
-preservation needs behavioral diagnostics. Distributed execution and semantic
-option handling require tests at their real component boundaries. Training
-completion, candidate selection, release choice, and independent qualification
-are different events.
+## References
 
-### 17.2 What remains uncertain
+1. [Meta, Muse Glimmer post-training guidance](https://dev.meta.ai/docs/muse-glimmer/post-training).
+2. [Meta, Muse Glimmer model release](https://huggingface.co/meta-models/Muse-Glimmer-30B).
+3. Prior SiliconShield research white paper, superseded by the present report (see repository history), prior open-source experiments and dataset methodology.
+4. [OpenTitan](https://github.com/lowRISC/opentitan), upstream RTL source project used in the broader dataset lineage.
+5. [SiliconShield-RTL Contract-1](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-1), other open-source model.
+6. [SiliconShield-RTL Contract-2](https://huggingface.co/debjyotikm/siliconshield-rtl-contract-2), other open-source model.
 
-Most studies are adaptive, single-seed comparisons with small group counts. Some
-vary parent, learning rate, objective, and curriculum simultaneously. Those
-trials can establish whether a recipe met its gates, but cannot isolate causal
-effects. No general superiority of adapters, full fine-tuning, a loss term, or a
-hardware platform follows from them.
-
-Source-cone extraction and plain-English rendering are part of label validity.
-Model self-review is not independent human review. Formal checks remain limited
-by the registered transition model and assumptions. Perfect scores on a few
-component groups do not establish full-IP security, and raw confidence does not
-bound risk.
-
-### 17.3 Reproduction and release evidence
-
-The public repository provides model-loading, routing, data, reporting, and
-study infrastructure. Public models and dataset collections expose part of the
-research [1, 2]. Exact historical reproduction additionally needs the
-appropriate trainer, actual sampled exposure, runtime behavior, and saved
-evaluation protocol. Selected auxiliary-loss implementations belong to
-historical study snapshots rather than every current trainer.
-
-This white paper omits machine paths, cryptographic identifiers, and internal
-experiment aliases for readability. Their omission does not remove the need to
-verify immutable artifacts when reproducing a study. Release manifests and
-retained receipts provide that operational layer. The paper itself is an
-evidence synthesis, not a new independent reproduction of every reported run.
-
-Contract-1 qualification and shifted results were reconciled against saved
-records for the released artifact. The OpenTitan replay statement was reconciled
-against its completion record. Conflicting later manuscript prose was not
-carried into this paper. No saved model, dataset, evaluation outcome, or
-original manuscript was changed during preparation.
-
-**Conclusion.** SiliconShield's contribution is the combination of local
-decision specialists, executable data construction, and an auditable Muse
-research loop. Its strongest results arise when the question is explicit and the
-training population matches the intended reasoning task. Its failures show why
-broader data, longer runs, and more agent autonomy do not substitute for
-coherent execution, balanced semantic tests, and preserved evaluation
-boundaries. This provides a concrete foundation for improving both the
-specialists and the agents that use them.
-
-## Acknowledgments
-
-Both decision models were created with the help of Muse Wonder and
-Muse Spark 1.3, working through Muse Code and OpenCode agentic coding
-sessions on local GPU hardware.
-
-## References and public research resources
-
-[1] SiliconShield contributors. *SiliconShield source, model documentation,
-training recipes, and evaluation infrastructure.* See the [project
-introduction](../README.md) and [documentation index](README.md).
-
-[2] SiliconShield model and data releases. [Contract-1 and Contract-2 model
-card](siliconshield-rtl.md), [training collections and
-recipes](training-recipes.md), and [RTL benchmark](benchmark.md).
-Release and population descriptions in this paper were checked against local
-documentation and retained records. Public Hub access was not independently
-revalidated for this paper.
-
-[3] Qirui Chen et al. *HardSecBench: Benchmarking the Security Awareness of
-LLMs for Hardware Code Generation.* 2026.
-[Paper](https://arxiv.org/abs/2601.13864) ·
-[Source repository](https://github.com/chenqirui2002/HardSecBench).
-SiliconShield extracts scoped contracts from source material. Its decision task
-and reported scores are not the upstream code-generation benchmark.
-
-[4] lowRISC contributors. *OpenTitan.*
-[Source repository](https://github.com/lowRISC/opentitan).
-The [data pipeline](data-pipeline.md#sources-and-builders) describes the extraction
-scope and provenance retained by SiliconShield.
-
-[5] LAYA contributors. *LAYA: local decision engine.*
-[Original implementation](https://github.com/NandhaKishorM/laya) ·
-[Foundation model card](https://huggingface.co/convaiinnovations/laya) ·
-[Compatible LAYA Next runtime](https://github.com/debjyotikm/laya-next).
-Exact tested runtime identities belong in the [release guide](releases.md).
-
-[6] Benjamin Warner et al. *Smarter, Better, Faster, Longer: A Modern
-Bidirectional Encoder for Fast, Memory Efficient, and Long Context Finetuning
-and Inference.* 2024. [Paper](https://arxiv.org/abs/2412.13663) ·
-[ModernBERT-large model](https://huggingface.co/answerdotai/ModernBERT-large).
-Architecture dimensions in this paper come from the inspected model configuration.
-
-[7] Harness² contributors. *Harness²: Recursive Agent Harnessing for an Open
-World.* 2026. https://arxiv.org/abs/2610.14224
-
-[8] NVIDIA. *DGX Spark.*
-https://www.nvidia.com/en-us/products/workstations/dgx-spark/
-
-[9] NVIDIA. *RTX PRO 4000 Blackwell.*
-https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-4000/
-
-[10] YosysHQ contributors. *Yosys Open SYnthesis Suite.*
-https://yosyshq.net/yosys/. Icarus Verilog contributors. *Icarus Verilog.*
-[Icarus implementation](https://github.com/steveicarus/iverilog). The
-[data pipeline](data-pipeline.md) describes how these tools support label admission.
-
-**Source note.** Numerical study results are original SiliconShield experimental
-records synthesized from the research manuscript, saved metric reports, dataset
-audits, calibration receipts, release documentation, and candidate-selection
-records. External references describe foundations and methods rather than
-independently validating SiliconShield's measurements. No cumulative GPU-hour,
-energy, or cost total is reported because the available records do not provide a
-complete, comparable accounting.
+This paper describes the present experiment's scope. It does not establish competition eligibility, third-party endorsement, or a new redistribution license for upstream model weights.

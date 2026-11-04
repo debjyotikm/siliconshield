@@ -99,6 +99,13 @@ def build_parser() -> argparse.ArgumentParser:
     assess.add_argument(
         "--rtl", action="append", default=[], help="RTL location (repeat)."
     )
+    assess.add_argument(
+        "--local-workers",
+        action="store_true",
+        help="Consult local decision-model workers. Local models are "
+        "off by default and not supported; use at own risk. The "
+        "Meta-only path uses Glimmer specialists.",
+    )
     return parser
 
 
@@ -518,6 +525,15 @@ def main(argv: list[str] | None = None) -> int:
     """Run the CLI; return the process exit code."""
     args = build_parser().parse_args(argv)
     if args.command == "assess":
+        if not args.local_workers:
+            print(
+                "experts: local decision models are off by default "
+                "and not supported; use at own risk. Pass "
+                "--local-workers to consult them, or assess "
+                "through the Glimmer specialists path.",
+                file=sys.stderr,
+            )
+            return 2
         try:
             report = run_assess(args)
         except (

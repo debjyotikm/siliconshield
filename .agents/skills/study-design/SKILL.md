@@ -6,8 +6,7 @@ description: Design a reproducible decision-model study with frozen plans, measu
 # Study Design
 
 Use this skill when starting or reviewing a SiliconShield-RTL
-training study, in either mode. Full reference:
-`docs/study-walkthrough.md`. Implementation:
+training study, in either mode. Implementation:
 `siliconshield/training/laya/decision_study.py`.
 
 ## Pick the mode

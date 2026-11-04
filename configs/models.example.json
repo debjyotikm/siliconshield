@@ -5,8 +5,8 @@
       "id": "contract-1",
       "display_name": "Contract-1 decision model",
       "checkpoint": "/path/to/contract-1-export",
-      "python": "/path/to/laya-environment/bin/python",
-      "laya_root": "/path/to/pinned-laya-runtime",
+      "python": "/path/to/training-env/bin/python",
+      "laya_root": "/path/to/pinned-local-model-runtime",
       "expected_files": {
         "model.safetensors": "<64 lowercase hex characters>"
       },
@@ -16,8 +16,8 @@
       "id": "contract-2",
       "display_name": "Contract-2 decision model",
       "checkpoint": "/path/to/contract-2-export",
-      "python": "/path/to/laya-environment/bin/python",
-      "laya_root": "/path/to/pinned-laya-runtime",
+      "python": "/path/to/training-env/bin/python",
+      "laya_root": "/path/to/pinned-local-model-runtime",
       "expected_files": {
         "model.safetensors": "<64 lowercase hex characters>"
       },

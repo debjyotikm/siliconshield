@@ -297,7 +297,14 @@ def test_app_case_and_rtl_conflict_is_a_clean_error(tmp_path, monkeypatch):
     rtl.write_text("module m; endmodule")
     monkeypatch.setattr(
         "sys.argv",
-        ["siliconshield", "--case", "unauthorized-write", "--rtl", str(rtl)],
+        [
+            "siliconshield",
+            "--case",
+            "unauthorized-write",
+            "--rtl",
+            str(rtl),
+            "--local-model",
+        ],
     )
     with pytest.raises(SystemExit, match="not both"):
         cli.main()
@@ -314,6 +321,7 @@ def test_app_missing_rtl_is_a_clean_error(tmp_path, monkeypatch):
             str(tmp_path / "missing.sv"),
             "--requirement",
             "synthetic requirement",
+            "--local-model",
         ],
     )
     with pytest.raises(SystemExit, match="Cannot read --rtl"):
@@ -522,3 +530,20 @@ def test_investigate_rejects_malformed_cases(tmp_path):
         workflow_module.report_assessment(["x"])
     with pytest.raises(ValueError, match="RTL text"):
         workflow_module.apply_patch(5, [("a", "b")])
+
+
+def test_app_main_refuses_local_models_by_default(tmp_path, monkeypatch):
+    from siliconshield.app.cli import main
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "app",
+            "--case",
+            "unauthorized-write",
+            "--output",
+            str(tmp_path / "out"),
+        ],
+    )
+    with pytest.raises(SystemExit, match="off by default"):
+        main()

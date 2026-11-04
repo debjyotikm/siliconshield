@@ -4,13 +4,14 @@
 
 | Scope | Baseline | Related specifications |
 |---|---|---|
-| Implemented application, inference, and training boundaries | Current repository interfaces and serialized contracts | [Assessment](router.md) · [Studies](study-walkthrough.md) · [Wire and artifact contracts](reference.md) |
+| Implemented application, inference, and training boundaries | Current repository interfaces and serialized contracts | [Assessment](router.md) · [Wire and artifact contracts](reference.md) |
 
 SiliconShield combines requirement-conditioned RTL assessment with a controlled
-model-improvement system. Contract-1 and Contract-2 are independently trained
-RTL decision models. Applications can invoke either model directly or route a declared design scope
-to specialists with measured support. Muse Glimmer can request those assessments
-and interpret the returned evidence alongside the RTL. A
+model-improvement system. Contract-1 and Contract-2 are specialist skills that
+Muse Glimmer applies to a declared design scope. Applications can also invoke
+the retained local path directly or route a scope to specialists with measured
+support. Muse Glimmer can request those assessments and interpret the returned
+evidence alongside the RTL. A
 separate investigation path executes requirement checks and tests proposed repairs.
 
 The training system uses accepted datasets, frozen study inputs, owned jobs,
@@ -22,8 +23,8 @@ campaign promotion have separate records and acceptance conditions.
 | Path | Entry point | Result |
 |---|---|---|
 | Investigate RTL with Glimmer and specialists | `glimmer_router` calls `router.roster` and `router.assess` against an operator-selected registry. | Specialist evidence and an agent explanation, with disagreements and coverage gaps retained. |
-| Use decision models directly | Python `WorkerPool.load()` / `analyze()`, or the experts CLI without arbitration. | Structured predictions, scores, coverage, and execution identity. No agent call. |
-| Build or improve decision models | A bound job through `glimmer_operator`, or a separately configured campaign supervisor. | Checkpoints, development results, and an explicit promotion or preservation decision. |
+| Use the retained local path directly | Python `WorkerPool.load()` / `analyze()`, or the experts CLI without arbitration. | Structured predictions, scores, coverage, and execution identity. No agent call. |
+| Build or improve retained local models | A bound job through `glimmer_operator`, or a separately configured campaign supervisor. | Checkpoints, development results, and an explicit promotion or preservation decision. |
 
 The [setup guide](setup.md) gives runnable entry points for each path. Direct
 Python inference does not require a capability profile. The experts CLI still
@@ -47,7 +48,7 @@ does not establish a counterexample or exploitability.
 
 ## 1. Runtime decomposition
 
-![Three execution paths: Glimmer-driven specialist assessment, direct model inference, and controlled decision-model training.](diagrams/system-overview.svg)
+![Three execution paths: Glimmer-driven specialist assessment, direct model inference, and controlled retained-model training.](diagrams/system-overview.svg)
 
 **Figure 01.** Agent-assisted assessment, direct inference, and training.
 Interface IDs refer to the schedule below. Each lane has its own entry point
@@ -118,8 +119,8 @@ The repository contains implementation, illustrative configurations, and tests.
 
 The export manifest identifies artifact bytes. Observed execution identity
 also binds the inference protocol. The [interface reference](reference.md#decision-and-worker-contracts)
-owns those fields, and [decision-model qualification](expert-qualification.md) describes
-how to measure them. Identical weights alone do not establish a matched comparison.
+owns those fields and describes how to measure them. Identical weights alone
+do not establish a matched comparison.
 
 ## 4. Training control and recovery
 
@@ -134,14 +135,14 @@ but have different responsibilities:
 
 In the local-operator path, Glimmer serves from a separate inference environment.
 It can run on another machine from the training GPU. Its weights remain
-unchanged. The decision-model trainer performs optimization, writes durable
+unchanged. The retained-model trainer performs optimization, writes durable
 checkpoints, and evaluates development views. `Operator` and the owned worker
-retain execution authority. The [local training guide](decision-model-training-with-glimmer.md)
-specifies configuration and reattachment.
+retain execution authority. Configuration and reattachment
+are recorded with the owned job.
 
 The study mode also fixes the starting model:
 
-- `improve_existing` continues an immutable decision-model export and protects
+- `improve_existing` continues an immutable retained export and protects
   registered retention views while targeting an improvement.
 - `create_new` starts from a verified untouched, adapter-free foundation and
   defines a new domain's evaluation plan. Removing adapters from a trained
@@ -152,7 +153,7 @@ choices. Dataset acceptance and measured fitting/resource receipts precede a
 bound production launch. Installing the runtime or completing a toy fitting
 job does not establish those qualifications.
 
-The [round lifecycle](campaigns.md#round-lifecycle) is persisted by
+The round lifecycle is persisted by
 `laya_campaign.py`. The supervisor coordinates analysis and proposals. `Operator`
 and `security_jobs` own preparation, submission, reconciliation, and recovery.
 A deployment provides the polling/service loop and an evaluator callback.
@@ -181,7 +182,6 @@ the reference for that transaction.
 | Prepared data, policy, or command changes | Refuse the bound launch or assessment until a reviewed specification is registered. | `execution/study_contract.py` · [study enforcement tests](../tests/test_study_enforcement.py) |
 | Crash during promotion or report closeout | Resume from transaction/phase evidence and revalidate the export before completing. | `execution/laya_campaign.py` |
 
-Full operational procedures are in [training operations and recovery](training-operations.md).
 Locks and identity checks coordinate trusted processes. Host/container isolation
 remains a deployment responsibility.
 
@@ -233,7 +233,7 @@ This preserves experimental authority without asserting that every proposed
 experiment will improve the model.
 
 **Scientific separation.** Development selects and diagnoses. Reserved
-populations evaluate frozen candidates. The [evaluation specification](evaluation.md)
+populations evaluate frozen candidates. The [research white paper](whitepaper.md)
 defines denominators, whole-triplet consistency, uncertainty, and comparison
 requirements. Infrastructure tests establish these contracts' behavior under
 fixtures, not model quality on arbitrary RTL.
@@ -248,5 +248,5 @@ fixtures, not model quality on arbitrary RTL.
 | Add a new training objective | Versioned objective, trainer/study gate parity, resume signature, refusal tests, and runtime qualification |
 | Change a serialized interface | New schema/protocol version with explicit compatibility behavior and consumer tests |
 
-Use [decision-model qualification](expert-qualification.md), [study walkthrough](study-walkthrough.md),
-and [contributor checks](../CONTRIBUTING.md#local-gate) as the corresponding integration procedures.
+Use [contributor checks](../CONTRIBUTING.md#local-gate) as the corresponding
+integration procedure.

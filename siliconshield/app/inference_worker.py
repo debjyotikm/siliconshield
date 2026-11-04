@@ -9,6 +9,8 @@ analyses until shutdown; unloading terminates this process to
 release its CUDA context.
 """
 
+# Non-meta local decision models are not supported. Use at own risk.
+
 import argparse
 import copy
 import hashlib

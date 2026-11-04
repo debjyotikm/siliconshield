@@ -35,7 +35,7 @@ A study needs five pieces:
   Units launch the worker module from the snapshot as their
   working directory, so a trainer-only copy fails on import.
 - A job profile: job python, snapshot, parent export, dataset,
-  runs directory, resource root, GPU list, LAYA root, timeout,
+  runs directory, resource root, GPU list, runtime root, timeout,
   and training defaults. One GPU takes a single-device list.
 
 ## Validate before submit

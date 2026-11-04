@@ -32,7 +32,7 @@ class DemoServer(ThreadingHTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
-    """Expose only explicit assets and bounded assessment/study actions."""
+    """Expose only explicit assets and bounded assessment actions."""
 
     server: DemoServer
     server_version = "SiliconShieldDemo/1.0"
@@ -86,10 +86,6 @@ class Handler(BaseHTTPRequestHandler):
         demo = self.server.demo
         try:
             if path == "/api/bootstrap":
-                gpu = demo.config["gpu"]
-                devices = [{"id": "cpu", "label": "CPU · server"}]
-                if gpu is not None:
-                    devices.append({"id": f"cuda:{gpu}", "label": f"GPU {gpu}"})
                 self.send(
                     200,
                     {
@@ -98,20 +94,13 @@ class Handler(BaseHTTPRequestHandler):
                             ROOT / "examples.example.json", []
                         ),
                         "title": "SiliconShield",
-                        "gpu": gpu,
-                        "devices": devices,
-                        "default_device": demo.inference_device(),
-                        "toy_updates": 3,
-                        "training_enabled": demo.config["training_enabled"],
                         "glimmer_configured": bool(demo.config["glimmer"]),
+                        "arbiter_configured": bool(demo.config.get("arbiter")),
                     },
                 )
                 return
             if path == "/api/status":
                 self.send(200, demo.status())
-                return
-            if path in {"/api/training", "/api/training/receipt"}:
-                self.send(200, demo.training_status())
                 return
             if path.startswith("/api/jobs/"):
                 job_id = path.rsplit("/", 1)[-1]
@@ -149,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send(500, {"error": str(exc)})
 
     def do_POST(self) -> None:
-        """Authorize mutations before dispatching any model or training work."""
+        """Authorize mutations before dispatching any specialist work."""
         port = self.server.server_port
         allowed = {f"http://127.0.0.1:{port}", f"http://localhost:{port}"}
         token = self.headers.get("X-Demo-Token", "")
@@ -188,20 +177,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send(500, {"error": str(exc)})
 
     def dispatch(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
-        """Keep paths, commands, and training settings out of browser authority."""
+        """Keep paths, commands, and settings out of browser authority."""
         demo = self.server.demo
-        if path in {"/api/models/load", "/api/assess", "/api/models/unload"}:
+        if path == "/api/assess":
             model = body.get("model")
             if not isinstance(model, str) or model not in demo.entries:
                 raise ValueError(
-                    "Register this model in the local model registry first."
-                )
-            if path.endswith("/unload"):
-                return demo.unload(model)
-            device = demo.inference_device(body.get("device"))
-            if path.endswith("/load"):
-                return demo.submit_task(
-                    "load", lambda log: demo.load(model, log, device)
+                    "Register this specialist in the Glimmer registry first."
                 )
             state_text(body)
             return demo.submit_task(
@@ -212,35 +194,15 @@ class Handler(BaseHTTPRequestHandler):
             if body.get("scope") not in ROUTING_SCOPES:
                 raise ValueError("Select a measured routing domain.")
             if not demo.config["registry"]:
-                raise ValueError("Configure a model registry before routing.")
+                raise ValueError(
+                    "Configure a specialist registry before routing."
+                )
             return demo.submit_task("router", lambda log: demo.route(body, log))
-        if path == "/api/training/start":
-            if set(body) != {"confirm"} or body.get("confirm") is not True:
-                raise ValueError(
-                    "Only an explicit start confirmation is accepted."
-                )
-            if not demo.config["training_enabled"]:
-                raise ValueError(
-                    "Toy training is disabled in the local configuration."
-                )
-            with demo.lock:
-                if any(
-                    j["kind"] == "training-launch" and j["status"] == "running"
-                    for j in demo.jobs.values()
-                ):
-                    raise ValueError(
-                        "A training launch is already in progress."
-                    )
-                return demo.submit_task(
-                    "training-launch", demo.prepare_training
-                )
-        if path == "/api/training/stop":
-            return demo.stop_training()
         raise ValueError("Unknown action.")
 
 
 def serve(config: dict[str, Any]) -> None:
-    """Own one local session while training jobs retain their durable lifecycle."""
+    """Own one local session of Glimmer specialist assessments."""
     import fcntl
 
     state = Path(config["state_dir"])

@@ -320,6 +320,27 @@ def _write_cli_registry(tmp_path):
     return str(registry_path)
 
 
+def test_cli_assess_refuses_local_models_by_default(tmp_path, capsys):
+    from siliconshield.experts.cli import main
+
+    registry_path = _write_cli_registry(tmp_path)
+    state_path = tmp_path / "state.txt"
+    state_path.write_text("synthetic state")
+    code = main(
+        [
+            "assess",
+            "--registry",
+            registry_path,
+            "--scope",
+            "fifo",
+            "--state-file",
+            str(state_path),
+        ]
+    )
+    assert code == 2
+    assert "off by default" in capsys.readouterr().err
+
+
 def test_cli_assess_end_to_end(tmp_path, capsys):
     from siliconshield.experts.cli import main
 

@@ -201,11 +201,11 @@ Before accepting a documentation change:
 1. Check commands, environment variables, schema fields, and callbacks against
    their implementation. State prerequisites, side effects, and expected output.
 2. Resolve local links and heading anchors. Syntax-check fenced shell and Python
-   examples, including the [study walkthrough](docs/study-walkthrough.md) and
+   examples, including the
    [qualification example](examples/qualify_experts.py).
 3. Keep one maintained procedure for each workflow and link to it from other
    guides. Distinguish model predictions, executed checks, and measured quality
-   using the [evaluation protocol](docs/evaluation.md).
+   with explicit evidence for each claim.
 4. Update editable diagrams and rendered previews together. Inspect them at
    normal page width. Rendering instructions belong to the
    [architecture figure index](docs/diagrams/README.md) and

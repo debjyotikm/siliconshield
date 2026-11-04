@@ -85,6 +85,7 @@ class WorkerPool:
         """Return an immutable copy of the validated ready receipt."""
         return copy.deepcopy(self._ready[expert_id])
 
+    # Non-meta local decision models are not supported. Use at own risk.
     def load(self, entry: ModelEntry) -> None:
         """Load and validate identity before permitting any analysis.
 

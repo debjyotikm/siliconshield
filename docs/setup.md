@@ -1,7 +1,7 @@
 # Setup
 
-[Documentation index](README.md) · [Pinned releases](releases.md) ·
-[Router](router.md) · [Study walkthrough](study-walkthrough.md)
+[Documentation index](README.md) ·
+[Router](router.md)
 
 This guide connects the three SiliconShield workflows to their prerequisites,
 entry points, and output checks. Start with the shared installation, then choose
@@ -9,11 +9,15 @@ one path:
 
 | Workflow | Start here | What runs |
 |---|---|---|
-| Investigate RTL with Muse Glimmer and specialist decision models | [Agent-assisted investigation](#1-investigate-rtl-with-muse-glimmer-and-specialists) | Local Glimmer requests scoped assessments and interprets specialist evidence. |
-| Use the decision models directly | [Direct inference](#2-use-the-decision-models-directly) | Contract-1 or Contract-2 returns a structured prediction, without an agent. |
-| Build or improve a decision model | [Training setup](#3-build-and-improve-decision-models) | A frozen study governs data, optimization, evaluation, and recoverable GPU jobs. |
+| Investigate RTL with Muse Glimmer and Contract skills | [Agent-assisted investigation](#1-investigate-rtl-with-muse-glimmer-and-specialists) | Local Glimmer requests scoped assessments and interprets specialist evidence. |
+| Use the retained local path directly | [Direct inference](#2-use-the-retained-local-path-directly) | A retained local worker returns a structured prediction, without an agent. |
+| Build or improve a retained local model | [Training setup](#3-build-and-improve-retained-local-models) | A frozen study governs data, optimization, evaluation, and recoverable GPU jobs. |
 
-Decision-model inference can use CPU or CUDA. Glimmer serving has its own GPU
+Sections 2 and 3 cover the retained local research path, which is disabled
+by default and is not part of the shipped product. The shipped path uses
+Glimmer and the Contract skills.
+
+Retained local inference can use CPU or CUDA. Glimmer serving has its own GPU
 runtime and can run on another machine. The shipped training job runner requires
 Linux and systemd user services. If working from a Mac, run these commands in an
 SSH session on the Linux host. A local browser or terminal does not need the
@@ -43,18 +47,18 @@ or load model weights into its own process. Keep models, registries, datasets,
 traces, and run outputs in the workspace, outside Git. Record
 `git rev-parse HEAD` with each measurement.
 
-### Decision-model worker environment
+### Retained local worker environment
 
-Download both immutable exports and check out the compatible LAYA Next runtime
-using [release setup](releases.md#download-immutable-exports). That procedure
-reads the pinned payloads from [model-releases.toml](../configs/model-releases.toml)
-and produces `models/contract-1`, `models/contract-2`, and `laya-next` beneath
+Download both immutable exports and check out the compatible local model
+runtime. Read the pinned payloads from
+[model-releases.toml](../configs/model-releases.toml), which
+produces `models/contract-1`, `models/contract-2`, and `laya-next` beneath
 `SILICONSHIELD_WORKSPACE`. Do not substitute a moving runtime branch.
 
 Create the worker environment separately. The commands below use the pinned
 runtime dependencies. For CUDA, select the platform wheel/index compatible with
 your GPU and driver before installation. The tested versions and hardware are
-recorded in [releases](releases.md#tested-combination).
+recorded in [model-releases.toml](../configs/model-releases.toml).
 
 ```bash
 python3.11 -m venv "$SILICONSHIELD_WORKSPACE/worker-env"
@@ -75,12 +79,13 @@ for that choice. To use a GPU, check `nvidia-smi` and set
 `SILICONSHIELD_DEVICE=cuda:0` before creating the registry. Select an available
 card. The worker does not silently fall back from CUDA to CPU.
 
-The LAYA runtime must contain `laya/__init__.py`. Installing SiliconShield alone
-does not install that runtime, decision-model exports, or a GPU driver. CPU and
+The compatible runtime checkout must contain `laya/__init__.py`. Installing
+SiliconShield alone does not install that runtime, local model exports, or a
+GPU driver. CPU and
 CUDA inference have different execution identities and can differ on marginal
 predictions. Capability measurements must match the chosen execution settings.
 
-### Register both decision models
+### Register both local models
 
 Create a new registry from the release manifest. This checks paths and schema
 on CPU. It does not load weights or assign capability tiers:
@@ -169,8 +174,8 @@ Install the benchmark download dependency in the controller:
 python -m pip install -r requirements/benchmark.txt
 ```
 
-Follow [the reviewed-population procedure](benchmark.md#reproduce-the-reviewed-population)
-to prepare the reviewed dataset and its provenance record. Then measure the
+Prepare the reviewed dataset and its provenance record following
+[dataset construction](data-pipeline.md). Then measure the
 registered models and publish their profiles into a new output directory:
 
 ```bash
@@ -186,8 +191,7 @@ export SILICONSHIELD_REGISTRY="$SILICONSHIELD_WORKSPACE/routing-measurement/mode
 This runs model inference on the registry's device and creates ready receipts,
 measurement reports, capability profiles, and the routable registry. It makes
 no agent calls and does not train. The example refuses to publish profiles if
-inference errors occur. See [decision-model qualification](expert-qualification.md) for
-the output contract and additional scopes.
+inference errors occur.
 
 These are development measurements for the selected areas. They do not establish
 independent model qualification or a combined-router accuracy advantage. Reuse
@@ -200,7 +204,7 @@ Use a running Glimmer service with the tool-call interface supported by the
 [router bridge](router.md#driving-assessments-from-glimmer). For a new deployment,
 follow [reference serving](inference.md#image-and-workspace) or the separately
 qualified [native inference path](inference.md). Keep that environment separate
-from the decision-model worker. The repository supplies a reference Dockerfile,
+from the local worker. The repository supplies a reference Dockerfile,
 not a ready-built native vLLM image.
 
 Set the actual endpoint and served model name. These values match the reference
@@ -252,7 +256,7 @@ and its login. It does not read the Glimmer endpoint variables above. See
 In either deployment, RTL and evidence go to the configured agent backend.
 Local specialist execution alone does not make a remote agent call local.
 
-## 2. Use the decision models directly
+## 2. Use the retained local path directly
 
 ### Python integration without an agent
 
@@ -281,7 +285,7 @@ PY
 ```
 
 Select `contract-1` and supply a local guard or register-update requirement to
-use the other decision model. In a Python application, retain the `WorkerPool`
+use the other local model. In a Python application, retain the `WorkerPool`
 context across requests to avoid repeated loading. `workers.ready(model_id)`
 returns the validated load receipt.
 
@@ -310,13 +314,14 @@ is supplied. Read `assessment.responses`, `assessment.errors`, and effective
 but provides no routable experts for this command. The CLI reports specialist
 scores as `scores`, while the direct worker result uses `probabilities`.
 
-## 3. Build and improve decision models
+## 3. Build and improve retained local models
 
 ### Training environment and study mode
 
 Use a separate CUDA-capable training interpreter with SiliconShield,
-[core dependencies](../requirements/core.txt), and a pinned compatible LAYA
-runtime. It may use the same dependency versions as the inference worker, but
+[core dependencies](../requirements/core.txt), and a pinned compatible local
+model runtime. It may use the same dependency versions as the inference
+worker, but
 its source snapshot, runtime, devices, and settings are frozen for the study.
 Check imports and systemd before preparing a job:
 
@@ -333,7 +338,7 @@ their own interpreter and runtime paths.
 
 | Study mode | Starting artifact | Evaluation obligation |
 |---|---|---|
-| `improve_existing` | An immutable decision-model export, such as Contract-1 or Contract-2 | Improve the target while satisfying the registered retention limits. |
+| `improve_existing` | An immutable retained export, such as Contract-1 or Contract-2 | Improve the target while satisfying the registered retention limits. |
 | `create_new` | An untouched, adapter-free foundation with a verified foundation reference | Establish the new domain's baseline, development gates, and reserved evaluation plan. |
 
 Removing adapters from an already trained export does not make it an untouched
@@ -350,12 +355,11 @@ Complete these steps before launching:
    automatic acceptance record. Keep benchmark/development rows out of TRAIN.
 2. **Measure the recipe.** Run a bounded TRAIN-only fitting probe and resource
    check. Verify that the intended parameter groups move, the examples fit the
-   input budget, and the sampler delivers required exposure. The
-   [input validator](decision-model-training-with-glimmer.md#validate-the-data-on-cpu)
-   checks the planned data and sampling configuration before GPU submission.
-3. **Freeze the study.** Follow the [study walkthrough](study-walkthrough.md)
-   to bind parent, data, source, runtime, recipe, views, selection policy,
-   receipts, and the exact launch command. Its output is `study.json` and a
+   input budget, and the sampler delivers required exposure. Validate
+   the planned data and sampling configuration before GPU submission.
+3. **Freeze the study.** Bind parent, data, source, runtime, recipe, views,
+   selection policy, receipts, and the exact launch command. Its output is
+   `study.json` and a
    `bound-job-profile.json`. The study API verifies them without launching.
 4. **Assign resources.** The profile selects GPU IDs, run storage, timeout,
    retries, and a shared resource root. Use the same resource root for jobs
@@ -364,15 +368,14 @@ Complete these steps before launching:
 
 Keep all study artifacts outside Git. A source snapshot must contain the full
 `siliconshield` package. Use the [trainer guide](security-model-training.md)
-for optimization controls and [training operations](training-operations.md) for ownership and
+for optimization controls, ownership, and
 recovery. Installing dependencies alone does not make a study train-ready.
 
 ### Launch with a local Glimmer operator
 
-Prepare `operator.local.json` in the study workspace using the complete
-[one-job configuration](decision-model-training-with-glimmer.md#run-one-frozen-study-job).
-It names the bound profile, the frozen experiment ID, the actual Glimmer
-endpoint/model, output directory, polling budget, and intervention budget.
+Prepare `operator.local.json` in the study workspace. It names the bound
+profile, the frozen experiment ID, the actual Glimmer endpoint/model, output
+directory, polling budget, and intervention budget.
 Use the same endpoint preparation as workflow 1. On another serving host,
 set `ssh_host` in this configuration.
 
@@ -385,8 +388,8 @@ python -m siliconshield.research_loop.execution.glimmer_operator \
 ```
 
 Glimmer reads evidence and proposes bounded actions. SiliconShield enforces the
-study and owns execution, checkpoints, and recovery. Only the decision model
-receives optimizer updates. Glimmer's weights remain unchanged.
+study and owns execution, checkpoints, and recovery. Only the retained local
+model receives optimizer updates. Glimmer's weights remain unchanged.
 
 **Check the result:** require completed execution, valid checkpoints, delivered
 exposure, per-view development results, an explicit promote-or-preserve
@@ -395,16 +398,15 @@ final test evaluation follow their separate reserved protocols.
 
 Reattach with the same configuration after an interruption. Reaching
 `max_cycles` ends that client invocation, not necessarily the owned job.
-Inspect execution and operator receipts before another submission. The
-[bounded strategy driver](decision-model-training-with-glimmer.md#fitting-followed-by-development)
-can compare fitting recipes, but does not create a study manifest for each job.
-Use the bound one-job path for manifest-enforced studies. Multi-round diagnosis
-and supervision are configured separately in [campaigns](campaigns.md).
+Inspect execution and operator receipts before another submission. A bounded
+strategy driver can compare fitting recipes, but does not create a study
+manifest for each job. Use the bound one-job path for manifest-enforced
+studies.
 
 ## Optional tools and development checks
 
 Verilator, a C++ compiler, and make are needed for the separate
-[executable repair workflow](releases.md#real-muse-repair), not ordinary specialist
+executable repair workflow, not ordinary specialist
 assessment. Dataset construction may need Yosys, Icarus, and
 `requirements/data.txt`. Harness² guidance is optional. Its dependency and
 worker setup are described in [Muse procedures](muse-procedures.md).
@@ -432,7 +434,7 @@ quality. See [contributor checks](../CONTRIBUTING.md#local-gate) for the curated
 
 | Symptom | Check |
 |---|---|
-| Worker cannot load | Verify its interpreter can import SiliconShield and the pinned LAYA runtime. Check export files, hashes, device, and memory. |
+| Worker cannot load | Verify its interpreter can import SiliconShield and the pinned local model runtime. Check export files, hashes, device, and memory. |
 | Router finds no experts | Use the generated profiled registry and a scope present in its measurements. An unprofiled registry is insufficient. |
 | Evidence becomes unrated | Compare the measured and observed execution identities. Remeasure after changing weights, runtime, question contract, device type, or precision. |
 | Glimmer is reachable but makes no valid tool calls | Check the served model name, tool-call/reasoning parser, response budget, and recorded trace. Reachability alone is insufficient. |

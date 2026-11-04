@@ -2,8 +2,12 @@
 
 [Documentation index](README.md)
 
-The decision model learns requirement-conditioned security judgments using a
-LAYA foundation and runtime. SiliconShield provides the dataset pipeline,
+> Scope: this guide documents the trainer for the retained local research
+> path. That path is disabled by default and is not part of the shipped
+> product, which uses Glimmer and the Contract skills.
+
+The retained local model learns requirement-conditioned security judgments using an
+open-source foundation and local model runtime. SiliconShield provides the dataset pipeline,
 distributed trainer, continuation rules, checkpoint selection, and export
 checks. Choose learning rates and sampling weights for the task, then record
 them in the recipe.
@@ -21,7 +25,7 @@ complete input encoding, not only raw RTL token length. Use a new output
 directory for a new experiment. Training refuses rows whose question bytes
 differ from `--question-contract` and refuses unreviewed templates when
 `--review-ledger` is set. For new owned work, record this plan as a
-[decision study](study-walkthrough.md) instead of assembling it by hand.
+decision study instead of assembling it by hand.
 The campaign then enforces the frozen bytes at every launch.
 
 The training and development files are normally `train.jsonl` and `dev.jsonl`.
@@ -50,8 +54,8 @@ python -m torch.distributed.run --standalone --nproc_per_node=3 \
 ```
 
 Use `--continue-training` when initializing from an adapted export. A new
-unadapted foundation need not use it. Prefer the owned operator path described
-in [campaigns](campaigns.md) when sharing training hardware. Direct `torchrun`
+unadapted foundation need not use it. Prefer the owned operator path
+when sharing training hardware. Direct `torchrun`
 does not acquire the operator's job ownership automatically.
 
 Distributed data parallel replicates the model per GPU. For three ranks,
@@ -100,7 +104,7 @@ ledger, packets, pools, and development views required by the study. The trainer
 Whole-triplet selection is implemented in the repository. The specialized
 triplet-aware optimization and semantic-margin objectives in the historical
 Contract-2 study used versioned study code. They are not enabled by a generic
-trainer flag here. See [training recipes](training-recipes.md).
+trainer flag here.
 
 ## Select on the full task
 
@@ -128,7 +132,7 @@ The choice depends on the scientific priority declared before training:
 The version is a policy choice, not a model-quality upgrade. Keep it frozen for
 matched comparisons. Legacy transfer and incumbent-reference paths remain for
 reproducing existing campaigns. They are not the recommended assembly path for
-new decision studies. See the [walkthrough](study-walkthrough.md).
+new decision studies.
 
 The [selection compatibility reference](reference.md#selection-compatibility-reference)
 describes legacy campaign ranking and the implemented protected-view variants.
@@ -143,7 +147,7 @@ must check the full frozen gates before accepting it.
 The campaign creates a round recipe containing its selection reference. Jobs
 must point at that recipe. Ranking or tolerance changes require explicit policy
 registration. Do not compare runs with different rules as though selection were
-unchanged. See [evaluation](evaluation.md) for metric definitions.
+unchanged.
 
 ## Preserve earlier behavior
 

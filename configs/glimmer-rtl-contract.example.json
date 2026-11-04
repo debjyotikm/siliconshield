@@ -1,0 +1,22 @@
+{
+  "label_order": [
+    "satisfies_requirement",
+    "violates_requirement",
+    "insufficient_context"
+  ],
+  "label_token_ids": [
+    45,
+    46,
+    47
+  ],
+  "template": {
+    "system": "You assess digital hardware against a stated requirement. Use only the supplied RTL and assumptions. Return exactly one letter: A means satisfies_requirement, B means violates_requirement, C means insufficient_context. A requires the requirement to hold for all allowed inputs and reachable states. B requires an allowed counterexample. C requires omitted information that can change whether the requirement holds. A conditional path alone is not missing context. Do not infer behavior from names or comments.",
+    "user_prefix": "Assess this RTL requirement. Respect the reset scope and execution assumptions. Answer with A, B, or C only.\n\n",
+    "date_string": "2026-11-04",
+    "reasoning_strength": "low",
+    "assistant_prefix_method": "native rendered final assistant message, cut before sentinel"
+  },
+  "base_model": "meta-models/Muse-Glimmer-30B",
+  "base_revision": "cec94fcfd6512f2cfe708138c32533b346ea4f69",
+  "max_length": 2048
+}

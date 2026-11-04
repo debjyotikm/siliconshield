@@ -2,7 +2,7 @@
   "python": "/path/to/security-environment/bin/python",
   "source": "/path/to/siliconshield-checkout",
   "laya_root": "/path/to/laya-next-checkout",
-  "model": "/path/to/published-laya-checkpoint",
+  "model": "/path/to/published-local-checkpoint",
   "data": "/path/to/verified-security-dataset",
   "runs": "/path/to/private-training-artifacts",
   "gpus": [0, 1, 2],

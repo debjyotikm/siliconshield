@@ -1,7 +1,7 @@
 # Writing requirements for RTL analysis
 
 [Documentation index](README.md) · [Router](router.md) ·
-[Decision models](siliconshield-rtl.md) · [Dataset construction](data-pipeline.md)
+[Model card](siliconshield-rtl.md) · [Dataset construction](data-pipeline.md)
 
 An RTL implementation describes what a circuit does. A requirement describes
 what it must do. Assessing a bug means comparing the two under stated operating
@@ -354,7 +354,7 @@ does not add omitted design context or prove the requirement.
 
 These are model assessments, not simulation or formal proof. A score is not a
 calibrated correctness guarantee. The examples above teach specification and
-review practice, not a promise that either decision model classifies every
+review practice, not a promise that either specialist classifies every
 variant correctly. Use the [model card](siliconshield-rtl.md) and
 [limitations](LIMITATIONS.md) to select the appropriate domain. Dataset labels
 require the separate [solver evidence and semantic review](data-pipeline.md)

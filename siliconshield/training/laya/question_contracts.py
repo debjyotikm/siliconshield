@@ -20,6 +20,8 @@ LABELS = [
 
 LEGACY_CONTRACT = "siliconshield-requirement-context-v0"
 NEW_CONTRACT = "siliconshield-requirement-context-v1"
+GLIMMER_CONTRACT = "glimmer-specialist-v1"
+ADAPTER_CONTRACT = "siliconshield-adapter-scoring-v1"
 
 _CONTRACTS = {
     LEGACY_CONTRACT: {
@@ -46,6 +48,28 @@ _CONTRACTS = {
             "give the same verdict, use that verdict. A conditional "
             "path, irrelevant omission, or difficulty alone is not "
             "insufficient context."
+        ),
+        "criteria": list(LABELS),
+    },
+    GLIMMER_CONTRACT: {
+        "instructions": (
+            "Assess the RTL against the requirement under the "
+            "supplied assumptions, following the specialist skill. "
+            "Use satisfies_requirement when the property holds and "
+            "violates_requirement when a reachable counterexample "
+            "exists. Use insufficient_context when missing "
+            "implementation or policy information can change the "
+            "answer. End with a VERDICT line naming one label and a "
+            "CONFIDENCE line with self-reported uncertainty."
+        ),
+        "criteria": list(LABELS),
+    },
+    ADAPTER_CONTRACT: {
+        "instructions": (
+            "Score the RTL against the requirement under the "
+            "supplied assumptions with the fine-tuned adapter. The "
+            "verdict is the top single-token answer; scores are "
+            "normalized over the three answer tokens."
         ),
         "criteria": list(LABELS),
     },

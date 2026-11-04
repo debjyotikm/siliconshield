@@ -344,6 +344,7 @@ def investigate(case, output, assessor=None, proposer=None):
             target.unlink()
     rtl, requirement = case["rtl"], case["requirement"]
     assumptions = case.get("assumptions", "")
+    # Non-meta local decision models are not supported. Use at own risk.
     assessor = (
         assessor or SecurityAssessor.from_environment() or UnavailableAssessor()
     )
